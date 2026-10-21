@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f18" />
+    <title>峡谷打工人 · 迷你世界（交互样板）</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="stage"></div>
+
+      <!-- 顶部信息 -->
+      <header id="topbar">
+        <div class="brand">
+          <div class="logo">峡</div>
+          <div>
+            <div class="brand-title">峡谷打工人</div>
+            <div class="brand-sub">英雄联盟办公室 · 迷你世界</div>
+          </div>
+        </div>
+        <div class="clock">
+          <div class="clock-time" id="clockTime">--:--</div>
+          <div class="clock-date"><span id="clockDate">--</span><span class="live-badge" id="liveBadge">● 实时</span></div>
+        </div>
+        <div class="chips">
+          <div class="chip" id="phaseChip">--</div>
+          <div class="chip accent" id="statusChip">--</div>
+          <div class="chip ghost" id="viewerChip" title="旁观人数（样板占位数据）">👀 -- 人在围观</div>
+        </div>
+      </header>
+
+      <!-- 事件板（桌面在右侧；手机竖屏为底部抽屉） -->
+      <aside id="board" class="panel">
+        <div class="drawer-handle" id="drawerHandle"><span></span></div>
+        <div class="board-head">
+          <div class="board-title">事件板 <small id="boardCount"></small></div>
+          <div class="board-tools">
+            <button class="seg on" data-filter="all">全部</button>
+            <button class="seg" data-filter="fun">有趣以上</button>
+            <label class="toggle"><input type="checkbox" id="foldDaily" checked /> 折叠日常</label>
+          </div>
+        </div>
+        <div id="pinned"></div>
+        <div id="feed"></div>
+      </aside>
+
+      <!-- 人物卡片 -->
+      <section id="card" class="panel hidden"></section>
+
+      <!-- 比赛文字直播 -->
+      <section id="match" class="panel hidden"></section>
+
+      <!-- 样板审核工具（正式版没有） -->
+      <section id="review" class="panel">
+        <div class="review-head">
+          <span>样板审核工具</span>
+          <small>正式版不提供</small>
+          <button class="icon-btn" id="reviewToggle" title="收起/展开">▾</button>
+        </div>
+        <div class="review-body">
+          <div class="presets" id="presets"></div>
+          <div class="slider-row">
+            <input type="range" id="timeSlider" min="0" max="1439" step="1" />
+            <div class="slider-scale"><span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+          </div>
+          <div class="row">
+            <div class="weekdays" id="weekdays"></div>
+          </div>
+          <div class="row">
+            <div class="speeds" id="speeds"></div>
+            <button class="btn ghost" id="liveBtn">回到现在</button>
+          </div>
+          <div class="row">
+            <button class="btn" id="genBtn">＋ 随机事件</button>
+            <button class="btn accent" id="matchBtn">▶ 周赛文字直播（演示）</button>
+          </div>
+        </div>
+      </section>
+      <button id="reviewFab" class="fab" title="样板审核工具">🛠</button>
+
+      <div id="toast"></div>
+      <div id="boot">正在搭建办公室……</div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,29 @@
+# dependencies
+**/node_modules/
+.npm/
+.pnpm-store/
+
+# build
+dist/
+build/
+out/
+*.exe
+*.dmg
+*.AppImage
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.log
+
+# local scratch
+.tmp/
+.cache/

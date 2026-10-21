@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>群友电竞经理 · 模拟引擎调试台 v0.2</title>
+<style>
+:root{--purple:#6d4fd8;--purple-light:#f1edfc;--purple-border:#c9bdf3;--text:#2a2438;--muted:#6f6884;--teal:#0f6e56;--teal-light:#e1f5ee;--red:#a32d2d;--gold:#854f0b;}
+*{box-sizing:border-box}
+body{margin:0;font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text);background:#faf9fe;font-size:14px}
+header{padding:18px 24px;background:#fff;border-bottom:1px solid var(--purple-border)}
+h1{font-size:20px;margin:0 0 4px}
+h1 .v{color:var(--purple);font-size:13px;font-weight:400;margin-left:8px}
+header p{margin:0;font-size:13px;color:var(--muted)}
+main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
+.card{background:#fff;border:1px solid var(--purple-border);border-radius:12px;padding:16px 18px}
+.card h2{font-size:15px;margin:0 0 12px;color:var(--purple)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:4px 28px}
+label{display:block;font-size:13px;margin:8px 0 2px}
+label span{color:var(--purple);font-weight:500}
+input[type=range]{width:100%}
+select,input[type=number],input[type=text]{padding:6px 8px;border:1px solid var(--purple-border);border-radius:8px;font-size:13px;background:#fff}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+button{background:var(--purple);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer}
+button:hover{opacity:.88}
+button.ghost{background:#fff;color:var(--purple);border:1px solid var(--purple)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.team{background:var(--purple-light);border-radius:10px;padding:10px 12px}
+.team h3{margin:0 0 6px;font-size:13px}
+.prow{font-size:13px;margin:3px 0}
+.prow .pos{display:inline-block;width:36px;color:var(--purple);font-weight:500}
+.tag{display:inline-block;background:var(--teal-light);color:var(--teal);border-radius:4px;font-size:11px;padding:0 5px;margin-left:4px}
+.tag.p{background:var(--purple-light);color:var(--purple)}
+.logbox{max-height:420px;overflow:auto;background:var(--purple-light);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.75;white-space:pre-wrap}
+.logbox .hl{color:var(--purple);font-weight:500}
+.logbox .bl{color:var(--red)}
+.logbox .tr{color:var(--teal)}
+.logbox .nd{font-weight:500}
+.bar{height:10px;background:var(--purple-light);border-radius:5px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;background:var(--purple)}
+.stat{display:flex;gap:24px;flex-wrap:wrap;font-size:13px;margin:8px 0}
+.stat b{font-size:18px;color:var(--purple)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px}
+td,th{border-bottom:1px solid #eee;padding:5px 8px;text-align:left}
+th{color:var(--muted);font-weight:500}
+tr.me td{background:var(--purple-light);font-weight:500}
+.g-S{color:var(--purple);font-weight:700}.g-A{color:var(--teal);font-weight:500}.g-C{color:var(--muted)}.g-D{color:var(--red)}
+textarea{width:100%;height:280px;font-family:Consolas,monospace;font-size:12px;border:1px solid var(--purple-border);border-radius:8px;padding:10px;line-height:1.5}
+.note{font-size:12px;color:var(--muted);line-height:1.7}
+.mvp-star{color:var(--gold)}
+.award{background:var(--teal-light);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:13px}
+footer{max-width:1100px;margin:0 auto;padding:0 16px 24px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+<h1>群友电竞经理<span class="v">v0.2 · 节点引擎 + LPL 赛制赛季模式</span></h1>
+<p>调参数 → 模拟看战报/计分板 → 批量平衡 → 打完整赛季（16 队 BO1 常规赛 + BO3 季后赛 + 成长 + 觉醒）。赛季自动存档。</p>
+</header>
+<main>
+
+<section class="card">
+<h2>参数（作用于所有模式）</h2>
+<div class="grid">
+<div><label>对阵预设（单场/批量用）</label><select id="sel_preset"></select></div>
+<div><label>随机噪声 σ <span id="v_sigma"></span></label><input type="range" id="s_sigma" min="3" max="18" step="1"></div>
+<div><label>雪球系数（每 1000g 领先 = 每人 +系数）<span id="v_snow"></span></label><input type="range" id="s_snow" min="0" max="4" step="0.5"></div>
+<div><label>时间轴节点数 <span id="v_nodes"></span></label><input type="range" id="s_nodes" min="8" max="15" step="1"></div>
+<div><label>当日局数（一把没：第1局 +6，之后每局 -6）<span id="v_game"></span></label><input type="range" id="s_game" min="1" max="5" step="1"></div>
+<div><label>神鬼 · 神/鬼开局概率 <span id="v_god"></span></label><input type="range" id="s_god" min="0" max="50" step="5"></div>
+<div><label>一把没 · 首局加成 <span id="v_first"></span></label><input type="range" id="s_first" min="0" max="12" step="1"></div>
+<div><label>一把没 · 逐局衰减 <span id="v_decay"></span></label><input type="range" id="s_decay" min="0" max="10" step="1"></div>
+<div><label>随机种子（留空 = 随机）</label><input type="text" id="in_seed" placeholder="如 42"></div>
+<div><label style="margin-top:14px"><input type="checkbox" id="chk_awake"> 单场模式：阿鸡已觉醒（对线+6 操作+10 团战+12 意识+6 心态+8）</label></div>
+</div>
+<p class="note">经济模型 v0.2：优势方收益递减、落后方追赶补偿、高地决战一锤定音（+2800g 起）、15% 大乱斗节点。弱队有了真实的翻盘通道。</p>
+</section>
+
+<section class="card">
+<h2>出场名单（单场/批量模式）</h2>
+<div class="teams"><div class="team" id="rosterA"></div><div class="team" id="rosterB"></div></div>
+</section>
+
+<section class="card">
+<h2>运行（单场 / 批量）</h2>
+<div class="row">
+<button id="btn_one">模拟一场 · 战报 + 计分板</button>
+<input type="number" id="in_count" value="1000" min="100" max="5000" step="100" style="width:90px">
+<button id="btn_batch" class="ghost">批量模拟 · 平衡报告</button>
+<button id="btn_ongame" class="ghost">狗粮衰减分析</button>
+<button id="btn_awake" class="ghost">阿鸡觉醒对比</button>
+</div>
+</section>
+
+<section class="card">
+<h2>平衡报告</h2>
+<div id="report"><p class="note">还没有运行。</p></div>
+</section>
+
+<section class="card">
+<h2>战报</h2>
+<div id="log" class="logbox"><span class="note">点「模拟一场」生成文字直播。◆ 特性行 · ★ 高光 · ✗ 黑洞 · ⚡ 大乱斗。</span></div>
+<h2 style="margin-top:14px">计分板</h2>
+<div id="box"><p class="note">每局对局数据：K/D/A、参团率、输出占比、评级（S/A/B/C/D）。</p></div>
+</section>
+
+<section class="card">
+<h2>赛季模式 · S1 城市赛（LPL 赛制 · 16 队）</h2>
+<div class="row" style="margin-top:0">
+<button id="btn_newseason">生成新赛季</button>
+<button id="btn_round">打一轮（每日 BO1）</button>
+<button id="btn_ffwd" class="ghost">快进常规赛</button>
+<button id="btn_playoffs" class="ghost">模拟季后赛（BO3）</button>
+<button id="btn_resetseason" class="ghost">重置存档</button>
+</div>
+<p class="note" id="season_status">还没开赛。16 队 = SSB（你，六人布阵制）+ DBD（随机AI，等真人卡）+ RGS（EDG青训）/ Showtime + 12 支城市赛队（3 支藏网吧大神，队名与选手 ID 致敬真实城市英雄争霸赛）。常规赛单循环 15 轮 BO1，前 8 进季后赛 BO3。阿鸡觉醒：队伍五连败 或 累计 5 场队内垫底。每打一场全员向潜力成长（吊儿郎当 -60%，一把没 -30%，觉醒后 +80%）。</p>
+<div id="season_area"></div>
+</section>
+
+<section class="card">
+<h2>选手数据（JSON · 单场模式用 · 可直接改）</h2>
+<p class="note">stats：lane对线 roam游走 fight团战 sense意识 mech操作 pool英雄池 mental心态 ｜ fit：top上 jgl野 mid中 adc下 sup辅 ｜ traits：slack吊儿郎当 bigheart大心脏 onegame一把没 goof搞耍 kamikaze神鬼二象 showoff耍帅血统。赛季模式用独立数据副本。</p>
+<textarea id="ta_data" spellcheck="false"></textarea>
+<div class="row">
+<button id="btn_apply">应用数据</button>
+<button id="btn_reset" class="ghost">恢复默认</button>
+<span class="note" id="data_msg"></span>
+</div>
+</section>
+
+</main>
+<footer>v0.2 未含：BP 禁选 / 手动训练分配 / 转会市场 / S2 全国赛。经济模型与赛制参考 DD 2026-10-10 拍板：追赶补偿、高地决战定胜负、LPL 16 队 BO1+BO3。</footer>
+
+<script id="engine">
+"use strict";
+var SLOTS=["top","jgl","mid","adc","sup"];
+var SLOT_NAME={top:"上单",jgl:"打野",mid:"中单",adc:"AD",sup:"辅助"};
+var NODE_TYPES={
+  lane:{name:"对线期",w:{lane:.5,mech:.3,sense:.2},inv:{top:1,jgl:.6,mid:1,adc:1,sup:.4},kMin:0,kMax:2,twMin:0,twMax:0},
+  gank:{name:"游走抓单",w:{roam:.5,sense:.3,mech:.2},inv:{top:.6,jgl:1.4,mid:1.2,adc:.6,sup:.8},kMin:0,kMax:2,twMin:0,twMax:0},
+  skirmish:{name:"野区遭遇战",w:{roam:.4,sense:.3,mech:.3},inv:{top:.4,jgl:1.5,mid:1,adc:.5,sup:.7},kMin:1,kMax:2,twMin:0,twMax:1},
+  dragon:{name:"小龙团",w:{fight:.4,mech:.3,sense:.3},inv:{top:.9,jgl:1,mid:1,adc:1,sup:.9},kMin:1,kMax:3,twMin:0,twMax:1},
+  herald:{name:"峡谷先锋团",w:{lane:.2,fight:.3,sense:.3,mech:.2},inv:{top:1.1,jgl:1.2,mid:.9,adc:.8,sup:.8},kMin:1,kMax:3,twMin:1,twMax:2},
+  baron:{name:"大龙团",w:{fight:.4,sense:.3,mental:.3},inv:{top:1,jgl:1,mid:1,adc:1,sup:1},kMin:2,kMax:5,twMin:1,twMax:2},
+  siege:{name:"推高地",w:{fight:.35,mech:.25,sense:.2,mental:.2},inv:{top:1,jgl:1,mid:1,adc:1,sup:1},kMin:2,kMax:4,twMin:2,twMax:3},
+  elder:{name:"远古龙团",w:{fight:.4,mental:.3,sense:.3},inv:{top:1,jgl:1,mid:1,adc:1,sup:1},kMin:2,kMax:5,twMin:1,twMax:2},
+  final:{name:"高地决战",w:{fight:.35,mech:.3,mental:.35},inv:{top:1,jgl:1,mid:1,adc:1,sup:1},kMin:2,kMax:5,twMin:3,twMax:4}
+};
+/* 时间轴（分钟，对齐真实资源刷新：小龙 5:00 起每 5 分钟 · 先锋 ~13:00 · 大龙 22:00 · 高地 28:00）
+   均势局（终局经济差<4000）追加远古龙团 31:00 / 最后的决战 35:00 → 比赛时长不固定 */
+var TL_MAIN=[
+  {key:"lane",t:3},{key:"dragon",t:5},{key:"lane",t:7},{key:"dragon",t:10},
+  {key:"herald",t:13},{key:"dragon",t:15},{key:"lane",t:17},{key:"dragon",t:20},
+  {key:"baron",t:22},{key:"siege",t:25},{key:"final",t:28}
+];
+var TL_OPT=[{key:"skirmish",t:9},{key:"gank",t:12},{key:"gank",t:18},{key:"skirmish",t:23}];
+var TRAITS={
+  slack:{name:"吊儿郎当",desc:"训练收益-60%（觉醒后+80%）"},
+  bigheart:{name:"大心脏",desc:"关键节点贡献 +10"},
+  onegame:{name:"一把没",desc:"当日第1局+6，之后每局-6"},
+  goof:{name:"搞耍",desc:"优势>2000g 时 10% 概率整活（-25）"},
+  kamikaze:{name:"神鬼二象",desc:"开局掷底色（神+12/鬼-15），单杀被单杀翻转"},
+  showoff:{name:"耍帅血统",desc:"本命英雄时对线/团战节点 +8"},
+  scalemage:{name:"缚地魔",desc:"后期接管：20分钟后节点 +10；但刺客是一生之敌：抓单/遭遇战 -8"},
+  shotcall:{name:"对线指挥官",desc:"前20分钟节点 +8（下路打出优势），20分钟后 -5（大局观降速）"},
+  streaky:{name:"顺逆风心态",desc:"顺风每千经济 +1.2、逆风 -1.2（上限±10）：赢麻了越打越猛，输麻了越打越蔫"}
+};
+/* ---------- 战术指令：五环克制（A.beats=B 表示 A 克 B）----------
+   强开团>保排消耗>防守反打>速攻节奏>运营发育>强开团
+   克制方全场节点 ×1.05；各战术另有节点阶段增益/代价（克制≠稳赢，阵容与状态仍然重要） */
+var TACTICS={
+  engage:{name:"强开团",beats:"poke",desc:"团战类节点 +3%，但对线期 -4%（莽夫不讲对线）"},
+  poke:{name:"保排消耗",beats:"counter",desc:"对线/推高地节点 +10%，大龙/远古/决战 -2%（不想跟你赌一波）"},
+  counter:{name:"防守反打",beats:"rush",desc:"上一节点失利的节点 +4%（你开我接，越挫越勇）"},
+  rush:{name:"速攻节奏",beats:"scaling",desc:"13 分钟前 +16%，22 分钟后 -5%（前期定生死）"},
+  scaling:{name:"运营发育",beats:"engage",desc:"20 分钟后 +6%，13 分钟前 -7%（大核成型前忍着）"}
+};
+function tacMult(tac,def,type,lastWinner,side,nodesPlayed){
+  if(!tac||!TACTICS[tac])return 1;
+  var m=1;
+  if(tac==="engage"){if(type.w.fight>=0.3)m*=1.03;if(type.w.lane>=0.4)m*=0.96;}
+  else if(tac==="poke"){if(type.w.lane>=0.4||def.key==="siege")m*=1.10;if(def.key==="baron"||def.key==="elder"||def.key==="final")m*=0.98;}
+  else if(tac==="counter"){if(nodesPlayed>0&&lastWinner&&lastWinner!==side)m*=1.04;}
+  else if(tac==="rush"){if(def.t<13)m*=1.16;else if(def.t>=22)m*=0.95;}
+  else if(tac==="scaling"){if(def.t>=20)m*=1.06;else if(def.t<13)m*=0.93;}
+  return m;
+}
+var DEFAULT_PLAYERS={
+  aji:{id:"aji",name:"阿鸡",stats:{lane:52,roam:55,fight:58,sense:45,mech:67,pool:42,mental:48},fit:{top:58,jgl:52,mid:60,adc:54,sup:50},potential:95,traits:["slack","bigheart"]},
+  gouliang:{id:"gouliang",name:"狗粮",stats:{lane:82,roam:52,fight:78,sense:68,mech:84,pool:64,mental:74},fit:{top:35,jgl:40,mid:45,adc:90,sup:55},potential:78,traits:["onegame","goof"]},
+  piegan:{id:"piegan",name:"撇干",stats:{lane:58,roam:48,fight:62,sense:54,mech:68,pool:40,mental:40},fit:{top:82,jgl:50,mid:74,adc:42,sup:45},potential:72,traits:["kamikaze","showoff"]},
+  ai_jgl:{id:"ai_jgl",name:"反野鬼才",stats:{lane:48,roam:58,fight:52,sense:50,mech:50,pool:46,mental:50},fit:{top:45,jgl:85,mid:50,adc:42,sup:55},potential:60,traits:[]},
+  ai_sup:{id:"ai_sup",name:"插眼狂魔",stats:{lane:44,roam:52,fight:50,sense:56,mech:44,pool:50,mental:58},fit:{top:40,jgl:50,mid:48,adc:42,sup:85},potential:58,traits:[]},
+  /* ── 群友真卡（SSB 六人名单成员）── 弟必：白金中单·缚地魔，维克托/炸弹人后期核，怕刺客 */
+  dibi:{id:"dibi",name:"弟必",stats:{lane:64,roam:42,fight:74,sense:64,mech:66,pool:62,mental:58},fit:{top:60,jgl:30,mid:88,adc:40,sup:45},potential:76,traits:["scalemage"]},
+  /* 吊隆：白金辅助·硬辅高手·队伍指挥·定海神针，爱取外号（事件卡素材），后期大局观一般 */
+  diaolong:{id:"diaolong",name:"吊隆",stats:{lane:68,roam:62,fight:64,sense:70,mech:56,pool:58,mental:74},fit:{top:58,jgl:40,mid:42,adc:40,sup:88},potential:72,traits:["shotcall"]},
+  /* 当邓：白金打野·食草型·操作差但大局观/观察力强·后期指挥，心态随顺逆风摆动 */
+  dangdeng:{id:"dangdeng",name:"当邓",stats:{lane:48,roam:50,fight:60,sense:74,mech:50,pool:54,mental:44},fit:{top:48,jgl:85,mid:40,adc:32,sup:52},potential:70,traits:["streaky"]},
+  c_top:{id:"c_top",name:"UDJ",stats:{lane:55,roam:45,fight:52,sense:46,mech:52,pool:40,mental:44},fit:{top:80,jgl:48,mid:52,adc:45,sup:50},potential:55,traits:[]},
+  c_jgl:{id:"c_jgl",name:"Pasa",stats:{lane:44,roam:50,fight:50,sense:48,mech:48,pool:44,mental:52},fit:{top:45,jgl:82,mid:48,adc:44,sup:55},potential:54,traits:[]},
+  c_mid:{id:"c_mid",name:"白色风车",stats:{lane:56,roam:46,fight:50,sense:45,mech:50,pool:42,mental:46},fit:{top:52,jgl:45,mid:80,adc:46,sup:50},potential:56,traits:[]},
+  c_adc:{id:"c_adc",name:"维尼",stats:{lane:50,roam:42,fight:52,sense:44,mech:54,pool:44,mental:48},fit:{top:45,jgl:44,mid:46,adc:80,sup:52},potential:55,traits:[]},
+  c_sup:{id:"c_sup",name:"Strong",stats:{lane:42,roam:52,fight:48,sense:50,mech:42,pool:48,mental:54},fit:{top:45,jgl:50,mid:48,adc:44,sup:80},potential:53,traits:[]},
+  s_top:{id:"s_top",name:"Kabe",stats:{lane:68,roam:55,fight:68,sense:62,mech:66,pool:60,mental:62},fit:{top:88,jgl:55,mid:65,adc:48,sup:55},potential:75,traits:[]},
+  s_jgl:{id:"s_jgl",name:"Avoidless",stats:{lane:58,roam:72,fight:66,sense:68,mech:64,pool:62,mental:64},fit:{top:55,jgl:88,mid:60,adc:50,sup:60},potential:76,traits:[]},
+  s_mid:{id:"s_mid",name:"Twila",stats:{lane:70,roam:60,fight:70,sense:66,mech:70,pool:64,mental:60},fit:{top:62,jgl:55,mid:88,adc:55,sup:55},potential:78,traits:[]},
+  s_adc:{id:"s_adc",name:"XuBin",stats:{lane:66,roam:50,fight:70,sense:62,mech:68,pool:62,mental:66},fit:{top:48,jgl:48,mid:55,adc:88,sup:50},potential:74,traits:[]},
+  s_sup:{id:"s_sup",name:"SouthWind",stats:{lane:52,roam:64,fight:64,sense:72,mech:54,pool:64,mental:68},fit:{top:50,jgl:60,mid:55,adc:48,sup:88},potential:72,traits:[]}
+};
+var SSB_MAIN=["piegan","dangdeng","aji","gouliang","diaolong"];
+var PRESETS=[
+  {key:"friendly",label:"SSB vs 网吧队（S1 日常局）",A:SSB_MAIN,B:["c_top","c_jgl","c_mid","c_adc","c_sup"]},
+  {key:"hard",label:"下克上 · SSB vs LD",A:SSB_MAIN,B:["s_top","s_jgl","s_mid","s_adc","s_sup"]},
+  {key:"derby",label:"队内对抗 · 阿鸡阵 vs 弟必阵",A:SSB_MAIN,B:["piegan","dangdeng","dibi","gouliang","diaolong"],cloneB:true},
+  {key:"slight",label:"同档微差 · LD vs LD(-3)",A:["s_top","s_jgl","s_mid","s_adc","s_sup"],B:null,weakenOf:"A",delta:3},
+  {key:"equal",label:"同强度对照 · LD 镜像",A:["s_top","s_jgl","s_mid","s_adc","s_sup"],B:null,mirrorOf:"A"},
+  {key:"onetier",label:"差一档 · LD vs 网吧队",A:["s_top","s_jgl","s_mid","s_adc","s_sup"],B:["c_top","c_jgl","c_mid","c_adc","c_sup"]}
+];
+var DEFAULT_OPTS={sigma:13,snowball:0.8,nodeCount:13,gameIdx:1,godP:30,firstBuff:6,decayStep:6,awakened:false};
+/* 文案池只做氛围描述，不虚报数字——真实击杀数由直播里的击杀事件行与计分板一一对应 */
+var HL={
+  lane:["控线压制，补刀领先 20","换血细节拉满","兵线运营，逼对手回城"],
+  gank:["中路消失，出现在下路","绕后包饺子","河道蹲到人"],
+  skirmish:["野区反蹲成功","入侵反野全身而退","视野压制，抓崩节奏"],
+  dragon:["先手开团完美","拉扯消耗，白拿资源","完美站位，零损撤退"],
+  herald:["先锋撞塔，白赚一座","先锋团压对手回家","放先锋压塔，节奏起飞"],
+  baron:["偷掉大龙，对手心态崩了","大龙团完美指挥","稳稳控下大龙"],
+  siege:["三路兵线齐推","兵临城下，水晶摇摇欲坠","抱团推进，势不可挡"],
+  elder:["远古龙入手，全员灼烧","稳稳收下远古龙","远古龙团压对手回家"],
+  final:["高地强开，一波带走","绕后开团，直捣黄龙","中路一波，结束比赛"]
+};
+var BL=["迷之走位被秒","闪现撞墙送头","大招放空，原地发呆","越塔强杀失败，白给","走位靠前被先手秒掉"];
+var BL_SAFE=["大招放空，原地发呆","指挥犹豫，错失良机","迷之轮换，被白嫖资源"];
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function makeRng(seed){var f=mulberry32(seed);return{seed:seed,next:f,gauss:function(){var u=0,v=0;while(u===0)u=f();while(v===0)v=f();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}};}
+function fmtClock(min){var m=Math.floor(min);var s=Math.floor((min-m)*60);return m+":"+("0"+s).slice(-2);}
+function buildSeq(n,rng){
+  var base=TL_MAIN.slice();
+  if(n>=base.length){
+    var pool=TL_OPT.slice();
+    while(base.length<n&&pool.length){
+      var idx=Math.floor(rng.next()*pool.length);
+      var item=pool.splice(idx,1)[0];
+      var pos=0;while(pos<base.length&&base[pos].t<item.t)pos++;
+      base.splice(pos,0,item);
+    }
+  }else{
+    while(base.length>n){
+      var best=-1,bd=1e9;
+      for(var i2=2;i2<base.length-2;i2++){
+        if(["lane","dragon","skirmish","gank"].indexOf(base[i2].key)<0)continue;
+        var d=Math.abs(i2-(base.length-1)/2);
+        if(d<bd){bd=d;best=i2;}
+      }
+      if(best<0)break;
+      base.splice(best,1);
+    }
+  }
+  return base;
+}
+function cloneMirror(P,ids){return ids.map(function(id){var k="x_"+id;if(!P[k]){P[k]=JSON.parse(JSON.stringify(P[id]));P[k].id=k;P[k].name=P[id].name+"′";}return k;});}
+function weakenClone(P,ids,delta){return ids.map(function(id){var k="w_"+id;if(!P[k]){P[k]=JSON.parse(JSON.stringify(P[id]));P[k].id=k;P[k].name=P[id].name+"(属性-"+delta+")";for(var s in P[k].stats)P[k].stats[s]=Math.max(30,P[k].stats[s]-delta);}return k;});}
+function resolveRosters(P,preset){
+  var A=preset.A.slice();var B;
+  if(preset.weakenOf==="A")B=weakenClone(P,preset.A,preset.delta||3);
+  else if(preset.mirrorOf)B=cloneMirror(P,preset.A);
+  else if(preset.cloneB)B=cloneMirror(P,preset.B);
+  else B=preset.B.slice();
+  return{A:A,B:B};
+}
+function effStats(p,opts){
+  var st={};for(var k in p.stats)st[k]=p.stats[k];
+  if(opts.awakened&&p.traits.indexOf("slack")>=0){st.lane+=6;st.mech+=10;st.fight+=12;st.sense+=6;st.mental+=8;}
+  if(p.traits.indexOf("onegame")>=0){var m=opts.firstBuff-opts.decayStep*(opts.gameIdx-1);for(var k2 in st)st[k2]+=m;}
+  return st;
+}
+function pick(arr,rng){return arr[Math.floor(rng.next()*arr.length)];}
+
+function simulateMatch(P,idsA,idsB,opts,rng){
+  var log=[];
+  var nameA=opts.nameA||"A队",nameB=opts.nameB||"B队";
+  var seq=buildSeq(opts.nodeCount,rng);
+  var A=idsA.map(function(id){return P[id];});
+  var B=idsB.map(function(id){return P[id];});
+  var stA=A.map(function(p){return effStats(p,opts);});
+  var stB=B.map(function(p){return effStats(p,opts);});
+  var contrib={},nodeScores={};
+  A.concat(B).forEach(function(p){contrib[p.id]=0;nodeScores[p.id]=[];});
+  var km={};
+  A.concat(B).forEach(function(p){
+    if(p.traits.indexOf("kamikaze")>=0){
+      var r=rng.next()*100;var state=r<opts.godP?2:(r>100-opts.godP?0:1);
+      km[p.id]={state:state,flips:0,init:state};
+      log.push({t:"tr",s:(p.name+" 今日底色："+(state===2?"神 · 天魔下凡预定了":state===0?"鬼 · 教练想按下重开键":"中立 · 薛定谔的撇干"))});
+    }
+  });
+  var goldA=0,goldB=0,blowout=false,nodesPlayed=0,lastWinner="A";
+  var nodeWinsA=0,nodeWinsB=0;
+  var killsA=0,killsB=0,towersA=0,towersB=0,firstBlood=null,baronBuff=null,baronTeam=null;
+  var kda={};
+  A.concat(B).forEach(function(p){kda[p.id]={k:0,d:0,a:0};});
+  var gameClock=0;
+  var tacA=opts.tacA||null,tacB=opts.tacB||null;
+  var ctrA=(tacA&&TACTICS[tacA].beats===tacB)?1.05:1;
+  var ctrB=(tacB&&TACTICS[tacB].beats===tacA)?1.05:1;
+  var hasOne=A.concat(B).some(function(p){return p.traits.indexOf("onegame")>=0;});
+  var onegNote="";
+  if(hasOne){
+    var om=opts.firstBuff-opts.decayStep*(opts.gameIdx-1);
+    onegNote=" · 当日第 "+opts.gameIdx+" 局（一把没 全属性"+(om>=0?"+":"")+om+"）";
+  }
+  A.concat(B).forEach(function(p){
+    if((p.stress==null?30:p.stress)>=78)log.push({t:"tr",s:"◆ "+p.name+" 最近压力拉满，热身时都在走神（发挥受影响）"});
+  });
+  if(tacA||tacB){
+    var tacNote="战术对位："+(TACTICS[tacA]?TACTICS[tacA].name:"无")+" vs "+(TACTICS[tacB]?TACTICS[tacB].name:"无");
+    if(ctrA>1)log.push({t:"tr",s:"◆ 战术克制！"+TACTICS[tacA].name+" 天克 "+TACTICS[tacB].name+"（全场 +5%）"});
+    else if(ctrB>1)log.push({t:"tr",s:"◆ 战术克制！"+TACTICS[tacB].name+" 天克 "+TACTICS[tacA].name+"（全场 +5%）"});
+    onegNote+=(onegNote?" · ":"")+tacNote;
+  }
+  log.unshift({t:"nd",s:"比赛开始 ｜ "+nameA+" vs "+nameB+" ｜ 种子 "+rng.seed+onegNote});
+  function pickAmong(scores,wantMax,type){
+    var bi=-1,bv=wantMax?-1e9:1e9;
+    for(var j=0;j<5;j++){
+      if((type.inv[SLOTS[j]]||1)<0.9)continue;
+      if(wantMax?scores[j]>bv:scores[j]<bv){bi=j;bv=scores[j];}
+    }
+    return bi<0?0:bi;
+  }
+  function playNode(def){
+    var type=NODE_TYPES[def.key];
+    var clock=Math.max(1,def.t+rng.gauss()*0.35);
+    gameClock=clock;
+    var keyNode=def.t>=20||Math.abs(goldA-goldB)>4000;
+    var chaos=rng.next()<0.15;
+    var sg=opts.sigma*(chaos?2.5:1)*(def.t>=20?1.5:1);
+    var leadA=goldA-goldB,leadB=goldB-goldA;
+    var scoresA=[],scoresB=[];
+    function calc(team,st,ownLead,side,tacM){
+      var out=[];
+      var oppTeam=side==="A"?B:A;
+      var oppSt=side==="A"?stB:stA;
+      for(var j=0;j<team.length;j++){
+        var p=team[j],s=st[j];
+        var base=0,oBase=0;
+        for(var k in type.w){base+=type.w[k]*s[k];oBase+=type.w[k]*oppSt[j][k];}
+        var fit=p.fit[SLOTS[j]]||50;
+        var mult=Math.max(0.6,Math.min(1,0.5+fit/200));
+        var oFit=oppTeam[j].fit[SLOTS[j]]||50;
+        var oMult=Math.max(0.6,Math.min(1,0.5+oFit/200));
+        var eff=base*mult,oEff=oBase*oMult;
+        /* 对位压制双通道：判定层几乎不影响胜负（×0.05，保平衡），
+           表现层大幅转化为个人数据（×0.45）→ 高属性选手的 MVP/评级/击杀肉眼可见 */
+        var pr=eff-oEff;
+        var val=eff+pr*0.05;
+        if(side==="A"&&type.w.lane>=0.4&&Math.abs(pr)>=10&&rng.next()<0.22){
+          if(pr>0)log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+p.name+" 对位压制 "+oppTeam[j].name+"，刀刀入肉"});
+          else log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+oppTeam[j].name+" 对位压制 "+p.name+"，刀刀入肉"});
+        }
+        if(baronBuff===side)val+=8;
+        if(p.traits.indexOf("bigheart")>=0&&keyNode)val+=10;
+        if(p.traits.indexOf("showoff")>=0&&(type.w.lane>=0.4||type.w.fight>=0.4))val+=8;
+        if(p.traits.indexOf("scalemage")>=0){
+          if(def.t>=20){val+=10;if(keyNode&&rng.next()<0.10)log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+p.name+" 后期接管比赛，技能框全亮"});}
+          else if(def.key==="gank"||def.key==="skirmish"){val-=8;if(rng.next()<0.10)log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+p.name+" 看见刺客绕后，手指开始发凉"});}
+        }
+        if(p.traits.indexOf("shotcall")>=0){
+          if(def.t<20){val+=8;if(def.key==="lane"&&rng.next()<0.08)log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+p.name+" 对线打出优势，顺手给对面起了个新外号"});}
+          else val-=5;
+        }
+        if(p.traits.indexOf("streaky")>=0){
+          var mo=ownLead>0?Math.min(10,ownLead/1000*1.2):Math.max(-10,ownLead/1000*1.2);
+          val+=mo;
+          if(Math.abs(ownLead)>=2200&&rng.next()<0.15)log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+p.name+(ownLead>0?" 顺风局指挥声都大了三分，抓机会手到擒来":" 语音陷入沉默，打野路线开始迷茫")});
+        }
+        /* 压力：>60 开始影响发挥（每点 -0.12），<22 心态放松小幅加成 */
+        var strs=p.stress==null?30:p.stress;
+        if(strs>60)val-=(strs-60)*0.12;
+        else if(strs<22)val+=2;
+        /* 疲劳：连续上场累积（上场+12/场，替补-40），>40 开始影响发挥（每点 -0.09） */
+        var fat=p.fatigue==null?0:p.fatigue;
+        if(fat>40)val-=(fat-40)*0.09;
+        if(km[p.id])val+=(km[p.id].state===2?12:km[p.id].state===0?-15:0);
+        if(p.traits.indexOf("goof")>=0&&ownLead>2000&&rng.next()<0.10){val-=25;log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+p.name+" 优势太大开始整活：塔下跳舞被反杀（贡献 -25）"});}
+        val*=tacM;
+        val+=ownLead/1000*opts.snowball;
+        var inv=type.inv[SLOTS[j]]||1;
+        val=val*inv+rng.gauss()*sg*inv;
+        contrib[p.id]+=val+pr*0.45*inv;nodeScores[p.id].push(val+pr*0.45*inv);
+        out.push(val);
+      }
+      return out;
+    }
+    scoresA=calc(A,stA,leadA,"A",tacMult(tacA,def,type,lastWinner,"A",nodesPlayed)*ctrA);
+    scoresB=calc(B,stB,leadB,"B",tacMult(tacB,def,type,lastWinner,"B",nodesPlayed)*ctrB);
+    baronBuff=null;
+    var sumA=scoresA.reduce(function(a,b){return a+b;},0);
+    var sumB=scoresB.reduce(function(a,b){return a+b;},0);
+    var winner=sumA>sumB?"A":(sumB>sumA?"B":(rng.next()<0.5?"A":"B"));
+    lastWinner=winner;
+    if(winner==="A")nodeWinsA++;else nodeWinsB++;
+    var margin=Math.abs(sumA-sumB);
+    var isFinal=def.key==="final";
+    var leadNow=Math.abs(goldA-goldB);
+    var wName=winner==="A"?nameA:nameB;
+    /* 击杀产出：kMin~kMax 为该节点两队合计人头，胜方按优势吃大头。
+       逐杀记账进 kda（谁杀谁/谁助攻当场直播），计分板直接汇总 → 直播与面板一一对应 */
+    var kAll=type.kMin+Math.floor(rng.next()*(type.kMax-type.kMin+1));
+    var wShare=0.55+Math.min(0.35,margin/90);
+    var wk=Math.round(kAll*wShare),lk=kAll-wk;
+    var nodeDead={},nodeD={},streak={};
+    if(kAll>0){
+      var kwA=killW(A,contrib),kwB=killW(B,contrib);
+      var dwA=deathW(A,contrib),dwB=deathW(B,contrib);
+      var awA=assistW(A,contrib),awB=assistW(B,contrib);
+      for(var q=0;q<kAll;q++){
+        var ks=q<wk?winner:(winner==="A"?"B":"A");
+        var vs=ks==="A"?"B":"A";
+        var kTeam=ks==="A"?A:B,vTeam=vs==="A"?A:B;
+        var ki=wPick(ks==="A"?kwA:kwB,rng);
+        var killer=kTeam[ki];
+        var alive=[];for(var vj=0;vj<5;vj++){if(!nodeDead[vTeam[vj].id])alive.push(vj);}
+        if(!alive.length){alive=[0,1,2,3,4];nodeDead={};}
+        var vSel=alive[wPick(alive.map(function(x){return (vs==="A"?dwA:dwB)[x];}),rng)];
+        var victim=vTeam[vSel];
+        nodeDead[victim.id]=true;nodeD[victim.id]=(nodeD[victim.id]||0)+1;
+        kda[killer.id].k++;kda[victim.id].d++;
+        streak[killer.id]=(streak[killer.id]||0)+1;
+        var u=rng.next();
+        var na=u<0.08?0:(u<0.32?1:(u<0.65?2:3));
+        var pool=[0,1,2,3,4].filter(function(x){return x!==ki;});
+        var aNs=[];
+        for(var a2=0;a2<na&&pool.length;a2++){
+          var ai=wPick(pool.map(function(x){return (ks==="A"?awA:awB)[x];}),rng);
+          kda[kTeam[pool[ai]].id].a++;
+          aNs.push(kTeam[pool[ai]].name);
+          pool.splice(ai,1);
+        }
+        if(!firstBlood){
+          firstBlood=killer.name;
+          if(ks==="A")goldA+=300;else goldB+=300;
+          log.push({t:"hl",s:"["+fmtClock(clock)+"] ★ 一血！"+killer.name+" 击杀 "+victim.name+"（+300g）"});
+        }else{
+          log.push({t:"tr",s:"["+fmtClock(clock)+"] ⚔ "+killer.name+" 击杀 "+victim.name+(aNs.length?"（"+aNs.join("、")+" 助攻）":"")});
+        }
+        var stN=streak[killer.id];
+        if(stN===2)log.push({t:"hl",s:"["+fmtClock(clock)+"] 🔥 "+killer.name+" 双杀！"});
+        else if(stN===3)log.push({t:"hl",s:"["+fmtClock(clock)+"] 🔥 "+killer.name+" 三杀！"});
+        else if(stN===4)log.push({t:"hl",s:"["+fmtClock(clock)+"] 🔥🔥 "+killer.name+" 四杀！！"});
+        else if(stN>=5)log.push({t:"hl",s:"["+fmtClock(clock)+"] 🔥🔥🔥 PENTA KILL！"+killer.name+" 五杀收尾！！！"});
+      }
+      var deadA=0,deadB=0;
+      A.forEach(function(p){if(nodeDead[p.id])deadA++;});
+      B.forEach(function(p){if(nodeDead[p.id])deadB++;});
+      if(deadA===5||deadB===5)log.push({t:"hl",s:"["+fmtClock(clock)+"] 💀 "+(deadA===5?nameB:nameA)+" 打出团灭（ACE）"});
+    }
+    /* 推塔 */
+    var tw=type.twMin+Math.floor(rng.next()*(type.twMax-type.twMin+1));
+    if(winner==="A")towersA+=tw;else towersB+=tw;
+    /* 经济：final 一锤定音，20min 后资源团大额 */
+    var gain,loserGain;
+    if(isFinal){
+      gain=2800+Math.min(Math.round(margin*2),800);loserGain=900;
+    }else if(def.t>=22){
+      gain=1500+Math.min(Math.round(margin*3),600);
+      loserGain=650+Math.min(800,Math.floor(leadNow/2000)*300);
+    }else{
+      gain=450+Math.min(Math.round(margin*5),700);
+      gain=Math.round(gain*(1-Math.min(0.4,leadNow/12000)));
+      loserGain=350+Math.min(600,Math.floor(leadNow/2500)*300);
+    }
+    if(winner==="A"){goldA+=gain;goldB+=loserGain;}else{goldB+=gain;goldA+=loserGain;}
+    nodesPlayed++;
+    var wTeam=winner==="A"?A:B,wScores=winner==="A"?scoresA:scoresB;
+    var lTeam=winner==="A"?B:A,lScores=winner==="A"?scoresB:scoresA;
+    var hi=pickAmong(wScores,true,type);
+    var lo=pickAmong(lScores,false,type);
+    log.push({t:"nd",s:"["+fmtClock(clock)+"] "+type.name+" ｜ "+nameA+" "+sumA.toFixed(1)+" : "+sumB.toFixed(1)+" "+nameB+" ｜ "+wName+" +"+gain+"g（经济 "+(winner==="A"?"A":"B")+" "+(goldA-goldB>=0?"+":"")+(goldA-goldB)+"）"});
+    if(chaos)log.push({t:"tr",s:"["+fmtClock(clock)+"] ⚡ 大乱斗：十个人中路大乱斗，这波谁也说不准（波动 ×2.5）"});
+    if(def.key==="baron"){baronTeam=winner;baronBuff=winner;log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+wName+" 拿下大龙，全员强化（下一节点战力 +8）"});}
+    if(def.key==="herald")log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+wName+" 拿下峡谷先锋"+(tw>0?"，先锋撞塔推掉 "+tw+" 座":"")});
+    else if(tw>=2)log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+wName+" 推掉 "+tw+" 座防御塔"});
+    log.push({t:"hl",s:"["+fmtClock(clock)+"] ★ 高光："+wTeam[hi].name+" "+pick(HL[def.key],rng)});
+    var worstId=null,worstN=0;
+    A.concat(B).forEach(function(p){var n=nodeD[p.id]||0;if(n>worstN){worstN=n;worstId=p.id;}});
+    if(worstId){
+      log.push({t:"bl",s:"["+fmtClock(clock)+"] ✗ 黑洞："+P[worstId].name+" "+pick(BL,rng)+(worstN>=2?"（本节点送出 "+worstN+" 头）":"")});
+    }else{
+      log.push({t:"bl",s:"["+fmtClock(clock)+"] ✗ 黑洞："+lTeam[lo].name+" "+pick(BL_SAFE,rng)});
+    }
+    A.concat(B).forEach(function(p,idx){
+      if(km[p.id]){
+        var myScore=(idx<5?scoresA:scoresB)[idx%5];
+        var oppScore=(idx<5?scoresB:scoresA)[idx%5];
+        var d=myScore-oppScore;
+        if(d<=-12&&km[p.id].state>0&&rng.next()<0.35){km[p.id].state--;km[p.id].flips++;log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+p.name+" 被针对崩了，开始青铜表演（全属性 -15）"});}
+        else if(d>=12&&km[p.id].state<2&&rng.next()<0.35){km[p.id].state++;km[p.id].flips++;log.push({t:"tr",s:"["+fmtClock(clock)+"] ◆ "+p.name+" 杀疯了！切换天魔形态（全属性 +12）"});}
+      }
+    });
+    return isFinal;
+  }
+  for(var i=0;i<seq.length;i++){
+    var wasFinal=playNode(seq[i]);
+    if(!wasFinal&&seq[i].t>=20&&Math.abs(goldA-goldB)>=5200){
+      blowout=true;gameClock+=0.3+rng.next()*0.7;
+      log.push({t:"nd",s:"["+fmtClock(gameClock)+"] 经济差 "+Math.abs(goldA-goldB)+"，"+(Math.abs(goldA-goldB)>8000?"打出 GG，提前结束":"大势已去，提前结束")});
+      break;
+    }
+  }
+  /* 均势延长：终局经济差 <2500 → 远古龙团 31:00，仍胶着 → 最后的决战 35:00 */
+  var ext=0;
+  while(!blowout&&Math.abs(goldA-goldB)<2500&&ext<2){
+    ext++;
+    playNode(ext===1?{key:"elder",t:31}:{key:"final",t:35});
+  }
+  var win=goldA>goldB?"A":(goldB>goldA?"B":lastWinner);
+  var winTeam=win==="A"?A:B;
+  var mvp=winTeam[0],mvpScore=-1e9;
+  for(var j4=0;j4<5;j4++){
+    var sc=contrib[winTeam[j4].id]*(0.9+0.2*rng.next());
+    if(sc>mvpScore){mvpScore=sc;mvp=winTeam[j4];}
+  }
+  killsA=0;killsB=0;
+  A.forEach(function(p){killsA+=kda[p.id].k;});
+  B.forEach(function(p){killsB+=kda[p.id].k;});
+  if(killsA===0||killsB===0){
+    var sad=killsA===0?"A":"B";
+    var sTeam=sad==="A"?A:B,oTeam=sad==="A"?B:A;
+    var sKi=wPick(killW(sTeam,contrib),rng);
+    var sVi=wPick(deathW(oTeam,contrib),rng);
+    kda[sTeam[sKi].id].k++;kda[oTeam[sVi].id].d++;
+    if(sad==="A")killsA=1;else killsB=1;
+    log.push({t:"tr",s:"["+fmtClock(gameClock)+"] "+sTeam[sKi].name+" 终场前挽回颜面，拿下安慰杀"});
+  }
+  var gameLen=gameClock+(blowout?0.2:0.8+rng.next()*2);
+  log.push({t:"nd",s:"比赛结束 ｜ "+(win==="A"?nameA:nameB)+" 胜 · 时长 "+fmtClock(gameLen)+" ｜ 经济差 "+Math.abs(goldA-goldB)+" ｜ 推塔 "+towersA+"-"+towersB+" ｜ 击杀 "+killsA+"-"+killsB+" ｜ MVP："+mvp.name});
+  var box=buildBox(P,idsA,idsB,nodeScores,contrib,mvp.id,rng,km,{killsA:killsA,killsB:killsB,kda:kda,nodeWinsA:nodeWinsA,nodeWinsB:nodeWinsB});
+  return{win:win,nodes:nodesPlayed,blowout:blowout,goldA:goldA,goldB:goldB,mvpId:mvp.id,contrib:contrib,nodeScores:nodeScores,km:km,log:log,box:box,
+    gameLen:gameLen,towersA:towersA,towersB:towersB,killsA:killsA,killsB:killsB,firstBlood:firstBlood,baronTeam:baronTeam};
+}
+
+/* ── 计分板 v3：逐杀记账 ──
+   K/D/A 全部来自 simulateMatch 里逐杀分配的事件账本（ctx.kda），
+   直播里每条击杀行/一血/多杀/安慰杀都会如实累进账本 → 面板与直播一一对应。
+   参团率=(K+A)/全队击杀×100%；KDA=(K+A)/D（口径对齐真实比赛） */
+var POS_KILL={top:.9,jgl:.8,mid:1.15,adc:1.35,sup:.2};
+var POS_DEATH={top:1.2,jgl:1.15,mid:1,adc:1,sup:.85};
+var POS_ASSIST={top:1,jgl:1.5,mid:1.1,adc:.8,sup:1.7};
+function wPick(w,rng){
+  var s=0;for(var i=0;i<w.length;i++)s+=w[i];
+  var x=rng.next()*s;
+  for(var j=0;j<w.length;j++){x-=w[j];if(x<0)return j;}
+  return w.length-1;
+}
+function _normOf(team,contrib,j){
+  var ts=0;team.forEach(function(p){ts+=contrib[p.id]||0;});ts=Math.max(1,ts);
+  return Math.min(1.5,Math.max(0.4,(contrib[team[j].id]||0)/ts*5));
+}
+function killW(team,contrib){return team.map(function(p,j){return Math.max(0.05,Math.pow(_normOf(team,contrib,j),1.7)*POS_KILL[SLOTS[j]]);});}
+function deathW(team,contrib){return team.map(function(p,j){return Math.max(0.25,POS_DEATH[SLOTS[j]]*(1.28-0.45*_normOf(team,contrib,j)));});}
+function assistW(team,contrib){return team.map(function(p,j){return Math.max(0.1,POS_ASSIST[SLOTS[j]]*(0.75+0.25*_normOf(team,contrib,j)));});}
+function buildBox(P,idsA,idsB,nodeScores,contrib,mvpId,rng,km,ctx){
+  var allIds=idsA.concat(idsB);
+  var avgMap={};
+  allIds.forEach(function(id){
+    var a=nodeScores[id]||[];var s=0;for(var i=0;i<a.length;i++)s+=a[i];
+    avgMap[id]=a.length?s/a.length:0;
+  });
+  var sorted=allIds.slice().sort(function(x,y){return avgMap[y]-avgMap[x];});
+  var rankMap={};sorted.forEach(function(id,i){rankMap[id]=i;});
+  var sideMap={},sums={A:0,B:0};
+  idsA.forEach(function(id){sideMap[id]="A";});
+  idsB.forEach(function(id){sideMap[id]="B";});
+  allIds.forEach(function(id){sums[sideMap[id]]+=contrib[id]||0;});
+  var kda=(ctx&&ctx.kda)||{};
+  var teamKills={A:0,B:0};
+  idsA.forEach(function(id){teamKills.A+=(kda[id]?kda[id].k:0);});
+  idsB.forEach(function(id){teamKills.B+=(kda[id]?kda[id].k:0);});
+  return allIds.map(function(id,idx){
+    var p=P[id];var r=rankMap[id];
+    var grade=r<2?"S":r<4?"A":r<6?"B":r<8?"C":"D";
+    var side=sideMap[id];
+    var kk=kda[id]?kda[id].k:0,dd=kda[id]?kda[id].d:0,aa=kda[id]?kda[id].a:0;
+    var join=teamKills[side]>0?Math.min(100,Math.round((kk+aa)/teamKills[side]*100)):0;
+    var share=sums[side]>0?((contrib[id]||0)/sums[side]*100):0;
+    return{id:id,name:p.name,slot:SLOTS[idx%5],side:side,k:kk,d:dd,a:aa,join:join,
+      share:share,contrib:Math.round(contrib[id]||0),grade:grade,mvp:id===mvpId,
+      kami:km&&km[id]?["鬼","中立","神"][km[id].state]:null};
+  });
+}
+
+function simulateBatch(P,idsA,idsB,opts,n,baseSeed){
+  var r={n:0,winsA:0,winsB:0,nodes:0,blowouts:0,diffSum:0,mvp:{},kmInit:{2:0,1:0,0:0},kmWins:{2:0,1:0,0:0},kmGames:{2:0,1:0,0:0},flips:0};
+  for(var i=0;i<n;i++){
+    var rng=makeRng(baseSeed+i*7919);
+    var m=simulateMatch(P,idsA,idsB,opts,rng);
+    r.n++;if(m.win==="A")r.winsA++;else r.winsB++;
+    r.nodes+=m.nodes;if(m.blowout)r.blowouts++;
+    r.diffSum+=Math.abs(m.goldA-m.goldB);
+    r.mvp[m.mvpId]=(r.mvp[m.mvpId]||0)+1;
+    for(var pid in m.km){
+      var st=m.km[pid];r.kmInit[st.init]++;r.kmGames[st.init]++;r.flips+=st.flips;
+      var isA=idsA.indexOf(pid)>=0;
+      if((isA&&m.win==="A")||(!isA&&m.win==="B"))r.kmWins[st.init]++;
+    }
+  }
+  r.avgNodes=r.nodes/r.n;r.blowoutRate=r.blowouts/r.n;r.avgDiff=r.diffSum/r.n;
+  return r;
+}
+
+/* 队名与选手 ID 致敬真实城市英雄争霸赛（2011-2023）：
+   RGS=贵州（第12届冠军·EDG青训）Showtime=第8届冠军 LD=西安盛世龙鼎网吧（德杯黑马）
+   正月初五=网鱼赛道（首支登德杯的非职业队）TCS=贪吃飒（第10届冠军）等。
+   前十个 ID（厂长/卷毛/无状态/小伞/柚子/Icon/狼行/Ning/宝蓝/圣枪哥）= 从城市赛/网鱼
+   竞技场走出的职业选手，按生成顺序正好组成两支省级强队 —— 真实彩蛋 */
+var CITY_TEAM_NAMES=["赏金猎人","安庆电协","正月初五","ToT","2144.D","珑英竞技","SNS","皇德耀世","LD","HMG","TCS","TJD"];
+var AI_PLAYER_NAMES=["厂长","卷毛","无状态","小伞","柚子","Icon","狼行","Ning","宝蓝","圣枪哥","全能王","贝多芬","福清中二AD","yuzhe","诺夏","节奏","自宇","Kabe","Lin","GodJJ","XiaoYu","Ysera","XinYi","Twila","XuBin","Strong","UDJ","Pasa","白色风车","维尼","SouthWind","Avoidless","青蛙","致幻","洗澡哥","反向Q","补刀机器","E往无前","回城被截","越塔爱好者"];
+var DBD_NAMES=["峡谷钓鱼佬","半夜rank侠","青铜解说员","极限一换一","反向闪现创始人","野区养老院院长","兵线学家","下饭操作家","裸装赌狗","河道蟹保护协会会长"];
+/* 上场五人：SSB 布阵制取 lineup，AI 队取 roster；只有上场选手会获得比赛成长 */
+function teamFive(t){return (t.lineup&&t.lineup.length===5)?t.lineup:t.roster;}
+function rndIn(rng,lo,hi){return lo+rng.next()*(hi-lo);}
+function genPlayer(P,pid,name,slot,lo,hi,potHi,rng){
+  var st={};["lane","roam","fight","sense","mech","pool","mental"].forEach(function(k){st[k]=Math.round(rndIn(rng,lo,hi));});
+  var fit={};SLOTS.forEach(function(s){fit[s]=s===slot?Math.round(rndIn(rng,78,88)):Math.round(rndIn(rng,44,58));});
+  P[pid]={id:pid,name:name,stats:st,fit:fit,potential:Math.round(rndIn(rng,hi,potHi)),traits:[]};
+  return pid;
+}
+function genLeague(P,seed){
+  var rng=makeRng(seed);
+  var P2=JSON.parse(JSON.stringify(P));
+  var teams=[];
+  var nameIdx=0;
+  function nextName(){
+    var n=AI_PLAYER_NAMES[nameIdx%AI_PLAYER_NAMES.length];
+    var cycle=Math.floor(nameIdx/AI_PLAYER_NAMES.length);
+    if(cycle===1)n="小"+n;
+    else if(cycle>1)n=n+"·"+(cycle+1);
+    nameIdx++;
+    return n;
+  }
+  /* SSB 六人名单（布阵制）：撇干(上)/当邓(野)/阿鸡(中)/弟必(中)/狗粮(AD)/吊隆(辅)，每场选 5 人首发 */
+  teams.push({name:"SSB",roster:["piegan","dangdeng","aji","dibi","gouliang","diaolong"],lineup:SSB_MAIN.slice(),her:true,tag:"你的队",tactic:"engage",W:0,L:0,streak:0});
+  /* DBD：成员未设定，随机 AI 选手占位（独立网名池，不动城市赛真名彩蛋）——莽夫队 */
+  var dbdNames=DBD_NAMES.slice();
+  var dbdRoster=SLOTS.map(function(s){
+    var ni=Math.floor(rng.next()*dbdNames.length);
+    return genPlayer(P2,"dbd_"+s,dbdNames.splice(ni,1)[0],s,55,70,80,rng);
+  });
+  teams.push({name:"DBD",roster:dbdRoster,tag:"随机AI·等真人卡",tactic:"rush",W:0,L:0,streak:0});
+  /* 两座大山有战术性格：青训莽、卫冕冠军会运营 */
+  [["RGS","EDG青训·boss","engage"],["Showtime","城市赛卫冕冠军","scaling"]].forEach(function(tt,ti){
+    var ros=SLOTS.map(function(s){return genPlayer(P2,"pv"+ti+"_"+s,nextName(),s,63,75,84,rng);});
+    var starSlot=Math.floor(rng.next()*5);
+    var starId="pv"+ti+"_"+SLOTS[starSlot];
+    P2[starId].name="★"+P2[starId].name;
+    ["lane","roam","fight","sense","mech","pool","mental"].forEach(function(k){P2[starId].stats[k]=Math.round(rndIn(rng,76,80));});
+    teams.push({name:tt[0],roster:ros,tag:tt[1],tactic:tt[2],W:0,L:0,streak:0});
+  });
+  /* 城市队整体加强（56-68/潜力74），藏大神 3→5 支（72-78/潜力84），风格随机 */
+  var TAC_KEYS=["engage","poke","counter","rush","scaling"];
+  var starTeams=[1,2,5,8,10];
+  CITY_TEAM_NAMES.forEach(function(tn,ci){
+    var ros=SLOTS.map(function(s){return genPlayer(P2,"ct"+ci+"_"+s,nextName(),s,56,68,74,rng);});
+    var tag="城市队";
+    if(starTeams.indexOf(ci)>=0){
+      var ss=["adc","mid","top"][Math.floor(rng.next()*3)];
+      var sid="ct"+ci+"_"+ss;
+      P2[sid].name="★"+P2[sid].name;
+      ["lane","roam","fight","sense","mech","pool","mental"].forEach(function(k){P2[sid].stats[k]=Math.round(rndIn(rng,72,78));});
+      P2[sid].potential=84;
+      tag="城市队·藏大神";
+    }
+    teams.push({name:tn,roster:ros,tag:tag,tactic:TAC_KEYS[Math.floor(rng.next()*5)],W:0,L:0,streak:0});
+  });
+  return{P:P2,teams:teams};
+}
+function roundRobin(n){
+  var arr=[],rounds=[],r,k;
+  for(var i=0;i<n;i++)arr.push(i);
+  for(r=0;r<n-1;r++){
+    var pairs=[];
+    for(k=0;k<n/2;k++){
+      var a=arr[k],b=arr[n-1-k];
+      pairs.push(r%2===0?[a,b]:[b,a]);
+    }
+    rounds.push(pairs);
+    arr.splice(1,0,arr.pop());
+  }
+  return rounds;
+}
+function statAvg(p){var s=0,c=0;for(var k in p.stats){s+=p.stats[k];c++;}return s/c;}
+function applyGrowth(P,ids,rng){
+  ids.forEach(function(id){
+    var p=P[id];if(!p)return;
+    var mult=1;
+    if(p.traits.indexOf("slack")>=0)mult=p.awakened?1.8:0.4;
+    if(p.traits.indexOf("onegame")>=0)mult*=0.7;
+    for(var k in p.stats){
+      var room=p.potential-p.stats[k];
+      if(room>0)p.stats[k]=Math.min(p.potential,p.stats[k]+room*0.022*mult+rng.next()*0.15*mult);
+    }
+    /* 本命位置适性同步成长：越打越熟练（吊儿郎当时练不出肌肉记忆，觉醒后突飞猛进） */
+    var bestFit=null,bfv=0;
+    for(var f in p.fit){if(p.fit[f]>bfv){bfv=p.fit[f];bestFit=f;}}
+    if(bestFit&&bfv<85)p.fit[bestFit]=Math.min(85,bfv+(0.35+rng.next()*0.1)*mult);
+  });
+}
+function createSeason(P,seed){
+  var g=genLeague(P,seed);
+  var herBase={};
+  g.teams[0].roster.forEach(function(id){herBase[id]=statAvg(g.P[id]);});
+  return{P:g.P,teams:g.teams,schedule:roundRobin(16),round:0,phase:"regular",
+    awakened:false,awakenRound:null,ajiBottom:0,mvp:{},carried:{},herBase:herBase,herResults:[],
+    champion:null,playoffLog:null,seasonSeed:seed,pstats:{}};
+}
+function addStress(P,ids,d){ids.forEach(function(id){var p=P[id];if(!p)return;p.stress=Math.max(0,Math.min(100,(p.stress==null?30:p.stress)+d));});}
+/* ---------- 赛后随机事件（每场比赛后自动发生）：常规 16 + 剧情 5 + 大波动彩蛋 10 ----------
+   w=权重；w≤2 为大波动彩蛋（全员属性大幅增减，低概率高冲击） */
+function statUp(p,k,d){p.stats[k]=Math.max(30,Math.min(p.potential,p.stats[k]+d));}
+var STAT_KEYS=["lane","roam","fight","sense","mech","pool","mental"];
+var STAT_NAME={lane:"对线",roam:"游走",fight:"团战",sense:"意识",mech:"操作",pool:"英雄池",mental:"心态"};
+function allUp(P,ids,d){ids.forEach(function(id){STAT_KEYS.forEach(function(k){statUp(P[id],k,d);});});}
+function pick2(P,ids,rng){return P[pick(ids,rng)];}
+var EVENTS=[
+  /* —— 常规事件（w5-8）—— */
+  {w:7,name:"遇到退役大神",text:"网吧偶遇退役职业哥，手把手教了半小时对线细节。",
+   fx:function(P,ids,rng){var p=pick2(P,ids,rng);statUp(p,"lane",3);addStress(P,[p.id],-5);return p.name+" 对线 +3 · 压力 -5";}},
+  {w:7,name:"集体复盘LPL",text:"围在一起复盘昨晚的 LPL，战术板上画满了箭头。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"sense",1);});return "全员 意识 +1";}},
+  {w:7,name:"双排上分",text:"两人约了双排，rank 到凌晨两点，赢多输少。",
+   fx:function(P,ids,rng){var a=pick2(P,ids,rng);var rest=ids.filter(function(x){return x!==a.id;});var b=P[pick(rest,rng)];statUp(a,"mech",2);statUp(b,"mech",2);addStress(P,[a.id,b.id],4);return a.name+"、"+b.name+" 操作 +2 · 压力 +4";}},
+  {w:7,name:"网鱼网咖通宵",text:"网鱼网咖通宵，第二天睡到下午，有人落枕了。",
+   fx:function(P,ids,rng){addStress(P,ids,-12);var p=pick2(P,ids,rng);statUp(p,"lane",-1);return "全员压力 -12 · "+p.name+" 对线 -1（没睡醒）";}},
+  {w:7,name:"路边摊撸串",text:"路边摊撸串，氛围拉满，但有人的肠胃发出了抗议。",
+   fx:function(P,ids,rng){addStress(P,ids,-8);var p=pick2(P,ids,rng);addStress(P,[p.id],8);return "全员压力 -8 · "+p.name+" 压力 +8（吃坏了肚子）";}},
+  {w:7,name:"scrim加练到深夜",text:"scrim 打了一场又一场，教练的嗓子都哑了。",
+   fx:function(P,ids,rng){applyGrowth(P,ids,rng);addStress(P,ids,14);return "全员属性提升 · 压力 +14";}},
+  {w:7,name:"集体聚餐唱K",text:"集体聚餐唱K，回程路上还在互相甩锅昨天的操作——但大家明显松快了。",
+   fx:function(P,ids,rng){addStress(P,ids,-18);return "全员压力 -18";}},
+  {w:6,name:"台风预警",text:"台风预警，全员宅在基地——也就是换了个地方打游戏。",
+   fx:function(P,ids,rng){addStress(P,ids,-6);return "全员压力 -6";}},
+  {w:6,name:"被粉丝认出",text:"被粉丝认出来要签名，走路都带风。",
+   fx:function(P,ids,rng){var p=pick2(P,ids,rng);statUp(p,"mental",3);addStress(P,[p.id],-3);return p.name+" 心态 +3 · 压力 -3";}},
+  {w:6,name:"新皮肤半价",text:"新皮肤半价，钱包和心理同时得到满足。",
+   fx:function(P,ids,rng){addStress(P,ids,-8);var p=pick2(P,ids,rng);statUp(p,"pool",2);return "全员压力 -8 · "+p.name+" 英雄池 +2";}},
+  {w:6,name:"队内solo赛",text:"队内 solo 赛打得头破血流，胜者晚餐加鸡腿。",
+   fx:function(P,ids,rng){var p=pick2(P,ids,rng);statUp(p,"fight",2);addStress(P,[p.id],5);return p.name+" 团战 +2 · 压力 +5";}},
+  {w:6,name:"战术特训",text:"教练组拉着加练了三天战术，白板写穿了三支笔。",
+   fx:function(P,ids,rng){var p=pick2(P,ids,rng);var k=STAT_KEYS[Math.floor(rng.next()*7)];statUp(p,k,3);return p.name+" "+STAT_NAME[k]+" +3";}},
+  {w:5,name:"健身环大冒险",text:"全员被按头玩了半小时健身环，腰不酸了，腿不疼了。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"mental",1);});addStress(P,ids,-6);return "全员心态 +1 · 压力 -6";}},
+  {w:5,name:"队医强制补觉",text:"队医强制全员体检加补觉，有人查出轻度腱鞘炎。",
+   fx:function(P,ids,rng){addStress(P,ids,-10);return "全员压力 -10";}},
+  {w:5,name:"直播整活涨粉",text:"有人开播整活，意外涨了十万粉。",
+   fx:function(P,ids,rng){var p=pick2(P,ids,rng);statUp(p,"mental",2);addStress(P,ids,-4);return p.name+" 心态 +2 · 全员压力 -4";}},
+  {w:5,name:"约战隔壁战队",text:"和隔壁战队约了两场训练赛，互相摸了底。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"lane",1);statUp(P[id],"mech",1);});addStress(P,ids,5);return "全员 对线+1 操作+1 · 压力 +5";}},
+  /* —— 剧情彩蛋（w3-4）—— */
+  {w:4,name:"神秘高人",text:"基地来了位神秘高人，只留下一句「多插眼」，便飘然而去。",
+   fx:function(P,ids,rng){var p=pick2(P,ids,rng);statUp(p,"sense",4);addStress(P,ids,-8);return "★ "+p.name+" 意识 +4 · 全员压力 -8";}},
+  {w:4,name:"捡到《意识论》",text:"有人在图书馆睡着了，醒来手里多了本《意识论》。",
+   fx:function(P,ids,rng){var p=pick2(P,ids,rng);statUp(p,"sense",5);addStress(P,[p.id],-3);return p.name+" 意识 +5 · 压力 -3";}},
+  {w:4,name:"接了外设代言",text:"接了个外设代言，全员美滋滋拍了一天广告。",
+   fx:function(P,ids,rng){var p=pick2(P,ids,rng);statUp(p,"pool",3);addStress(P,ids,6);return p.name+" 英雄池 +3 · 全员压力 +6";}},
+  {w:4,name:"粉丝寄特产",text:"粉丝寄来一箱家乡特产，全队分了。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"mental",1);});addStress(P,ids,-5);return "全员心态 +1 · 压力 -5";}},
+  {w:3,name:"隔壁网吧踢馆",text:"隔壁网吧战队来踢馆，被你们打了个 2:0。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"fight",2);});addStress(P,ids,-6);return "全员团战 +2 · 压力 -6";}},
+  /* —— 大波动彩蛋（w1-2，低概率高冲击）—— */
+  {w:2,name:"沉迷PUBG",text:"全员沉迷 PUBG，训练赛迟到，教练组震怒，紧急没收手机。",
+   fx:function(P,ids,rng){allUp(P,ids,-3);addStress(P,ids,-10);return "⚠️ 全员全属性 -3 · 压力 -10";}},
+  {w:1,name:"基地升级",text:"老板突然打钱，基地搬进高端写字楼，外设全换顶配。",
+   fx:function(P,ids,rng){allUp(P,ids,2);addStress(P,ids,-5);return "★ 全员全属性 +2 · 压力 -5";}},
+  {w:1,name:"外设集体故障",text:"训练室跳闸，全员外设集体罢工一天。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"mech",-5);});addStress(P,ids,10);return "⚠️ 全员操作 -5 · 压力 +10";}},
+  {w:1,name:"天降神教练",text:"一位自称「江湖人称战术鬼才」的老头路过基地，指点了两手。",
+   fx:function(P,ids,rng){var a=pick2(P,ids,rng);var rest=ids.filter(function(x){return x!==a.id;});var b=P[pick(rest,rng)];var ka=STAT_KEYS[Math.floor(rng.next()*7)],kb=STAT_KEYS[Math.floor(rng.next()*7)];statUp(a,ka,4);statUp(b,kb,4);addStress(P,ids,-8);return "★ "+a.name+" "+STAT_NAME[ka]+"+4、"+b.name+" "+STAT_NAME[kb]+"+4 · 全员压力 -8";}},
+  {w:1,name:"更衣室爆炸",text:"战术分歧引爆更衣室，摔了两个鼠标。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"mental",-5);});addStress(P,ids,15);return "⚠️ 全员心态 -5 · 压力 +15";}},
+  {w:1,name:"版本红利",text:"新版本恰好加强了你们的战术体系，练了两周的套路突然成了版本答案。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"fight",4);statUp(P[id],"pool",3);});addStress(P,ids,-5);return "★ 全员团战 +4 英雄池 +3 · 压力 -5";}},
+  {w:1,name:"集体食物中毒",text:"庆功宴的生蚝出了问题，全员在医院挂水。",
+   fx:function(P,ids,rng){allUp(P,ids,-4);addStress(P,ids,8);return "⚠️ 全员全属性 -4 · 压力 +8";}},
+  {w:1,name:"赞助商神仙福利",text:"赞助商年底冲量，发了一波神仙福利。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"pool",6);});addStress(P,ids,-12);return "★ 全员英雄池 +6 · 压力 -12";}},
+  {w:1,name:"训练赛十连败",text:"约的训练赛连输十把，越打越迷。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"lane",-3);statUp(P[id],"sense",-3);});addStress(P,ids,12);return "⚠️ 全员对线 -3 意识 -3 · 压力 +12";}},
+  {w:2,name:"职业队集训营",text:"被 RGS 邀去合练了三天，回来整个人都不一样了。",
+   fx:function(P,ids,rng){ids.forEach(function(id){statUp(P[id],"mech",3);statUp(P[id],"sense",3);});addStress(P,ids,8);return "★ 全员操作 +3 意识 +3 · 压力 +8";}}
+];
+function rollEvent(P,ids,rng){
+  var total=0;EVENTS.forEach(function(e){total+=e.w;});
+  var r=rng.next()*total,ev=EVENTS[0];
+  for(var i=0;i<EVENTS.length;i++){r-=EVENTS[i].w;if(r<=0){ev=EVENTS[i];break;}}
+  var fxText=ev.fx(P,ids,rng);
+  return{name:ev.name,text:ev.text,fx:fxText,big:ev.w<=2};
+}
+function addFatigue(P,ids,d){ids.forEach(function(id){var p=P[id];if(!p)return;p.fatigue=Math.max(0,Math.min(100,(p.fatigue==null?0:p.fatigue)+d));});}
+/* AI 战术反制：最近 4 轮你反复用同一战术 ≥2 次 → 全联盟都会针对性准备（难度来源） */
+function aiTactic(st,team){
+  var h=(st.tacHist||[]).slice(-4);
+  if(h.length>=2){
+    var cnt={};h.forEach(function(t){cnt[t]=(cnt[t]||0)+1;});
+    var best=null,bn=0;
+    for(var k in cnt)if(cnt[k]>bn){bn=cnt[k];best=k;}
+    if(bn>=2&&best){for(var t in TACTICS)if(TACTICS[t].beats===best)return t;}
+  }
+  return team.tactic||"engage";
+}
+function playSeasonRound(st,opts,seedBase){
+  var events={round:st.round,matches:[],herMatch:null,awaken:null};
+  var pairs=st.schedule[st.round];
+  pairs.forEach(function(pr,idx){
+    var tA=st.teams[pr[0]],tB=st.teams[pr[1]];
+    var fiveA=teamFive(tA),fiveB=teamFive(tB);
+    var rng=makeRng((seedBase+idx*7919+st.round*104729)|0);
+    var tacA=tA.her?(tA.tactic||"engage"):aiTactic(st,tA);
+    var tacB=tB.her?(tB.tactic||"engage"):aiTactic(st,tB);
+    var m=simulateMatch(st.P,fiveA,fiveB,Object.assign({},opts,{nameA:tA.name,nameB:tB.name,tacA:tacA,tacB:tacB}),rng);
+    var wTeam=m.win==="A"?tA:tB,lTeam=m.win==="A"?tB:tA;
+    wTeam.W++;lTeam.L++;
+    wTeam.streak=wTeam.streak>0?wTeam.streak+1:1;
+    lTeam.streak=lTeam.streak<0?lTeam.streak-1:-1;
+    st.mvp[m.mvpId]=(st.mvp[m.mvpId]||0)+1;
+    var wIds=m.win==="A"?fiveA:fiveB;
+    var minId=wIds[0];
+    wIds.forEach(function(id){if(m.contrib[id]<m.contrib[minId])minId=id;});
+    st.carried[minId]=(st.carried[minId]||0)+1;
+    /* 只有上场选手获得比赛成长；你的队上场选手赛后压力 +4 */
+    applyGrowth(st.P,fiveA.concat(fiveB),rng);
+    if(tA.her||tB.her)addStress(st.P,(tA.her?fiveA:fiveB),4);
+    events.matches.push({a:tA.name,b:tB.name,win:m.win,mvp:st.P[m.mvpId].name,
+      diff:Math.abs(m.goldA-m.goldB),her:(tA.her||tB.her)});
+    if(tA.her||tB.her){
+      events.herMatch={m:m,a:tA,b:tB};
+      /* 战术记录（供 AI 反制）+ 疲劳账目：上场 +12，替补 -40 */
+      st.tacHist=(st.tacHist||[]);st.tacHist.push(tA.her?tacA:tacB);
+      var herFive=tA.her?fiveA:fiveB;
+      addFatigue(st.P,herFive,12);
+      addFatigue(st.P,st.teams[0].roster.filter(function(id){return herFive.indexOf(id)<0;}),-40);
+      /* 赛后随机事件：作用于全队名单（含替补），剧情与数值波动全看脸 */
+      events.afterEvent=rollEvent(st.P,st.teams[0].roster,makeRng((seedBase*31+idx*977+st.round*131577)|0));
+      var herRoster=tA.her?fiveA:fiveB;
+      var bottomId=herRoster[0];
+      herRoster.forEach(function(id){if(m.contrib[id]<m.contrib[bottomId])bottomId=id;});
+      if(bottomId==="aji")st.ajiBottom=(st.ajiBottom||0)+1;
+      st.herResults.push({round:st.round+1,opp:tA.her?tB.name:tA.name,
+        win:(tA.her&&m.win==="A")||(tB.her&&m.win==="B"),
+        mvp:st.P[m.mvpId].name,diff:Math.abs(m.goldA-m.goldB)});
+    }
+  });
+  var her=st.teams[0];
+  var byStreak=her.streak<=-5;
+  var byBottom=(st.ajiBottom||0)>=5;
+  if(!st.awakened&&(byStreak||byBottom)){
+    st.awakened=true;st.awakenRound=st.round+1;
+    var aji=st.P["aji"];
+    if(aji){aji.awakened=true;aji.stats.lane+=6;aji.stats.mech+=10;aji.stats.fight+=12;aji.stats.sense+=6;aji.stats.mental+=8;}
+    events.awaken=(byStreak?"队伍五连败达成":"阿鸡累计 "+st.ajiBottom+" 场队内垫底，憋不住了")+"——阿鸡在更衣室沉默了整整十分钟，然后抬头说：「下次比赛，看我的。」（属性大幅提升，成长 ×2.25）";
+  }
+  st.round++;
+  if(st.round>=st.schedule.length)st.phase="playoffs";
+  return events;
+}
+function simSeries(st,ta,tb,need,opts,seedBase){
+  var ga=0,gb=0,games=[];
+  var fa=teamFive(ta),fb=teamFive(tb);
+  var tacA=ta.her?(ta.tactic||"engage"):aiTactic(st,ta);
+  var tacB=tb.her?(tb.tactic||"engage"):aiTactic(st,tb);
+  for(var g=1;g<=need*2-1;g++){
+    var rng=makeRng((seedBase*31+g*7919)|0);
+    var m=simulateMatch(st.P,fa,fb,Object.assign({},opts,{gameIdx:g,nameA:ta.name,nameB:tb.name,tacA:tacA,tacB:tacB}),rng);
+    if(m.win==="A")ga++;else gb++;
+    st.mvp[m.mvpId]=(st.mvp[m.mvpId]||0)+1;
+    applyGrowth(st.P,fa.concat(fb),rng);
+    if(ta.her||tb.her){
+      addStress(st.P,(ta.her?fa:fb),4);
+      addFatigue(st.P,(ta.her?fa:fb),12);
+      rollEvent(st.P,(ta.her?ta:tb).roster,rng); /* 季后赛每局赛后也有随机事件 */
+    }
+    games.push(m);
+    if(ga===need||gb===need)break;
+  }
+  return{winnerTeam:ga===need?ta:tb,loserTeam:ga===need?tb:ta,ga:ga,gb:gb,games:games};
+}
+function runPlayoffs(st,opts,seedBase){
+  if(st.champion)return st.playoffLog||[];
+  var rng=makeRng(seedBase);
+  var order=st.teams.map(function(t){return t;}).sort(function(a,b){return b.W-a.W||(rng.next()<0.5?-1:1);});
+  var top8=order.slice(0,8);
+  var lines=[];
+  var stageN=0;
+  function stage(name,pairs,need){
+    stageN++;
+    var next=[];
+    lines.push("==== "+name+"（BO"+(need*2-1)+"） ====");
+    pairs.forEach(function(pr,idx){
+      var r=simSeries(st,pr[0],pr[1],need,opts,seedBase+idx*131+stageN*977);
+      var her=pr[0].her||pr[1].her;
+      var mvps=r.games.map(function(m){return st.P[m.mvpId].name;}).join("、");
+      lines.push(pr[0].name+" "+r.ga+" : "+r.gb+" "+pr[1].name+" ｜ 各局MVP："+mvps+(her?" ｜ ★你的系列赛":""));
+      if(her){
+        r.games.forEach(function(m,g){
+          lines.push("　第"+(g+1)+"局 "+(m.win==="A"?pr[0].name:pr[1].name)+" 胜 · "+fmtClock(m.gameLen)+" · MVP "+st.P[m.mvpId].name+" · 经济差 "+Math.abs(m.goldA-m.goldB));
+        });
+      }
+      next.push(r.winnerTeam);
+    });
+    return next;
+  }
+  var qf=[[top8[0],top8[7]],[top8[3],top8[4]],[top8[1],top8[6]],[top8[2],top8[5]]];
+  var sf=stage("八强赛",qf,2);
+  var ff=stage("半决赛",[[sf[0],sf[1]],[sf[2],sf[3]]],2);
+  var champ=stage("总决赛",[[ff[0],ff[1]]],2);
+  st.champion=champ[0].name;
+  var her=st.teams[0];
+  var herRank=order.indexOf(her)+1;
+  lines.push("==== 冠军："+st.champion+" ====");
+  lines.push("你的常规赛排名：第 "+herRank+" 名（"+her.W+"胜"+her.L+"负）"+(st.awakened?" · 阿鸡已于第 "+st.awakenRound+" 轮觉醒":" · 阿鸡整季未觉醒（没凑出五连败）"));
+  st.phase="done";
+  st.playoffLog=lines;
+  return lines;
+}
+</script>
+
+<script>
+"use strict";
+var P=JSON.parse(JSON.stringify(DEFAULT_PLAYERS));
+var SEASON=null;
+var SEASON_KEY="dd_esm_season_v2";
+var $=function(id){return document.getElementById(id);};
+var SLIDERS=[["s_sigma","v_sigma","sigma",function(v){return "σ = "+v;}],["s_snow","v_snow","snowball",function(v){return "系数 = "+v;}],["s_nodes","v_nodes","nodeCount",function(v){return v+" 个";}],["s_game","v_game","gameIdx",function(v){return "第 "+v+" 局";}],["s_god","v_god","godP",function(v){return "各 "+v+"%";}],["s_first","v_first","firstBuff",function(v){return "+"+v;}],["s_decay","v_decay","decayStep",function(v){return "-"+v+" /局"}]];
+
+function defaultsToUI(){
+  $("s_sigma").value=DEFAULT_OPTS.sigma;$("s_snow").value=DEFAULT_OPTS.snowball;$("s_nodes").value=DEFAULT_OPTS.nodeCount;
+  $("s_game").value=DEFAULT_OPTS.gameIdx;$("s_god").value=DEFAULT_OPTS.godP;$("s_first").value=DEFAULT_OPTS.firstBuff;$("s_decay").value=DEFAULT_OPTS.decayStep;
+  $("chk_awake").checked=DEFAULT_OPTS.awakened;
+  refreshSliderLabels();
+}
+function refreshSliderLabels(){SLIDERS.forEach(function(s){$(s[1]).textContent=s[3]($(s[0]).value);});}
+SLIDERS.forEach(function(s){$(s[0]).addEventListener("input",refreshSliderLabels);});
+PRESETS.forEach(function(p,i){var o=document.createElement("option");o.value=i;o.textContent=p.label;$("sel_preset").appendChild(o);});
+$("sel_preset").addEventListener("change",renderRosters);
+
+function readOpts(){
+  var o={};
+  SLIDERS.forEach(function(s){o[s[2]]=parseFloat($(s[0]).value);});
+  o.awakened=$("chk_awake").checked;
+  return o;
+}
+function currentSeed(){
+  var v=$("in_seed").value.trim();
+  if(v==="")return Math.floor(Math.random()*1e9);
+  var n=parseInt(v,10);return isNaN(n)?42:n;
+}
+function currentPreset(){return PRESETS[parseInt($("sel_preset").value,10)||0];}
+function renderRosters(){
+  var pr=currentPreset();var r=resolveRosters(P,pr);
+  function side(ids,title,note){
+    var h="<h3>"+title+(note?' <span class="vs">'+note+"</span>":"")+"</h3>";
+    ids.forEach(function(id,i){
+      var p=P[id];if(!p)return;
+      var tags=p.traits.map(function(t){return '<span class="tag">'+TRAITS[t].name+"</span>";}).join("");
+      h+='<div class="prow"><span class="pos">'+SLOT_NAME[SLOTS[i]]+"</span>"+p.name+tags+"</div>";
+    });
+    return h;
+  }
+  $("rosterA").innerHTML=side(r.A,"A队");
+  $("rosterB").innerHTML=side(r.B,"B队",(pr.mirrorOf?"（镜像）":"")+(pr.weakenOf?"（全属性-3）":""));
+}
+function renderLogTo(el,lines){
+  el.innerHTML=lines.map(function(l){
+    var cls=l.t==="hl"?"hl":(l.t==="bl"?"bl":(l.t==="tr"?"tr":"nd"));
+    return '<span class="'+cls+'">'+l.s.replace(/&/g,"&amp;").replace(/</g,"&lt;")+"</span>";
+  }).join("<br>");
+  el.scrollTop=0;
+}
+function renderBoxTo(el,box,titleA,titleB){
+  function tbl(side,tname){
+    var rows=box.filter(function(r){return r.side===side;});
+    var h="<table><tr><th>"+tname+"</th><th>K / D / A</th><th>参团率</th><th>输出占比</th><th>贡献</th><th>评级</th></tr>";
+    rows.forEach(function(r){
+      h+="<tr"+(r.mvp?' style="background:var(--purple-light)"':"")+"><td>"+SLOT_NAME[r.slot]+" "+r.name+(r.mvp?' <span class="mvp-star">★MVP</span>':"")+(r.kami?' <span class="tag p">'+r.kami+"</span>":"")+"</td>"+
+      "<td>"+r.k+" / "+r.d+" / "+r.a+"</td><td>"+r.join+"%</td><td>"+r.share.toFixed(1)+"%</td><td>"+r.contrib+"</td>"+
+      '<td class="g-'+r.grade+'">'+r.grade+"</td></tr>";
+    });
+    var tk=0,td=0,ta=0;
+    rows.forEach(function(r){tk+=r.k;td+=r.d;ta+=r.a;});
+    h+='<tr style="background:var(--purple-light);font-weight:700"><td>合计</td><td>'+tk+" / "+td+" / "+ta+"</td><td>—</td><td>100%</td><td>—</td><td>—</td></tr>";
+    return h+"</table>";
+  }
+  el.innerHTML=tbl("A",titleA||"A队")+tbl("B",titleB||"B队");
+}
+function renderReport(r,opts,extra){
+  var wr=r.winsA/r.n*100;
+  var h="";
+  h+='<div class="stat"><div>胜率 <b>'+wr.toFixed(1)+"%</b>（A "+r.winsA+" : B "+r.winsB+" / "+r.n+" 场）</div>";
+  h+="<div>平均节点 <b>"+r.avgNodes.toFixed(1)+"</b></div><div>碾压局 <b>"+(r.blowoutRate*100).toFixed(0)+"%</b></div><div>平均经济差 <b>"+Math.round(r.avgDiff)+"g</b></div></div>";
+  h+='<div class="bar"><i style="width:'+wr.toFixed(1)+'%"></i></div>';
+  var mvpArr=Object.keys(r.mvp).map(function(k){return[P[k]?P[k].name:k,r.mvp[k]];}).sort(function(a,b){return b[1]-a[1];});
+  if(mvpArr.length){
+    h+="<table><tr><th>MVP</th><th>次数</th><th>占比</th></tr>";
+    mvpArr.slice(0,8).forEach(function(x){h+="<tr><td>"+x[0]+"</td><td>"+x[1]+"</td><td>"+(x[1]/r.n*100).toFixed(1)+"%</td></tr>";});
+    h+="</table>";
+  }
+  if(r.kmGames[2]+r.kmGames[1]+r.kmGames[0]>0){
+    function wr2(s){return r.kmGames[s]?(r.kmWins[s]/r.kmGames[s]*100).toFixed(0)+"%":"-";}
+    h+="<table><tr><th>神鬼二象</th><th>开局占比</th><th>所在队胜率</th></tr>";
+    h+="<tr><td>神开局</td><td>"+(r.kmGames[2]/r.n*100).toFixed(0)+"%</td><td>"+wr2(2)+"</td></tr>";
+    h+="<tr><td>中立开局</td><td>"+(r.kmGames[1]/r.n*100).toFixed(0)+"%</td><td>"+wr2(1)+"</td></tr>";
+    h+="<tr><td>鬼开局</td><td>"+(r.kmGames[0]/r.n*100).toFixed(0)+"%</td><td>"+wr2(0)+"</td></tr></table>";
+    h+='<p class="note">平均翻转：'+(r.flips/r.n).toFixed(2)+" 次/场</p>";
+  }
+  if(extra)h+=extra;
+  h+='<p class="note">参数：σ '+opts.sigma+" · 雪球 "+opts.snowball+" · 节点 "+opts.nodeCount+" · 局数 "+opts.gameIdx+" · 神鬼概率 "+opts.godP+"%"+"</p>";
+  $("report").innerHTML=h;
+}
+
+$("btn_one").addEventListener("click",function(){
+  var opts=readOpts();var pr=currentPreset();var r=resolveRosters(P,pr);
+  var m=simulateMatch(P,r.A,r.B,Object.assign({},opts,{nameA:pr.label.indexOf("SSB")>=0?"SSB":(pr.label.split(" · ").pop().split(" vs ")[0]||"A队"),nameB:(pr.label.split(" vs ")[1]||"B队")}),makeRng(currentSeed()));
+  renderLogTo($("log"),m.log);
+  renderBoxTo($("box"),m.box,"A队（"+(pr.label.indexOf("SSB")>=0?"SSB":"")+"）","B队");
+  renderReport({n:1,winsA:m.win==="A"?1:0,winsB:m.win==="B"?1:0,avgNodes:m.nodes,blowoutRate:m.blowout?1:0,avgDiff:Math.abs(m.goldA-m.goldB),mvp:{},kmInit:{2:0,1:0,0:0},kmWins:{2:0,1:0,0:0},kmGames:{2:0,1:0,0:0},flips:0},opts,'<p class="note">单场：'+(m.win==="A"?"A":"B")+'队胜 · 种子 '+currentSeed()+" 可复现</p>");
+});
+$("btn_batch").addEventListener("click",function(){
+  var opts=readOpts();var pr=currentPreset();var r=resolveRosters(P,pr);
+  var n=Math.min(5000,Math.max(100,parseInt($("in_count").value,10)||1000));
+  var res=simulateBatch(P,r.A,r.B,opts,n,currentSeed());
+  renderReport(res,opts,"");
+});
+$("btn_ongame").addEventListener("click",function(){
+  var pr=currentPreset();var r=resolveRosters(P,pr);
+  var base=currentSeed();var o0=readOpts();
+  var rows=[];
+  for(var g=1;g<=5;g++){
+    var opts=readOpts();opts.gameIdx=g;
+    var res=simulateBatch(P,r.A,r.B,opts,300,base+g*104729);
+    var mod=o0.firstBuff-o0.decayStep*(g-1);
+    rows.push([g,(res.winsA/300*100).toFixed(1),(mod>0?"+"+mod:String(mod))]);
+  }
+  var extra="<table><tr><th>狗粮 · 当日局数</th><th>属性修正</th><th>A队胜率</th></tr>";
+  rows.forEach(function(x){extra+="<tr><td>第 "+x[0]+" 局</td><td>"+x[2]+"</td><td>"+x[1]+"%</td></tr>";});
+  extra+="</table>";
+  var opts2=readOpts();var res2=simulateBatch(P,r.A,r.B,opts2,300,base);
+  renderReport(res2,opts2,extra);
+});
+$("btn_awake").addEventListener("click",function(){
+  var pr=currentPreset();var r=resolveRosters(P,pr);
+  var base=currentSeed();
+  var o1=readOpts();o1.awakened=false;
+  var o2=readOpts();o2.awakened=true;
+  var r1=simulateBatch(P,r.A,r.B,o1,500,base);
+  var r2=simulateBatch(P,r.A,r.B,o2,500,base+500);
+  var extra="<table><tr><th>阿鸡状态</th><th>A队胜率</th></tr>";
+  extra+="<tr><td>未觉醒</td><td>"+(r1.winsA/500*100).toFixed(1)+"%</td></tr>";
+  extra+="<tr><td>已觉醒</td><td>"+(r2.winsA/500*100).toFixed(1)+"%</td></tr></table>";
+  renderReport(r1,o1,extra);
+});
+
+/* ---------- 赛季模式 ---------- */
+function saveSeason(){try{localStorage.setItem(SEASON_KEY,JSON.stringify(SEASON));}catch(e){}}
+function loadSeason(){
+  try{
+    var s=localStorage.getItem(SEASON_KEY);
+    if(!s)return null;
+    var obj=JSON.parse(s);
+    if(obj&&obj.teams&&obj.schedule)return obj;
+  }catch(e){}
+  return null;
+}
+function seasonStatusText(){
+  if(!SEASON)return;
+  var her=SEASON.teams[0];
+  var t="第 "+Math.min(SEASON.round,SEASON.schedule.length)+" / "+SEASON.schedule.length+" 轮 ｜ 你的战绩 "+her.W+"胜"+her.L+"负 ｜ "+
+    (her.streak>0?("当前 "+her.streak+" 连胜"):her.streak<0?("当前 "+(-her.streak)+" 连败"+(SEASON.awakened?"":"（连败到 5 触发阿鸡觉醒）")):"开赛");
+  if(SEASON.awakened)t+=" ｜ 阿鸡已觉醒（第 "+SEASON.awakenRound+" 轮）";
+  if(SEASON.phase==="playoffs")t+=" ｜ 常规赛结束，可模拟季后赛";
+  if(SEASON.phase==="done")t+=" ｜ 赛季已结束，冠军："+SEASON.champion;
+  $("season_status").textContent=t;
+}
+function renderStandings(){
+  var arr=SEASON.teams.slice().sort(function(a,b){return b.W-a.W;});
+  var h="<table><tr><th>#</th><th>队伍</th><th>胜负</th><th>连胜/连败</th><th>备注</th></tr>";
+  arr.forEach(function(t,i){
+    h+="<tr"+(t.her?' class="me"':"")+"><td>"+(i+1)+"</td><td>"+t.name+"</td><td>"+t.W+"-"+t.L+"</td><td>"+
+    (t.streak>0?t.streak+"连胜":(-t.streak)+"连败")+"</td><td>"+t.tag+"</td></tr>";
+  });
+  h+="</table>";
+  return h;
+}
+function renderGrowth(){
+  var h="<table><tr><th>选手</th><th>赛季初总评</th><th>当前总评</th><th>成长</th><th>潜力</th><th>特性</th></tr>";
+  SEASON.teams[0].roster.forEach(function(id,i){
+    var p=SEASON.P[id];if(!p)return;
+    var base=SEASON.herBase[id]||statAvg(p);
+    var now=statAvg(p);
+    var diff=now-base;
+    var tags=p.traits.map(function(t){return '<span class="tag">'+TRAITS[t].name+"</span>";}).join("")+(p.awakened?' <span class="tag p">已觉醒</span>':"");
+    h+="<tr><td>"+SLOT_NAME[SLOTS[i]]+" "+p.name+"</td><td>"+base.toFixed(1)+"</td><td><b>"+now.toFixed(1)+"</b></td><td style=\"color:"+(diff>=0?"var(--teal)":"var(--red)")+"\">"+(diff>=0?"+":"")+diff.toFixed(1)+"</td><td>"+p.potential+"</td><td>"+tags+"</td></tr>";
+  });
+  h+="</table>";
+  return h;
+}
+function renderSeason(extraHTML){
+  if(!SEASON){$("season_area").innerHTML="";return;}
+  var h="<h3 style='font-size:13px;color:var(--muted);margin:14px 0 4px'>积分榜</h3>"+renderStandings();
+  h+="<h3 style='font-size:13px;color:var(--muted);margin:14px 0 4px'>你的队员 · 成长</h3>"+renderGrowth();
+  if(extraHTML)h=extraHTML+h;
+  if(SEASON.playoffLog){
+    h+="<h3 style='font-size:13px;color:var(--muted);margin:14px 0 4px'>季后赛战报</h3><div class='logbox'>"+SEASON.playoffLog.map(function(l){return l.replace(/&/g,"&amp;").replace(/</g,"&lt;");}).join("<br>")+"</div>";
+    h+=renderAwards();
+  }
+  $("season_area").innerHTML=h;
+  seasonStatusText();
+  saveSeason();
+}
+function renderAwards(){
+  var mvpArr=Object.keys(SEASON.mvp).map(function(k){return[SEASON.P[k]?SEASON.P[k].name:k,SEASON.mvp[k]];}).sort(function(a,b){return b[1]-a[1];});
+  var cArr=Object.keys(SEASON.carried).map(function(k){return[SEASON.P[k]?SEASON.P[k].name:k,SEASON.carried[k]];}).sort(function(a,b){return b[1]-a[1];});
+  var growArr=SEASON.teams[0].roster.map(function(id){var p=SEASON.P[id];var base=SEASON.herBase[id]||0;return[p.name,statAvg(p)-base];}).sort(function(a,b){return b[1]-a[1];});
+  var h="<h3 style='font-size:13px;color:var(--muted);margin:14px 0 4px'>赛季颁奖</h3>";
+  h+='<div class="award">常规赛 MVP：'+(mvpArr[0]?mvpArr[0][0]+"（"+mvpArr[0][1]+" 次单局 MVP）":"-")+"</div>";
+  h+='<div class="award">躺赢王：'+(cArr[0]?cArr[0][0]+"（"+cArr[0][1]+" 局躺赢）":"-")+"</div>";
+  h+='<div class="award">进步最快（你的队）：'+(growArr[0]?growArr[0][0]+"（总评 +"+growArr[0][1].toFixed(1)+"）":"-")+"</div>";
+  return h;
+}
+$("btn_newseason").addEventListener("click",function(){
+  SEASON=createSeason(P,currentSeed());
+  $("season_area").innerHTML="";
+  renderSeason('<p class="note">新赛季生成完毕：16 队就位。点「打一轮」开始。DBD 暂用随机 AI，后续真人卡到位后替换。</p>');
+});
+$("btn_round").addEventListener("click",function(){
+  if(!SEASON){alert("先点「生成新赛季」");return;}
+  if(SEASON.phase!=="regular"){alert(SEASON.phase==="done"?"赛季已结束，请生成新赛季":"常规赛已结束，请模拟季后赛");return;}
+  var opts=readOpts();
+  var ev=playSeasonRound(SEASON,opts,currentSeed());
+  var h="";
+  if(ev.awaken)h+='<div class="award" style="background:var(--purple-light);color:var(--purple);font-weight:500">⚡ '+ev.awaken+"</div>";
+  h+="<h3 style='font-size:13px;color:var(--muted);margin:14px 0 4px'>第 "+(ev.round+1)+" 轮赛果</h3><table>";
+  ev.matches.forEach(function(m){
+    h+="<tr"+(m.her?' class="me"':"")+"><td>"+m.a+"</td><td>"+(m.win==="A"?"1 : 0":"0 : 1")+"</td><td>"+m.b+"</td><td>MVP "+m.mvp+"</td></tr>";
+  });
+  h+="</table>";
+  if(ev.herMatch){
+    var hm=ev.herMatch;
+    h+="<h3 style='font-size:13px;color:var(--muted);margin:14px 0 4px'>你的比赛 · "+hm.a.name+" vs "+hm.b.name+"</h3>";
+    h+="<div class='logbox' id='season_log' style='max-height:260px'></div><div id='season_box'></div>";
+  }
+  renderSeason(h);
+  if(ev.herMatch){
+    renderLogTo($("season_log"),ev.herMatch.m.log);
+    renderBoxTo($("season_box"),ev.herMatch.m.box,ev.herMatch.a.name,ev.herMatch.b.name);
+  }
+});
+$("btn_ffwd").addEventListener("click",function(){
+  if(!SEASON){alert("先点「生成新赛季」");return;}
+  if(SEASON.phase!=="regular"){alert("常规赛已结束");return;}
+  var opts=readOpts();
+  var awakenMsg="";
+  while(SEASON.phase==="regular"){
+    var ev=playSeasonRound(SEASON,opts,currentSeed());
+    if(ev.awaken&&!awakenMsg)awakenMsg=ev.awaken;
+  }
+  var h="";
+  if(awakenMsg)h+='<div class="award" style="background:var(--purple-light);color:var(--purple);font-weight:500">⚡ '+awakenMsg+"</div>";
+  h+="<h3 style='font-size:13px;color:var(--muted);margin:14px 0 4px'>你的常规赛全部赛果</h3><table><tr><th>轮次</th><th>对手</th><th>结果</th><th>MVP</th><th>经济差</th></tr>";
+  SEASON.herResults.forEach(function(r){
+    h+="<tr><td>第"+r.round+"轮</td><td>"+r.opp+"</td><td style=\"color:"+(r.win?"var(--teal)":"var(--red)")+"\">"+(r.win?"胜":"负")+"</td><td>"+r.mvp+"</td><td>"+r.diff+"</td></tr>";
+  });
+  h+="</table>";
+  renderSeason(h);
+});
+$("btn_playoffs").addEventListener("click",function(){
+  if(!SEASON){alert("先点「生成新赛季」");return;}
+  if(SEASON.phase==="regular"){alert("常规赛还没打完（"+SEASON.round+"/"+SEASON.schedule.length+"轮），可先「快进常规赛」");return;}
+  if(SEASON.phase==="done"){renderSeason();return;}
+  var opts=readOpts();
+  runPlayoffs(SEASON,opts,currentSeed());
+  renderSeason();
+});
+$("btn_resetseason").addEventListener("click",function(){
+  localStorage.removeItem(SEASON_KEY);
+  SEASON=null;
+  $("season_area").innerHTML="";
+  $("season_status").textContent="存档已清除。";
+});
+
+$("btn_apply").addEventListener("click",function(){
+  try{
+    var obj=JSON.parse($("ta_data").value);
+    P=obj;
+    $("data_msg").textContent="已应用 "+Object.keys(obj).length+" 名选手。";
+    renderRosters();
+  }catch(e){$("data_msg").textContent="JSON 有误："+e.message;}
+});
+$("btn_reset").addEventListener("click",function(){
+  P=JSON.parse(JSON.stringify(DEFAULT_PLAYERS));
+  $("ta_data").value=JSON.stringify(DEFAULT_PLAYERS,null,1);
+  $("data_msg").textContent="已恢复默认。";
+  renderRosters();
+});
+
+$("ta_data").value=JSON.stringify(DEFAULT_PLAYERS,null,1);
+defaultsToUI();
+renderRosters();
+SEASON=loadSeason();
+if(SEASON){
+  renderSeason('<p class="note">已恢复上次的赛季存档。</p>');
+  seasonStatusText();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>重生之我是SSB职业经理 · 开发手册 v0.1</title>
+<style>
+:root{--purple:#6d4fd8;--p600:#534AB7;--p400:#7F77DD;--p100:#EEEDFE;--pborder:#c9bdf3;--text:#2a2438;--text2:#3C3489;--muted:#6f6884;--teal:#0f6e56;--teal-l:#e1f5ee;--red:#a32d2d;--red-l:#fcebeb;--gold:#854f0b;--gold-l:#faeeda;}
+*{box-sizing:border-box}
+body{margin:0;font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text);background:#faf9fe;font-size:14px;line-height:1.7}
+header{padding:22px 20px;background:#fff;border-bottom:1px solid var(--pborder)}
+.hw{max-width:960px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px;color:var(--text2)}
+.sub{color:var(--muted);font-size:13px}
+main{max-width:960px;margin:0 auto;padding:16px 20px 60px}
+.card{background:#fff;border:1px solid var(--pborder);border-radius:12px;padding:16px 18px;margin:14px 0}
+.card h2{font-size:17px;margin:0 0 10px;color:var(--text2)}
+.card h3{font-size:14px;margin:14px 0 6px;color:var(--p600)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+td,th{border-bottom:1px solid #eee;padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500;background:var(--p100)}
+code,pre{font-family:Consolas,"Courier New",monospace;font-size:12.5px;background:var(--p100);border-radius:4px}
+code{padding:1px 5px}
+pre{padding:10px 12px;overflow-x:auto;line-height:1.6}
+.note{font-size:12.5px;color:var(--muted)}
+.warn{background:var(--gold-l);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:13px;color:var(--gold)}
+.danger{background:var(--red-l);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:13px;color:var(--red)}
+.tip{background:var(--teal-l);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:13px;color:var(--teal)}
+.concl{background:var(--p100);border-left:4px solid var(--purple);border-radius:0 8px 8px 0;padding:12px 16px;margin:0 0 6px;font-size:14px}
+ul{margin:6px 0;padding-left:22px}
+.tag{display:inline-block;background:var(--teal-l);color:#085041;font-size:12px;border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0}
+.tag.red{background:var(--red-l);color:var(--red)}
+.tag.gold{background:var(--gold-l);color:var(--gold)}
+@media(max-width:640px){body{font-size:13px}}
+</style>
+</head>
+<body>
+<header><div class="hw">
+<h1>重生之我是SSB职业经理 · 开发手册</h1>
+<div class="sub">v0.1 ｜ 单机网页游戏（纯前端 · 无依赖 · 双击即玩）｜ 本手册给共同开发者：看完即可上手改数值、加卡、加事件</div>
+</div></header>
+<main>
+
+<div class="concl"><b>一句话结论：</b>整个项目就是 <b>6 个文件</b>——两个 HTML（游戏 + 引擎调试台）、两个 Node 测试、一个同步脚本、本手册。引擎代码<b>只在主文件里改</b>，同步用脚本，改完必跑测试；所有数据（选手卡/特性/事件/节点）都是 JSON 风格的 JS 变量，找到就能改，不用装任何环境（浏览器即可玩；跑测试需要 Node.js）。</div>
+
+<div class="card">
+<h2>一、文件清单与分工</h2>
+<table>
+<tr><th>文件</th><th>是什么</th><th>谁读它</th></tr>
+<tr><td><code>重生之我是SSB职业经理.html</code></td><td><b>游戏本体 + 权威引擎源</b>。两个 script 块：<code>&lt;script id="engine"&gt;</code>（纯逻辑，无 DOM）+ 无名 script（UI/存档/页面渲染）</td><td>玩家浏览器 / 游戏测试.js</td></tr>
+<tr><td><code>引擎调试台.html</code></td><td>调参工具：滑杆（σ/节点数/一把没参数）、预设对局 1000 场批量、单场直播、赛季冒烟。<b>引擎块是主文件的镜像</b>，自己永远不要直接改它的 engine</td><td>模拟测试.js / 开发者</td></tr>
+<tr><td><code>游戏测试.js</code></td><td>主文件全量回归：语法检查、300 场 KDA 账目对账（ΣA.k≡ΣB.d）、<b>直播↔计分板逐人对账</b>、真实感指标断言、赛季全流程、布阵/压力/随机事件专项</td><td>Node</td></tr>
+<tr><td><code>模拟测试.js</code></td><td>平衡校准：5 组预设 ×1000 场胜率曲线、阿鸡觉醒对比、计分板/赛季冒烟。<b>读的是调试台</b>，所以先同步再跑</td><td>Node</td></tr>
+<tr><td><code>同步引擎.py</code></td><td>把主文件 engine 块整块替换进调试台（正则块替换，比手工 Edit 稳）</td><td>Python 3</td></tr>
+<tr><td><code>开发手册.html</code></td><td>本文档</td><td>人</td></tr>
+</table>
+<div class="tip">环境要求：玩 = 任意现代浏览器；开发 = 浏览器 + Node.js（跑测试）+ Python 3（跑同步脚本）。无构建步骤、无包依赖、无服务器。</div>
+</div>
+
+<div class="card">
+<h2>二、开发工作流（最重要的 30 行）</h2>
+<h3>标准改动流程</h3>
+<pre>1. 改 重生之我是SSB职业经理.html（引擎改动在 &lt;script id="engine"&gt; 块内）
+2. python 同步引擎.py          ← 同步到调试台（漏了这步，平衡测试测的是旧引擎！）
+3. node 游戏测试.js            ← 主测试，全绿才算过
+4. node 模拟测试.js            ← 平衡曲线，对照下方"目标带"
+5. 打包发队友：整个文件夹压缩即可（存档不在文件夹里，见下）</pre>
+<h3>⚠️ 已知的坑（都踩过）</h3>
+<div class="danger">
+<b>① 双文件引擎：</b>模拟测试.js 读调试台、游戏测试.js 读主文件。改主文件引擎后不同步就跑模拟测试 = 拿旧数据骗自己。<br>
+<b>② 预设/名单顺序：</b>roster 和预设 A/B 数组必须严格对齐 <code>[上单, 打野, 中单, AD, 辅助]</code>（SLOTS 顺序），错位=全错。<br>
+<b>③ 账目问题用脚本验证：</b>直播和计分板对不上时先跑对账断言，不要肉眼数（人工数错过 14 vs 15，其实是引擎对的）。<br>
+<b>④ 数值平衡的联动：</b>nodeCount、σ、提前GG阈值三者联动（曾因 nodeCount 11→13 导致碾压局暴涨，阈值 4500→5200 才拉回）。改任何一个都要复测全套曲线。<br>
+<b>⑤ 存档在浏览器 localStorage</b>（key：<code>dd_esm_season_v2</code>），不在文件夹里——打包给别人 = 别人全新开局。旧存档结构变化时有兜底（teamFive 回退等），但新特性（fit 成长/事件）不回溯。
+</div>
+</div>
+
+<div class="card">
+<h2>三、架构速览</h2>
+<pre>重生之我是SSB职业经理.html
+├─ &lt;script id="engine"&gt;      纯逻辑（Node 可直接编译执行，无 DOM）
+│   ├─ 常量：SLOTS / NODE_TYPES（节点类型×属性权重×击杀推塔产出）/ TL_MAIN+TL_OPT（时间轴）
+│   ├─        TRAITS（特性表）/ DEFAULT_PLAYERS（SSB 六人 + 调试预设名单）/ PRESETS / DEFAULT_OPTS
+│   ├─        EVENTS（31 个赛后随机事件池）/ AI_PLAYER_NAMES / DBD_NAMES
+│   ├─ 模拟：buildSeq（时间轴组装）→ simulateMatch（节点循环+逐杀记账+经济+提前GG/膀胱局延长）
+│   ├─ 赛季：genLeague（16 队生成）→ createSeason → playSeasonRound → runPlayoffs（BO3）
+│   ├─ 成长：applyGrowth（上场选手）/ rollEvent（赛后随机事件）/ addStress
+│   └─ 工具：makeRng(种子)  ← 一切随机都吃种子，同种子=同结果（可复现/可对账）
+└─ &lt;script&gt;（UI）           Tab 页渲染 / 布阵编辑器 / 直播播放器 / localStorage 读写</pre>
+<div class="note">调试台的 engine 块与主文件<b>逐字节相同</b>（由同步脚本保证），调试台自己的 UI（滑杆/下拉）在外面，不会被覆盖。</div>
+</div>
+
+<div class="card">
+<h2>四、数据结构（想加卡/加事件，看这节就够）</h2>
+<h3>选手卡（DEFAULT_PLAYERS 里的格式）</h3>
+<pre>dibi:{id:"dibi",name:"弟必",
+  stats:{lane:64,roam:42,fight:74,sense:64,mech:66,pool:62,mental:58},  // 七属性 40-95
+  fit:{top:60,jgl:30,mid:88,adc:40,sup:45},     // 位置适性，本命位 85-90
+  potential:76,                                  // 成长上限（属性只会逼近不会超过）
+  traits:["scalemage"]                           // 特性，见下表
+}</pre>
+<div class="note">段位→属性基准：白银 45-55 / 黄金 55-62 / 白金 62-72 / 翡翠 70-78 / 钻石 78-85。改属性后记得想平衡（SSB 是"你"的队，RGS/Showtime 63-75+star76-80 压着）。<b>英雄池 pool 目前是死属性</b>，留给 BP 禁选系统实装。</div>
+<h3>特性表（TRAITS + 机制位置）</h3>
+<table>
+<tr><th>特性</th><th>机制</th><th>实现处</th></tr>
+<tr><td>吊儿郎当 slack</td><td>成长 ×0.4；觉醒后 ×1.8</td><td>applyGrowth</td></tr>
+<tr><td>大心脏 bigheart</td><td>关键节点（20min+ 或经济差&gt;4000）贡献 +10</td><td>calc</td></tr>
+<tr><td>一把没 onegame</td><td>BO 当日第 1 局全属性 +6，之后每局 -6（狗粮专属喜剧）</td><td>effStats</td></tr>
+<tr><td>搞耍 goof</td><td>优势&gt;2000g 时 10% 概率整活塔下跳舞（-25）</td><td>calc</td></tr>
+<tr><td>神鬼二象 kamikaze</td><td>开局掷底色（神+12/鬼-15），单杀/被单杀翻转</td><td>calc + km 状态机</td></tr>
+<tr><td>耍帅血统 showoff</td><td>对线/团战节点 +8</td><td>calc</td></tr>
+<tr><td>缚地魔 scalemage</td><td>20min 后节点 +10（后期接管）；抓单/遭遇战 -8（怕刺客）——弟必</td><td>calc</td></tr>
+<tr><td>对线指挥官 shotcall</td><td>20min 前 +8，之后 -5（后期大局观降速）——吊隆</td><td>calc</td></tr>
+<tr><td>顺逆风心态 streaky</td><td>顺风每千经济 +1.2 / 逆风 -1.2（上限±10）——当邓</td><td>calc</td></tr>
+</table>
+<h3>赛后随机事件（EVENTS，31 个）</h3>
+<pre>{w:2,name:"沉迷PUBG",                        // w=权重；w≤2 自动标记为大波动彩蛋（实测总触发率 ~7%）
+ text:"全员沉迷 PUBG，训练赛迟到……",          // 剧情文案
+ fx:function(P,ids,rng){                      // 效果：P=选手表 ids=全队名单 rng=种子随机
+   allUp(P,ids,-3);addStress(P,ids,-10);      // 工具：allUp 全属性 / statUp 单属性(带上下限) / addStress
+   return "⚠️ 全员全属性 -3 · 压力 -10";}}     // 返回值=赛后卡片展示的效果行</pre>
+<div class="note">事件在每场比赛后自动触发（常规赛每轮 + 季后赛每局），作用于全队名单（含替补）。当前分布：常规 16（w5-8）+ 剧情 5（w3-4）+ 大波动 10（w1-2）。加事件往数组里 append 即可。</div>
+<h3>战术指令（TACTICS，五环克制）</h3>
+<pre>强开团 ＞ 保排消耗 ＞ 防守反打 ＞ 速攻节奏 ＞ 运营发育 ＞ 强开团（闭环）
+克制方全场节点 ×1.05；各战术另有节点阶段乘数（tacMult 函数）：
+  强开团：团战节点+3% / 对线-4% ｜ 保排：对线推塔+10% / 决战-2%
+  防守反打：上一节点失利则+4% ｜ 速攻：13'前+16% / 22'后-5% ｜ 运营：20'后+6% / 13'前-7%</pre>
+<div class="note">调参后克制边实测胜率 70.7%~82.3%（镜像队 300 场）——克制值得选但不是稳赢。<b>AI 反制</b>（aiTactic）：最近 4 轮你同一战术用 ≥2 次，全联盟会针对性选克制你的战术。每队 genLeague 时分配 tactic（RGS=强开团、Showtime=运营、DBD=速攻、城市队随机）。</div>
+<h3>比赛节点（NODE_TYPES + TL_MAIN/TL_OPT）</h3>
+<div class="note">每节点 = 类型（属性权重 w + 位置参与度 inv + 击杀产出 kMin-kMax + 推塔 twMin-twMax）× 时间戳。TL_MAIN 固定 11 个（对线3'/小龙5'/…/决战28'，对齐真实资源刷新），TL_OPT 4 个可选（遭遇战9'/抓单12'/18'/遭遇战23'）。nodeCount=13 → 11 固定 + 随机 2 个可选（保证游走节点出场）。时长不固定三机制：时间戳抖动 / 20min 后经济差≥5200 提前 GG / 终局差&lt;2500 追加远古龙团+最后的决战。</div>
+</div>
+
+<div class="card">
+<h2>五、核心机制速查</h2>
+<table>
+<tr><th>机制</th><th>规则</th></tr>
+<tr><td>比赛模拟</td><td>每节点双方 5 人各算贡献分（属性×权重×适性×对位压制），总分定胜负，胜方按 margin 吃击杀大头；逐杀记账进 kda 账本 → 直播逐杀播报 ↔ 计分板<b>逐人对账可审计</b></td></tr>
+<tr><td>对位压制双通道</td><td>对位差 pr：判定层 ×0.05（几乎不动胜负平衡）+ 表现层 ×0.45 记入贡献（高属性=高 MVP/评级/击杀，肉眼可见）</td></tr>
+<tr><td>经济模型</td><td>节点胜方 +900~2600g；领先方优势递减、落后方追赶补偿；高地决战 +2800g；大龙 buff 下节点 +8</td></tr>
+<tr><td>压力 stress</td><td>0-100 默认 30；上场每场 +4；&gt;60 每点发挥 -0.12，&lt;22 小幅 +2；≥78 赛前播报。只能靠随机事件浮动（训练类事件 +，放松类 -）</td></tr>
+<tr><td>疲劳 fatigue</td><td>上场每场 +12，替补一轮 -40；&gt;40 每点发挥 -0.09（疲劳 80 的队 vs 疲劳 0 镜像胜率仅 21%）——轮换是必修课，连打 4 场开始明显掉状态</td></tr>
+<tr><td>战术指令</td><td>赛前五选一，克制对手 +5% 全场节点 + 阶段乘数；AI 会反制连用战术；对手风格可侦察（主页/布阵页）</td></tr>
+<tr><td>成长</td><td>每场向潜力逼近（room×0.022×特性倍率）；本命适性 fit 同步向 85 逼近；<b>只有上场五人成长</b>，替补靠事件</td></tr>
+<tr><td>阿鸡觉醒</td><td>队伍 5 连败 或 阿鸡累计 5 场队内垫底 → 属性大涨 + 成长 ×1.8（重生剧本的核心弧线）</td></tr>
+<tr><td>六人布阵制</td><td>SSB roster=6 人，lineup=5 人首发（比赛日前可改，选已在阵中者=互换位置）；AI 队 teamFive=roster</td></tr>
+<tr><td>联赛</td><td>16 队：SSB（你）/ DBD（随机 AI 等真人卡·速攻）/ RGS（EDG青训·强开团）/ Showtime（卫冕冠军·运营）/ 12 城市队（56-68，其中 5 支藏大神 72-78，风格随机）。15 轮 BO1 双循环 + 前 8 名 BO3 季后赛 + 颁奖（MVP/躺赢王/进步最快）</td></tr>
+</table>
+<div class="warn">难度校准基准（8 季实测）：摆烂玩家（不轮换+战术从不换）4.6 胜/15，会玩玩家（轮换+侦察克制）9.1 胜/15 —— 操作水平值 4-5 个胜场。如果改数值后这个梯度塌了，说明平衡被打破。</div>
+</div>
+
+<div class="card">
+<h2>六、平衡校准（改数值前先看这页）</h2>
+<h3>胜率曲线目标带（模拟测试.js 的输出对照）</h3>
+<table>
+<tr><th>预设</th><th>当前值</th><th>含义</th></tr>
+<tr><td>同档微差 LD vs LD(-3)</td><td>~77%</td><td>微弱优势应兑现为高胜率（目标 75-78）</td></tr>
+<tr><td>LD 镜像</td><td>~51%</td><td>同强度必须接近 50（引擎无偏）</td></tr>
+<tr><td>差一档</td><td>~100%</td><td>碾压就该碾压</td></tr>
+<tr><td>SSB vs LD</td><td>~27%</td><td>打顶级队是硬仗（真卡进队后从 7% 涨上来的，正常）</td></tr>
+<tr><td>队内对抗 阿鸡阵 vs 弟必阵</td><td>~28%</td><td>布阵制核心抉择：练阿鸡（潜力95+觉醒线）vs 用弟必（即战力）</td></tr>
+</table>
+<h3>真实感指标（游戏测试.js 断言，LPL 2026 实测参照）</h3>
+<table>
+<tr><th>指标</th><th>当前</th><th>真实参照</th></tr>
+<tr><td>场均击杀（两队合计）</td><td>~26.5</td><td>20-27</td></tr>
+<tr><td>场均推塔</td><td>~12.2</td><td>~12</td></tr>
+<tr><td>场均时长</td><td>~30:50</td><td>32:30（最快 17:07 / 最长 53:43）</td></tr>
+<tr><td>ADC vs 辅助 场均击杀</td><td>4.5 vs 0.4</td><td>ADC 应显著更高</td></tr>
+<tr><td>平均参团率</td><td>~58%</td><td>55-75%</td></tr>
+</table>
+<div class="warn">当前参数：<code>{sigma:13, snowball:0.8, nodeCount:13, firstBuff:6, decayStep:6}</code> + 提前GG阈值 5200。这三个数是一起调好的，动一个要复测全部曲线。赛季级验收（v0.11 起）：会玩玩家 9 胜左右 / 摆烂玩家 4-5 胜、冠军通常仍属 RGS/Showtime——SSB 想夺冠需要多季养成 + 觉醒阿鸡。</div>
+</div>
+
+<div class="card">
+<h2>七、版本日志（开发史）</h2>
+<table>
+<tr><th>版本</th><th>日期</th><th>内容</th></tr>
+<tr><td>v0.1</td><td>10-10</td><td>节点制引擎 + 六特性 + 调试台（滑杆/批量模拟）</td></tr>
+<tr><td>v0.2</td><td>10-10</td><td>经济模型（追赶补偿/优势递减/高地决战）、LPL 赛制 16 队、计分板、成长系统、localStorage 存档</td></tr>
+<tr><td>v0.3</td><td>10-10</td><td>游戏正式版 UI（Tab/直播/百科/市场），KDA 账目式算法（ΣA.k≡ΣB.d）</td></tr>
+<tr><td>v0.4</td><td>10-12</td><td>时间轴节点制（对齐真实资源刷新）、一血、时长不固定（提前GG/远古龙膀胱局）、逐杀记账+直播对账、SSB/HEG 改名</td></tr>
+<tr><td>v0.4.1-3</td><td>10-12</td><td>真实城市英雄争霸赛名单致敬（RGS=EDG青训/Showtime/12 城市队，前 10 ID 恰好组成两强队）、属性→表现映射（对位压制双通道）、本命适性成长；游走死属性修复（nodeCount 13+阈值 5200+σ13）；英雄池确认死属性留待 BP</td></tr>
+<tr><td>v0.5</td><td>10-12</td><td>SSB 六人布阵制（上场才成长）、HEG→DBD（随机 AI）、压力系统、赛后活动三选一</td></tr>
+<tr><td><b>v0.1 定名</b></td><td>10-12</td><td><b>更名"重生之我是SSB职业经理"</b>（版本号重置）、首页重生剧情、活动三选一改为每场赛后自动随机事件（31 事件池 + 大波动彩蛋）、RGS/Showtime 加强防 SSB 过强</td></tr>
+<tr><td><b>v0.11 策略三件套</b></td><td>10-12</td><td><b>战术指令</b>（五环克制 + AI 反制 + 侦察）、<b>疲劳轮换</b>（上场+12/替补-40，>40 罚）、<b>联赛加强</b>（城市队 56-68、藏大神 5 支）。难度梯度：摆烂 4.6 胜 vs 会玩 9.1 胜</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>八、待办路线图（按优先级）</h2>
+<ul>
+<li><b>局内决策点</b>⭐已拍板要做：直播到关键节点（大龙团/远古龙/高地决战）暂停，玩家 2-3 选一（抢大龙/放龙换塔/强开团），直接解决"点开始前结果已注定"——建立在现有节点系统上</li>
+<li><b>BP 禁选系统</b>⭐已拍板要做：英雄池 pool 属性在此实装（池浅被 ban 命根英雄掉属性），需先建英雄数据表（100+ 英雄×位置×克制）——策略天花板最高</li>
+<li><b>DBD 真人卡</b>：DD 会继续提供群友资料（格式：主位置/段位/风格印象/名场面/潜力直觉），替换 DBD 的随机 AI</li>
+<li><b>S2 全国赛</b>：职业选手 AI 入场（注意：厂长/Ning/宝蓝/圣枪哥等名字 S1 已用作城市赛选手，S2 要换 LPL 级阵容或圆设定）</li>
+<li><b>转会市场 / 手动训练分配 / 存档导出导入</b>（存档在 localStorage，想给朋友发进度需要做这个功能）</li>
+</ul>
+<h3>协作约定</h3>
+<ul>
+<li>游戏和攻略都是<b>自包含单文件 HTML</b>：不引外部资源、不拆文件、双击就能玩</li>
+<li>引擎只改主文件；改完 <code>python 同步引擎.py</code> + 两个测试全绿，才算一次合格提交</li>
+<li>文案风格：玩梗但不虚报数字（直播里的数字必须和计分板对得上）；数值严谨和喜剧效果并重</li>
+<li>涉及真实选手/战队名：仅致敬城市英雄争霸赛等公开历史，自用不盈利</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>九、新接手者的 10 分钟上手路线</h2>
+<ol>
+<li>双击 <code>重生之我是SSB职业经理.html</code> 玩一整个赛季（约 15 分钟）：布阵→直播→赛后事件→季后赛</li>
+<li>双击 <code>引擎调试台.html</code>：跑一次 1000 场批量，看胜率曲线长什么样</li>
+<li>装 Node.js，在文件夹里跑 <code>node 游戏测试.js</code> 和 <code>node 模拟测试.js</code>，确认全绿</li>
+<li>打开主文件搜索 <code>EVENTS</code>，随便给一个事件改个文案/数值 → 重跑测试感受工作流</li>
+<li>读完本手册第四、六节，就可以动手改卡/加事件了</li>
+</ol>
+</div>
+
+<p class="note" style="text-align:center">重生之我是SSB职业经理 · 开发手册 v0.1 ｜ 2026-10-12 ｜ 数值口径以当日测试输出为准</p>
+</main>
+</body>
+</html>
