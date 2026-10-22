@@ -15,8 +15,9 @@ export function mountBroadcast(opts: {
 }): () => void {
   const root = document.getElementById('modalBody');
   if (!root) return () => {};
-  root.classList.add('live');
+  root.classList.add('live', 'sheet');
   root.innerHTML = `
+    <div class="sheet-scroll">
     <div class="live-head">
       <div>
         <h2>${opts.title}</h2>
@@ -24,10 +25,11 @@ export function mountBroadcast(opts: {
       </div>
       <div class="scorebug"><b id="bugUs">0</b><span>:</span><b id="bugThem">0</b><small id="bugGold">经济 +0</small></div>
     </div>
-    <div class="danmaku-layer" id="danmakuLayer"></div>
     <div class="live-feed" id="liveFeed"></div>
     <div id="liveBoard" class="hidden"></div>
-    <div class="row">
+    <div class="danmaku-layer" id="danmakuLayer"></div>
+    </div>
+    <div class="dock">
       <button class="btn" id="livePause">暂停直播</button>
       <button class="btn" id="liveFast">快进</button>
       <button class="btn accent hidden" id="liveDone">${opts.button}</button>
@@ -61,10 +63,18 @@ export function mountBroadcast(opts: {
     if (cue.kind === 'danmaku') {
       const fly = document.createElement('span');
       fly.className = 'danmaku';
-      fly.style.top = `${4 + Math.floor(Math.random() * 3) * 22}px`;
       fly.textContent = cue.text.replace(/^【第二解说 · [^】]+】/, '');
-      layer.appendChild(fly);
-      window.setTimeout(() => fly.remove(), 4600);
+      layer.replaceChildren(fly);
+      const laneW = layer.clientWidth;
+      const textW = fly.offsetWidth;
+      const start = Math.max(0, laneW - textW);
+      fly.animate(
+        [{ transform: `translateX(${start}px)` }, { transform: 'translateX(-100%)' }],
+        { duration: 5600, easing: 'linear', fill: 'forwards' },
+      );
+      window.setTimeout(() => {
+        if (fly.isConnected) fly.remove();
+      }, 5600);
     }
   };
 
@@ -159,6 +169,6 @@ export function mountBroadcast(opts: {
   return () => {
     stopped = true;
     stopLoop();
-    root.classList.remove('live');
+    root.classList.remove('live', 'sheet');
   };
 }

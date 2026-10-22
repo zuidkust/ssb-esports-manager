@@ -3,7 +3,7 @@ import { opponentForRound } from '../src/core/calendar';
 import { createNewGame, needsLineupConfirm, needsPrematch } from '../src/save/state';
 import { PREMATCH_MINUTE } from '../src/core/calendar';
 import { signSponsor } from '../src/sim/economy';
-import { autoLineup } from '../src/sim/lineup';
+import { autoLineup, validLineup } from '../src/sim/lineup';
 import { commitRound, enterDay, finishSeason, ourRank, roundPairs, standings, tierMove, winsNeeded } from '../src/sim/league';
 
 describe('联赛赛程', () => {
@@ -40,6 +40,8 @@ describe('联赛赛程', () => {
     const slots = autoLineup(s.roster);
     expect(new Set(slots).size).toBe(5);
     expect(slots).not.toContain('piegan');
+    expect(validLineup(slots)).toBe(true);
+    expect(validLineup(['gouliang', 'gouliang', 'dibi', 'diaolong', 'aji'])).toBe(false);
   });
 });
 

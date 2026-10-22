@@ -22,12 +22,12 @@ import { Board } from './ui/board';
 import { Card } from './ui/card';
 import { bindManage, manageHtml } from './ui/manage';
 import { buyFacility } from './sim/economy';
-import { applyGameLoad, catchUpThrough, commitRound, needsBroadcast, needsIntermission, winsNeeded } from './sim/league';
-import { benchOf } from './sim/lineup';
+import { applyGameLoad, catchUpThrough, commitRound, needsBroadcast, needsIntermission, ourRank, roundSettled, winsNeeded } from './sim/league';
+import { benchOf, validLineup } from './sim/lineup';
 import { playOurMatch } from './sim/matchprep';
 import { cuesFrom } from './sim/script';
 import { mountBroadcast } from './ui/broadcast';
-import { bindPrematch, prematchHtml } from './ui/prematch';
+import { bindPrematch, prematchHtml, standingsTableHtml } from './ui/prematch';
 import { makeRng } from './engine/match';
 import { mountGodPanel } from './debug/panel';
 
@@ -212,17 +212,24 @@ function updateHud() {
   $('resCash').parentElement!.title = state.unpaidMonths > 0 ? `连续 ${state.unpaidMonths} 个月没发出工资` : '公司现金';
   $('resAp').textContent = actionPointLabel(state, clock.day);
   $('resInsight').textContent = String(state.insight);
-  $('phaseChip').textContent = clock.night ? '夜里 · 快进中' : `${world.segment(clock.minute).name} · 在岗 ${world.presentCount()}/6`;
+  const settledNow = info.round != null && clock.minute >= MATCH_MINUTE && roundSettled(state);
+  const segName = settledNow ? '赛后' : world.segment(clock.minute).name;
+  $('phaseChip').textContent = clock.night ? '夜里 · 快进中' : `${segName} · 在岗 ${world.presentCount()}/6`;
   const nm = nextMatch(clock.day, clock.minute);
   const opp = nm ? world.opponentToday() : null;
   const inMatch = info.round != null && clock.minute >= MATCH_MINUTE && world.members.some((m) => m.activity.kind === 'match');
-  $('matchChip').textContent = inMatch
+  const rank = state.season.round > 0 ? ourRank(state) : null;
+  $('matchChip').textContent = settledNow
+    ? `第 ${info.round} 轮已结束 · 目前第 ${rank?.rank ?? ourRank(state).rank} 名`
+    : inMatch
     ? `比赛中 · 第 ${info.round} 轮 vs ${world.opponentToday()?.name}`
     : info.offseason
     ? `休赛期 · 还有 ${nm ? nm.inDays : '?'} 天开赛`
     : nm && nm.inDays === 0 && opp
       ? `今晚 19:00 第 ${nm.round} 轮 · vs ${opp.name}`
       : nm ? `下一场：${nm.inDays} 天后 · 第 ${nm.round} 轮` : '—';
+  $('matchChip').classList.toggle('link', state.season.round > 0);
+  $('matchChip').title = state.season.round > 0 ? '点击看积分榜' : '';
   document.querySelectorAll<HTMLElement>('#speeds button').forEach((b) => {
     b.classList.toggle('on', clock.debugRate == null && b.dataset.s === clock.speed && !clock.paused);
   });
@@ -256,6 +263,11 @@ $('manageBtn').addEventListener('click', () => {
   if (modalOpen && !modalClosable) return;
   showManage();
 });
+$('matchChip').addEventListener('click', () => {
+  if (!live || state.season.round <= 0) return;
+  if (modalOpen && !modalClosable) return;
+  showStandings();
+});
 addEventListener('keydown', (e) => {
   const tag = (e.target as HTMLElement).tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -282,7 +294,7 @@ function openModal(html: string, closable = true) {
   haltBroadcast();
   modalOpen = true;
   modalClosable = closable;
-  $('modalBody').classList.remove('live');
+  $('modalBody').classList.remove('live', 'sheet');
   $('modalBody').innerHTML = html;
   $('modal').classList.remove('hidden');
 }
@@ -290,7 +302,7 @@ function closeModal() {
   if (!modalClosable) return;
   haltBroadcast();
   modalOpen = false;
-  $('modalBody').classList.remove('manage', 'live');
+  $('modalBody').classList.remove('manage', 'live', 'sheet');
   $('modal').classList.add('hidden');
 }
 $('modal').addEventListener('click', (e) => {
@@ -459,12 +471,35 @@ function checkBankrupt() {
   });
 }
 
+function showStandings() {
+  if (!live) return;
+  const row = ourRank(state);
+  const info = dayInfo(clock.day);
+  openModal(
+    `<h2>积分榜 · ${TIER_CN[state.season.tier]}</h2>
+    <p>第 ${state.season.round} 轮后，SSB 第 ${row.rank} 名（${row.w} 胜 ${row.l} 负）。${info.round != null && roundSettled(state) ? '这一轮已经记进榜。' : ''}</p>
+    <div class="sheet-scroll">${standingsTableHtml(state)}</div>
+    <div class="dock"><button class="btn accent" id="stClose">回到网吧</button></div>`,
+    true,
+  );
+  $('modalBody').classList.add('sheet');
+  document.getElementById('stClose')?.addEventListener('click', () => {
+    modalClosable = true;
+    closeModal();
+  });
+}
+
 function showPrematch(holdId: string, intermission: boolean) {
   openModal(prematchHtml(state, intermission), false);
+  $('modalBody').classList.add('sheet');
   bindPrematch(state, {
     toast,
     onRefresh: () => showPrematch(holdId, intermission),
     onConfirm: (slots, tactic: TacticId) => {
+      if (!validLineup(slots)) {
+        toast('每个选手只能占一个位置');
+        return;
+      }
       state.lineup = { day: clock.day, slots, tactic };
       world.starters = slots.slice();
       if (intermission && state.series) state.series.phase = 'play';
@@ -562,6 +597,7 @@ function finishWatchedGame(holdId: string, won: boolean, slots: string[]) {
     director.snapAll();
     board.set(state.eventLog);
     persist('auto');
+    showStandings();
     return;
   }
   series.phase = 'gap';

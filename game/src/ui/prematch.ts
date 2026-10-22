@@ -5,23 +5,30 @@ import { POSITION_CN, POSITIONS, ROSTER } from '../data/roster';
 import { TACTICS, type TacticId } from '../data/tactics';
 import type { GameState } from '../save/state';
 import { winsNeeded, standings } from '../sim/league';
-import { lineupSlots, researchTactic } from '../sim/lineup';
+import { lineupSlots, researchTactic, validLineup } from '../sim/lineup';
 
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
+
+export function standingsTableHtml(state: GameState): string {
+  const table = standings(state)
+    .map((r) => `<tr class="${r.id === 'ssb' ? 'us' : ''}"><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.w}</td><td>${r.l}</td></tr>`)
+    .join('');
+  return `<table class="standings"><tr><th>#</th><th>战队</th><th>胜</th><th>负</th></tr>${table}</table>`;
+}
 
 export function prematchHtml(state: GameState, intermission: boolean): string {
   const info = dayInfo(state.clock.day);
   const opp = info.round == null ? null : opponentForRound(state.season.tier, info.round);
-  const slots = state.lineup?.day === state.clock.day && state.lineup.slots.length === 5 ? state.lineup.slots : lineupSlots(state, state.clock.day);
+  const slots = lineupSlots(state, state.clock.day);
   const tactic = state.lineup?.day === state.clock.day ? state.lineup.tactic : (state.tactics[0] ?? 'engage');
   const bench = ROSTER.filter((m) => !slots.includes(m.id)).map((m) => m.name);
   const series = state.series;
   const bo = winsNeeded(state.season.tier) === 1 ? 'BO1' : 'BO3';
-  const table = standings(state)
-    .map((r) => `<tr class="${r.id === 'ssb' ? 'us' : ''}"><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.w}</td><td>${r.l}</td></tr>`)
-    .join('');
-  const options = (current: string) =>
-    ROSTER.map((m) => `<option value="${m.id}" ${m.id === current ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+  const takenElsewhere = (index: number) => new Set(slots.filter((_, j) => j !== index));
+  const options = (current: string, index: number) => {
+    const taken = takenElsewhere(index);
+    return ROSTER.map((m) => `<option value="${m.id}" ${m.id === current ? 'selected' : ''} ${taken.has(m.id) ? 'disabled' : ''}>${esc(m.name)}</option>`).join('');
+  };
   const tactics = TACTICS.map((t) => {
     const owned = state.tactics.includes(t.id);
     if (owned) {
@@ -31,19 +38,24 @@ export function prematchHtml(state: GameState, intermission: boolean): string {
     return `<div class="tac locked"><b>${t.name}</b><small>${esc(t.desc)}</small><button class="btn" data-research="${t.id}" ${state.insight < t.cost ? 'disabled' : ''}>${why}</button></div>`;
   }).join('');
   return `
+    <div class="sheet-scroll">
     <h2>${intermission ? '局间换人' : '比赛日'} · 第 ${info.round ?? '?'} 轮</h2>
     <p>${TIER_CN[state.season.tier]} · ${bo}${series && intermission ? ` · 目前 ${series.us}:${series.them}` : ''} · 19:00 vs <b>${esc(opp?.name ?? '对手')}</b></p>
     <p class="sub">${esc(opp?.blurb ?? '')}</p>
     <h3>首发</h3>
     <div class="lineup pick">
-      ${POSITIONS.map((pos, i) => `<label>${POSITION_CN[pos]}<select id="slot${i}">${options(slots[i] ?? '')}</select></label>`).join('')}
+      ${POSITIONS.map((pos, i) => `<label>${POSITION_CN[pos]}<select id="slot${i}">${options(slots[i] ?? '', i)}</select></label>`).join('')}
     </div>
     <p class="sub" id="benchLine">台下第二解说：${esc(bench.join('、') || '—')}</p>
     <h3>战术</h3>
     <div class="tac-list">${tactics}</div>
     <h3>积分榜</h3>
-    <table class="standings"><tr><th>#</th><th>战队</th><th>胜</th><th>负</th></tr>${table}</table>
-    <div class="row"><button class="btn accent" id="pmOk">${intermission ? '确认，打下一局' : '确认首发，开赛'}</button></div>`;
+    ${standingsTableHtml(state)}
+    </div>
+    <div class="dock">
+      <p class="warn hidden" id="pmErr"></p>
+      <button class="btn accent" id="pmOk">${intermission ? '确认，打下一局' : '确认首发，开赛'}</button>
+    </div>`;
 }
 
 export function bindPrematch(
@@ -52,14 +64,41 @@ export function bindPrematch(
 ): void {
   const root = document.getElementById('modalBody');
   if (!root) return;
-  const readSlots = () => POSITIONS.map((_, i) => (root.querySelector(`#slot${i}`) as HTMLSelectElement).value);
+  const selects = () => POSITIONS.map((_, i) => root.querySelector(`#slot${i}`) as HTMLSelectElement);
+  const readSlots = () => selects().map((sel) => sel.value);
+  const showErr = (text: string) => {
+    const err = document.getElementById('pmErr');
+    if (!err) return;
+    err.textContent = text;
+    err.classList.toggle('hidden', !text);
+  };
+  const lockOptions = () => {
+    const slots = readSlots();
+    selects().forEach((sel, i) => {
+      const taken = new Set(slots.filter((_, j) => j !== i));
+      for (const opt of sel.options) opt.disabled = taken.has(opt.value);
+    });
+  };
   const paintBench = () => {
     const slots = readSlots();
     const names = ROSTER.filter((m) => !slots.includes(m.id)).map((m) => m.name);
     const el = document.getElementById('benchLine');
-    if (el) el.textContent = `台下第二解说：${names.join('、') || '有人重复了，先改开'}`;
+    const dup = new Set(slots).size !== slots.length;
+    if (el) el.textContent = dup ? '有人占了两个位置，先改开' : `台下第二解说：${names.join('、') || '—'}`;
   };
-  root.querySelectorAll('select').forEach((sel) => sel.addEventListener('change', paintBench));
+  const onPick = (changed: HTMLSelectElement) => {
+    for (const other of selects()) {
+      if (other === changed || other.value !== changed.value) continue;
+      const used = new Set(selects().filter((s) => s !== other).map((s) => s.value));
+      const free = ROSTER.find((m) => !used.has(m.id));
+      if (free) other.value = free.id;
+    }
+    lockOptions();
+    paintBench();
+    showErr('');
+  };
+  lockOptions();
+  selects().forEach((sel) => sel.addEventListener('change', () => onPick(sel)));
   root.querySelectorAll<HTMLButtonElement>('[data-research]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.research as TacticId;
@@ -71,8 +110,10 @@ export function bindPrematch(
   });
   document.getElementById('pmOk')?.addEventListener('click', () => {
     const slots = readSlots();
-    if (new Set(slots).size !== 5) {
-      hooks.toast('五个人不能重复');
+    if (!validLineup(slots)) {
+      const text = '每个选手只能占一个位置';
+      showErr(text);
+      hooks.toast(text);
       return;
     }
     const picked = root.querySelector<HTMLInputElement>('input[name="tac"]:checked');
