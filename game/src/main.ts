@@ -1,5 +1,6 @@
 // 入口：把时钟、日常模拟、3D 场景、界面和存档串起来
 import './style.css';
+import * as THREE from 'three';
 import { dayInfo, MATCH_MINUTE, nextMatch, PREMATCH_MINUTE } from './core/calendar';
 import { fmtHM, GameClock, SPEEDS, sunPosition, type SpeedId } from './core/clock';
 import { drainRealtime, simBudget } from './core/realtime';
@@ -12,6 +13,7 @@ import { createWebPlatform } from './save/platform';
 import { formatWallTime, SaveManager, SLOTS, type SlotId } from './save/saves';
 import { createNewGame, needsPrematch, type GameState } from './save/state';
 import { World } from './sim/world';
+import { loadFigurineKit } from './scene/character';
 import { Director } from './scene/director';
 import { Lighting } from './scene/lighting';
 import { detectQuality, Stage } from './scene/stage';
@@ -26,6 +28,7 @@ import { mountGodPanel } from './debug/panel';
 const params = new URLSearchParams(location.search);
 const $ = (id: string) => document.getElementById(id)!;
 const AUTOSAVE_SECONDS = 60;
+const lineupMode = params.get('lineup') === '1';
 
 // ───────── 平台与存档 ─────────
 const platform = createWebPlatform();
@@ -33,12 +36,13 @@ const saves = new SaveManager(platform.store);
 
 // ───────── 场景 ─────────
 const quality = detectQuality(params.get('q'));
-const stage = new Stage($('stage'), quality);
+const stage = new Stage($('stage'), quality, { preserveDrawingBuffer: lineupMode });
 stage.sidePanel = innerWidth > 1180 ? 400 : 336;
 stage.resize();
 let state: GameState = createNewGame();
 const world = new World(state);
 let clock = new GameClock(state.clock);
+await loadFigurineKit();
 let venue: Venue = buildVenue(stage.scene, state.venueLevel, ROSTER, world.facilities);
 let venueId = venueKey(state.venueLevel, world.facilities);
 const lighting = new Lighting(stage.scene, venue, quality);
@@ -145,8 +149,24 @@ function frame(t: number) {
   }
 
   lighting.update({ sun: sunPosition(clock.minute), present: world.presentCount() });
-  $('nightHint').classList.toggle('hidden', !clock.night || !live);
-  director.update(visualDt * (live ? clock.moveScale : 1), clock.minute, lighting.night);
+  if (lineupMode) {
+    stage.scene.background = new THREE.Color(0xffffff);
+    lighting.hemi.color.set(0xffffff);
+    lighting.hemi.groundColor.set(0xe4e4e4);
+    lighting.hemi.intensity = 1.15;
+    lighting.sun.color.set(0xffffff);
+    lighting.sun.intensity = 2.4;
+    lighting.sun.position.set(1.2, 4.2, 6.2);
+    lighting.moon.intensity = 0;
+    lighting.ceiling.intensity = 0.55;
+    lighting.ceiling.position.set(-1.5, 3.2, 5);
+  }
+  $('nightHint').classList.toggle('hidden', !clock.night || !live || lineupMode);
+  if (lineupMode) {
+    for (const c of Object.values(director.chars)) c.update(visualDt, performance.now());
+  } else {
+    director.update(visualDt * (live ? clock.moveScale : 1), clock.minute, lighting.night);
+  }
   stage.render(visualDt, lighting.night);
   updateHud();
 
@@ -455,6 +475,62 @@ function toast(msg: string) {
   toastTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
 }
 
+// 白底六人站位：对照锁定图。不跑模拟，人站在模板正面前。
+function setupLineup() {
+  document.documentElement.classList.add('lineup-mode');
+  venue.root.visible = false;
+  stage.studio = true;
+  stage.renderer.toneMappingExposure = 1.05;
+  // 辉光合成在白底上会把整帧冲黑，站位验收改走直接渲染。
+  stage.composer = null;
+  stage.bloom = null;
+  stage.scene.environmentIntensity = 0.55;
+  stage.scene.background = new THREE.Color(0xffffff);
+  stage.renderer.setClearColor(0xffffff, 1);
+  // MeshBasic 在部分无头 GL 上会画出垃圾色，白底用自发光标准材质。
+  const flatWhite = new THREE.MeshStandardMaterial({
+    color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1, roughness: 1, metalness: 0,
+  });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), flatWhite);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.002;
+  ground.frustumCulled = false;
+  stage.scene.add(ground);
+  const backdrop = new THREE.Mesh(
+    new THREE.SphereGeometry(40, 16, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1, roughness: 1, metalness: 0,
+      side: THREE.BackSide, depthWrite: false,
+    }),
+  );
+  backdrop.frustumCulled = false;
+  stage.scene.add(backdrop);
+  const order = ['aji', 'dangdeng', 'gouliang', 'dibi', 'diaolong', 'piegan'];
+  order.forEach((id, i) => {
+    const c = director.chars[id];
+    c.setHidden(false);
+    c.teleport(new THREE.Vector3((i - 2.5) * 1.16, 0, 0), 0, 'stand');
+    c.update(0, performance.now());
+    if (id === 'diaolong' || id === 'piegan') c.headset.visible = true;
+    c.root.traverse((o) => {
+      const label = o as THREE.Object3D & { isCSS2DObject?: boolean; element?: HTMLElement };
+      if (label.isCSS2DObject && label.element === c.tagEl) label.position.set(0, -0.02, 0);
+    });
+  });
+  stage.controls.minPolarAngle = 0.35;
+  stage.controls.maxPolarAngle = Math.PI / 2.02;
+  stage.controls.minAzimuthAngle = -Infinity;
+  stage.controls.maxAzimuthAngle = Infinity;
+  stage.controls.minDistance = 2;
+  stage.controls.maxDistance = 40;
+  stage.sidePanel = 0;
+  stage.resize();
+  stage.camera.position.set(0, 0.96, 9.0);
+  stage.controls.target.set(0, 0.84, 0);
+  stage.controls.update();
+  $('boot').classList.add('done');
+}
+
 // ───────── 启动 ─────────
 startGame(state);
 // 调试 / 截图用：?day=2&t=14:50 直接跳到某个时刻；?skip=1 跳过标题
@@ -476,7 +552,10 @@ if (params.get('day') || params.get('t') || params.get('venue')) {
   startGame(s);
 }
 if (params.get('speed')) clock.setSpeed(params.get('speed') as SpeedId);
-if (!params.get('skip') && !params.get('t') && !params.get('venue')) {
+if (lineupMode) {
+  live = false;
+  setupLineup();
+} else if (!params.get('skip') && !params.get('t') && !params.get('venue')) {
   live = false;
   showTitle();
 }

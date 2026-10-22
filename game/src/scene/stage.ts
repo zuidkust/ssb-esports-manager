@@ -39,11 +39,13 @@ export class Stage {
   pickables: THREE.Object3D[] = [];
   onPick: ((id: string | null) => void) | null = null;
   focusTarget: THREE.Vector3 | null = null;
+  /** 白底站位：不再按昼夜改曝光和辉光。 */
+  studio = false;
   sidePanel = 0; // 右侧面板宽度：投影中心左移半个面板，让房间落在可见区域正中
   private raycaster = new THREE.Raycaster();
 
-  constructor(private container: HTMLElement, public quality: Quality) {
-    const r = (this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false }));
+  constructor(private container: HTMLElement, public quality: Quality, opts?: { preserveDrawingBuffer?: boolean }) {
+    const r = (this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: opts?.preserveDrawingBuffer ?? false }));
     r.setPixelRatio(quality.dpr);
     r.shadowMap.enabled = quality.shadows;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -146,11 +148,13 @@ export class Stage {
       if (delta.length() < 0.002) this.focusTarget = null;
     }
     this.controls.update();
-    this.renderer.toneMappingExposure = 1.0 + night * 0.25;
-    this.scene.environmentIntensity = 0.35 * (1 - night * 0.75);
-    if (this.bloom) {
-      this.bloom.strength = 0.2 + night * 0.6;
-      this.bloom.threshold = 0.88 - night * 0.25;
+    if (!this.studio) {
+      this.renderer.toneMappingExposure = 1.0 + night * 0.25;
+      this.scene.environmentIntensity = 0.35 * (1 - night * 0.75);
+      if (this.bloom) {
+        this.bloom.strength = 0.2 + night * 0.6;
+        this.bloom.threshold = 0.88 - night * 0.25;
+      }
     }
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);

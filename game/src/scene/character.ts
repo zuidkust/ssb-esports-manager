@@ -1,25 +1,70 @@
-// 低多边形人物：基础几何体拼装，关节为空 Group，姿态用关节角度插值实现
-// 外形按稿 B 剪影加强版：眼镜、胖瘦、高矮、发型、阿鸡的人字拖；头部比真人略大，远看也能认出是谁
+// 方案 B：低多边形切面手办。身体 / 发型 / 眼镜 / 耳机来自 glTF，运行时按 look 换色、显隐、身高与胖瘦。
+// 关节仍是同名空节点，poseTargets 把欧拉角写到 hips/spine/head 与 sh/el/hp/kn。Capsule 拼装已退役。
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import type { MemberDef } from '../data/roster';
+import type { Look, MemberDef } from '../data/roster';
 import { mat } from './office';
+import { girthScale, OFFICE_FIT, SEAT_H } from './figurine';
+import bodyUrl from './figurine/body.glb';
+import hairMessyUrl from './figurine/hair_messy.glb';
+import hairShortUrl from './figurine/hair_short.glb';
+import hairSideUrl from './figurine/hair_side.glb';
+import hairBuzzUrl from './figurine/hair_buzz.glb';
+import glassesUrl from './figurine/glasses.glb';
+import headsetUrl from './figurine/headset.glb';
 
-const SEAT_H = 0.5;
 const WALK_SPEED = 1.35;
-const HEAD_R = 0.155;
 
-function capsule(r: number, len: number, material: THREE.Material, seg = 14) {
-  const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, seg), material);
-  m.castShadow = true;
-  m.receiveShadow = true;
-  return m;
+const HAIR_URL: Record<Look['hairStyle'], string> = {
+  messy: hairMessyUrl,
+  short: hairShortUrl,
+  side: hairSideUrl,
+  buzz: hairBuzzUrl,
+};
+
+interface Kit {
+  body: THREE.Group;
+  hair: Record<Look['hairStyle'], THREE.Group>;
+  glasses: THREE.Group;
+  headset: THREE.Group;
 }
 
-function sphere(r: number, material: THREE.Material, w = 18, h = 12) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(r, w, h), material);
-  m.castShadow = true;
-  return m;
+let kit: Kit | null = null;
+let kitPromise: Promise<void> | null = null;
+
+const loader = new GLTFLoader();
+
+function loadGltf(url: string): Promise<THREE.Group> {
+  return fetch(url).then((res) => {
+    if (!res.ok) throw new Error(`手办模板加载失败 ${url}`);
+    return res.arrayBuffer();
+  }).then((buf) => new Promise((resolve, reject) => {
+    loader.parse(buf, '', (gltf) => resolve(gltf.scene), (err) => reject(err));
+  }));
+}
+
+/** 进场景前调用一次。六人、路人、外卖员共用这一套模板。 */
+export function loadFigurineKit(): Promise<void> {
+  if (kit) return Promise.resolve();
+  kitPromise ??= (async () => {
+    try {
+      const [body, messy, short, side, buzz, glasses, headset] = await Promise.all([
+        loadGltf(bodyUrl),
+        loadGltf(HAIR_URL.messy),
+        loadGltf(HAIR_URL.short),
+        loadGltf(HAIR_URL.side),
+        loadGltf(HAIR_URL.buzz),
+        loadGltf(glassesUrl),
+        loadGltf(headsetUrl),
+      ]);
+      kit = { body, hair: { messy, short, side, buzz }, glasses, headset };
+    } catch (err) {
+      kitPromise = null;
+      throw err;
+    }
+  })();
+  return kitPromise;
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -34,21 +79,78 @@ interface Pose {
 }
 
 interface Limb {
-  sh: THREE.Group;
-  el: THREE.Group;
+  sh: THREE.Object3D;
+  el: THREE.Object3D;
+}
+
+const GIRTH_NODES = [
+  'torso', 'pelvis',
+  'thighL', 'thighR', 'shinL', 'shinR',
+  'upperL', 'upperR', 'foreL', 'foreR', 'handL', 'handR',
+  'soleL', 'soleR', 'strapL', 'strapR', 'toesL', 'toesR',
+];
+
+function node(root: THREE.Object3D, name: string): THREE.Object3D {
+  const found = root.getObjectByName(name);
+  if (!found) throw new Error(`手办模板缺少节点 ${name}`);
+  return found;
+}
+
+function cloneMaterials(root: THREE.Object3D) {
+  const map = new Map<THREE.Material, THREE.Material>();
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const next = list.map((m) => {
+      let copy = map.get(m);
+      if (!copy) {
+        copy = m.clone();
+        map.set(m, copy);
+      }
+      return copy;
+    });
+    mesh.material = Array.isArray(mesh.material) ? next : next[0];
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+  });
+}
+
+function paint(root: THREE.Object3D, look: Look) {
+  const slots: Record<string, number> = {
+    matSkin: look.skin,
+    matHair: look.hair,
+    matShirt: look.shirt,
+    matPants: look.pants,
+    matShoes: look.shoes ?? 0x2f7fd1,
+    matBadge: 0xffffff,
+    matGlasses: 0x111114,
+    matHeadsetBand: 0x1b1b1f,
+    matHeadsetCup: look.shirt,
+  };
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of list) {
+      const std = m as THREE.MeshStandardMaterial;
+      const color = slots[std.name];
+      if (color != null && std.color) std.color.setHex(color);
+    }
+  });
 }
 
 export class Character {
   id: string;
   root = new THREE.Group();
   body = new THREE.Group();
-  hips = new THREE.Group();
-  spine = new THREE.Group();
-  neck = new THREE.Group();
-  head = new THREE.Group();
-  headset = new THREE.Group();
+  hips: THREE.Object3D;
+  spine: THREE.Object3D;
+  neck: THREE.Object3D;
+  head: THREE.Object3D;
+  headset: THREE.Object3D;
   arms: Limb[] = [];
-  legs: { hp: THREE.Group; kn: THREE.Group }[] = [];
+  legs: { hp: THREE.Object3D; kn: THREE.Object3D }[] = [];
   phone: THREE.Mesh;
   phoneScreen: THREE.MeshStandardMaterial;
   cup: THREE.Mesh;
@@ -57,7 +159,6 @@ export class Character {
   tagStatus: HTMLElement;
   bubbleEl: HTMLDivElement;
   bubbleUntil = 0;
-  // 运动状态
   pos = new THREE.Vector3();
   facing = 0;
   targetFacing = 0;
@@ -69,327 +170,117 @@ export class Character {
   onArrive: (() => void) | null = null;
   onSlam: (() => void) | null = null;
   private s: number;
+  private fit: number;
   private legLen: number;
   private t = Math.random() * 10;
   private phase = Math.random() * 10;
   private cur: Pose | null = null;
   private lastSlam = 0;
   private blinkAt = 2 + Math.random() * 3;
-  private eyes: THREE.Group[] = [];
+  private eyes: THREE.Object3D[] = [];
 
   constructor(public def: MemberDef) {
+    if (!kit) throw new Error('先调用 loadFigurineKit()');
     this.id = def.id;
     const L = def.look;
-    const s = (this.s = L.height), g = L.girth;
-    this.legLen = 0.84 * s;
+    this.s = L.height;
+    this.fit = L.height * OFFICE_FIT;
     this.root.userData.memberId = def.id;
+    this.root.scale.setScalar(this.fit);
     this.root.add(this.body);
 
-    const shirt = mat(L.shirt, { roughness: 0.85 });
-    const shirtDark = mat(new THREE.Color(L.shirt).multiplyScalar(0.72).getHex(), { roughness: 0.85 });
-    const pants = mat(L.pants, { roughness: 0.85 });
-    const skin = mat(L.skin, { roughness: 0.62 });
-    const hair = mat(L.hair, { roughness: 0.8 });
-    const dark = mat(0x1b1b1f, { roughness: 0.45 });
-    const white = mat(0xffffff, { roughness: 0.3 });
+    const model = kit.body.clone(true);
+    cloneMaterials(model);
+    paint(model, L);
+    this.body.add(model);
 
-    // 骨盆 + 皮带
-    this.hips.position.y = this.legLen;
-    this.body.add(this.hips);
-    const pelvis = capsule(0.11 * g, 0.12 * g, pants);
-    pelvis.rotation.z = Math.PI / 2;
-    pelvis.scale.set(1, 1, 0.85);
-    this.hips.add(pelvis);
-    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.122 * g, 0.122 * g, 0.035, 20), mat(0x2a2420, { roughness: 0.5 }));
-    belt.scale.set(1, 1, 0.86);
-    belt.position.y = 0.06;
-    this.hips.add(belt);
+    const g = girthScale(L.girth);
+    for (const name of GIRTH_NODES) {
+      const part = model.getObjectByName(name);
+      if (part) part.scale.set(g, 1, g);
+    }
+    for (const name of ['armL_sh', 'armR_sh', 'legL_hp', 'legR_hp']) {
+      node(model, name).position.x *= g;
+    }
 
-    // 躯干：车削出肩宽腰窄的轮廓
-    this.spine.position.y = 0.04;
-    this.hips.add(this.spine);
-    const torsoLen = 0.3 * s;
-    const R = 0.17 * g;
-    const torsoProfile = [
-      [0, 0], [R * 0.92, 0], [R * 0.98, torsoLen * 0.25], [R * 0.86, torsoLen * 0.55], [R * 1.04, torsoLen * 0.88],
-      [R * 0.92, torsoLen + 0.1], [R * 0.55, torsoLen + 0.16], [0.06, torsoLen + 0.19], [0, torsoLen + 0.19],
-    ].map(([r, y]) => new THREE.Vector2(r, y));
-    const torso = new THREE.Mesh(new THREE.LatheGeometry(torsoProfile, 24), shirt);
-    torso.position.y = 0.03;
-    torso.scale.set(1, 1, 0.74);
-    torso.castShadow = true;
-    this.spine.add(torso);
-    const hem = new THREE.Mesh(new THREE.TorusGeometry(R * 0.93, 0.014, 6, 24), shirtDark);
-    hem.rotation.x = Math.PI / 2;
-    hem.scale.set(1, 0.74, 1);
-    hem.position.y = 0.04;
-    this.spine.add(hem);
-    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.016, 6, 18), shirtDark);
-    collar.rotation.x = Math.PI / 2;
-    collar.position.y = torsoLen + 0.2;
-    this.spine.add(collar);
-    // 胸前队徽
-    const badge = new THREE.Mesh(new THREE.CircleGeometry(0.032, 16), mat(0xe9c46a, { roughness: 0.4, metalness: 0.4 }));
-    badge.position.set(R * 0.45, torsoLen * 0.78, R * 0.83);
-    badge.rotation.y = 0.35;
-    this.spine.add(badge);
-    if (g > 1.15) {
-      const belly = sphere(0.11 * g, shirt);
-      belly.position.set(0, 0.17, 0.03 * g);
-      belly.scale.set(1, 0.95, 0.82);
-      this.spine.add(belly);
-    }
-    const shoulderY = torsoLen + 0.16;
+    this.hips = node(model, 'hips');
+    this.spine = node(model, 'spine');
+    this.neck = node(model, 'neck');
+    this.head = node(model, 'head');
+    this.legLen = this.hips.position.y;
+    this.arms = [
+      { sh: node(model, 'armR_sh'), el: node(model, 'armR_el') },
+      { sh: node(model, 'armL_sh'), el: node(model, 'armL_el') },
+    ];
+    this.legs = [
+      { hp: node(model, 'legR_hp'), kn: node(model, 'legR_kn') },
+      { hp: node(model, 'legL_hp'), kn: node(model, 'legL_kn') },
+    ];
+    this.eyes = [node(model, 'eyeL'), node(model, 'eyeR')];
 
-    // 头
-    this.neck.position.y = torsoLen + 0.22;
-    this.spine.add(this.neck);
-    const neckM = capsule(0.048, 0.04, skin, 10);
-    neckM.position.y = 0.0;
-    this.neck.add(neckM);
-    this.head.position.y = 0.17;
-    this.neck.add(this.head);
-    const headW = Math.min(1.02, 0.95 + (g - 1) * 0.10);
-    const headM = sphere(HEAD_R, skin, 28, 20);
-    headM.scale.set(headW, 1.04, 0.98);
-    this.head.add(headM);
-    const jaw = sphere(HEAD_R * 0.8, skin, 20, 12);
-    jaw.position.set(0, -0.045, 0.012);
-    jaw.scale.set(headW * 1.05, 0.8, 1);
-    this.head.add(jaw);
-    const fz = HEAD_R * 0.93; // 脸部表面
-    for (const sx of [-1, 1]) {
-      const ear = sphere(0.032, skin, 10, 8);
-      ear.scale.set(0.6, 1, 0.9);
-      ear.position.set(sx * HEAD_R * headW * 0.98, -0.005, -0.005);
-      this.head.add(ear);
-      // 眼睛：眼白 + 瞳孔 + 高光（眨眼时整组压扁）
-      const eye = new THREE.Group();
-      eye.position.set(sx * 0.052, 0.012, fz - 0.012);
-      this.head.add(eye);
-      const sclera = new THREE.Mesh(new THREE.SphereGeometry(0.024, 14, 10), white);
-      sclera.scale.set(1, 1.1, 0.5);
-      eye.add(sclera);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.015, 12, 8), dark);
-      pupil.position.set(0, -0.002, 0.009);
-      pupil.scale.set(1, 1.15, 0.5);
-      eye.add(pupil);
-      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.0045, 6, 4), white);
-      glint.position.set(sx * -0.004 + 0.004, 0.006, 0.016);
-      eye.add(glint);
-      this.eyes.push(eye);
-      const brow = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.034, 2, 6), hair);
-      brow.rotation.z = Math.PI / 2 + sx * 0.12;
-      brow.position.set(sx * 0.052, 0.058, fz - 0.002);
-      this.head.add(brow);
-      const blush = new THREE.Mesh(new THREE.CircleGeometry(0.02, 12), new THREE.MeshStandardMaterial({ color: 0xf08a7a, transparent: true, opacity: 0.35, roughness: 1 }));
-      blush.position.set(sx * 0.082, -0.03, fz - 0.026);
-      blush.rotation.y = sx * 0.55;
-      this.head.add(blush);
-    }
-    const nose = sphere(0.017, skin, 8, 6);
-    nose.scale.set(1, 0.9, 1.1);
-    nose.position.set(0, -0.012, fz + 0.004);
-    this.head.add(nose);
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.0045, 4, 12, Math.PI), mat(0x7a3b30, { roughness: 0.6 }));
-    mouth.rotation.z = Math.PI;
-    mouth.position.set(0, -0.045, fz - 0.008);
-    this.head.add(mouth);
+    const hair = kit.hair[L.hairStyle].clone(true);
+    cloneMaterials(hair);
+    paint(hair, L);
+    node(model, 'socket_hair').add(hair);
 
-    // 发型：主发盖 + 后脑 + 各自的刘海
-    const capPhi = L.hairStyle === 'buzz' ? 0.38 : 0.52;
-    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R * 1.06, 28, 14, 0, Math.PI * 2, 0, Math.PI * capPhi), hair);
-    hairCap.scale.set(headW, 1.04, 1.0);
-    hairCap.position.set(0, 0.01, -0.006);
-    hairCap.rotation.x = -0.28;
-    hairCap.castShadow = true;
-    this.head.add(hairCap);
-    if (L.hairStyle !== 'buzz') {
-      const back = sphere(HEAD_R * 1.0, hair, 20, 12);
-      back.scale.set(headW * 1.02, 0.82, 0.8);
-      back.position.set(0, 0.01, -0.045);
-      this.head.add(back);
-    }
-    if (L.hairStyle === 'messy') {
-      for (let i = 0; i < 9; i++) {
-        const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.12, 5), hair);
-        const a = (i / 9) * Math.PI * 2;
-        tuft.position.set(Math.cos(a) * 0.08, 0.13, Math.sin(a) * 0.08 - 0.02);
-        tuft.rotation.set(Math.sin(a) * 0.7, 0, -Math.cos(a) * 0.7);
-        tuft.castShadow = true;
-        this.head.add(tuft);
-      }
-    } else if (L.hairStyle === 'side') {
-      const fringe = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.16, 4, 10), hair);
-      fringe.rotation.z = Math.PI / 2 - 0.3;
-      fringe.position.set(0.02, 0.105, 0.1);
-      fringe.scale.set(1, 1, 0.7);
-      this.head.add(fringe);
-    } else if (L.hairStyle === 'short') {
-      const fringe = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.15, 4, 10), hair);
-      fringe.rotation.z = Math.PI / 2;
-      fringe.position.set(0, 0.11, 0.098);
-      fringe.scale.set(1, 1, 0.6);
-      this.head.add(fringe);
-    }
-    // 眼镜
     if (L.glasses) {
-      const frameMat = mat(0x111114, { roughness: 0.3, metalness: 0.4 });
-      const lens = new THREE.MeshStandardMaterial({ color: 0xbfd8ff, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.2 });
-      for (const sx of [-1, 1]) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.0065, 6, 18), frameMat);
-        ring.position.set(sx * 0.052, 0.012, fz + 0.012);
-        this.head.add(ring);
-        const glass = new THREE.Mesh(new THREE.CircleGeometry(0.032, 16), lens);
-        glass.position.set(sx * 0.052, 0.012, fz + 0.012);
-        this.head.add(glass);
-        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.006, 0.13), frameMat);
-        arm.position.set(sx * HEAD_R * headW * 0.92, 0.018, 0.06);
-        this.head.add(arm);
-      }
-      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.006), frameMat);
-      bridge.position.set(0, 0.018, fz + 0.016);
-      this.head.add(bridge);
+      const glasses = kit.glasses.clone(true);
+      cloneMaterials(glasses);
+      paint(glasses, L);
+      node(model, 'socket_glasses').add(glasses);
     }
-    // 耳机（打游戏时戴）
-    const band = new THREE.Mesh(new THREE.TorusGeometry(HEAD_R * headW + 0.018, 0.014, 6, 20, Math.PI), dark);
-    band.position.y = 0.02;
-    this.headset.add(band);
-    for (const sx of [-1, 1]) {
-      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.045, 16), mat(L.shirt, { roughness: 0.45 }));
-      cup.rotation.z = Math.PI / 2;
-      cup.position.set(sx * (HEAD_R * headW + 0.018), 0.0, 0);
-      this.headset.add(cup);
-    }
-    const mic = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.09, 2, 6), dark);
-    mic.position.set(-0.13, -0.05, 0.07);
-    mic.rotation.set(0.9, 0, 0.3);
-    this.headset.add(mic);
-    this.headset.visible = false;
-    this.head.add(this.headset);
 
-    // 手臂：肩 → 肘；短袖露出小臂
-    const armR = 0.038 * Math.sqrt(g);
-    for (const sx of [-1, 1]) {
-      const sh = new THREE.Group();
-      sh.position.set(sx * (0.15 * g + 0.055), shoulderY, 0);
-      this.spine.add(sh);
-      const sleeve = capsule(armR + 0.008, 0.11 * s, shirt, 12);
-      sleeve.position.y = -0.07 * s;
-      sh.add(sleeve);
-      const upper = capsule(armR - 0.002, 0.2 * s, skin, 10);
-      upper.position.y = -0.14 * s;
-      sh.add(upper);
-      const el = new THREE.Group();
-      el.position.y = -0.27 * s;
-      sh.add(el);
-      const fore = capsule(armR - 0.008, 0.18 * s, skin, 10);
-      fore.position.y = -0.11 * s;
-      el.add(fore);
-      const hand = sphere(0.038, skin, 12, 8);
-      hand.scale.set(0.85, 1.15, 0.7);
-      hand.position.y = -0.245 * s;
-      el.add(hand);
-      const thumb = capsule(0.013, 0.025, skin, 6);
-      thumb.position.set(-sx * 0.03, -0.23 * s, 0.02);
-      thumb.rotation.z = sx * 0.6;
-      el.add(thumb);
-      this.arms.push({ sh, el });
-    }
-    // 手机（摸鱼时拿在右手，屏幕颜色随 App 变）
+    const headset = kit.headset.clone(true);
+    cloneMaterials(headset);
+    paint(headset, L);
+    headset.visible = false;
+    node(model, 'socket_headset').add(headset);
+    this.headset = headset;
+
+    const dark = mat(0x1b1b1f, { roughness: 0.45 });
     this.phoneScreen = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x6fa8ff, emissiveIntensity: 0.9 });
-    this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.14, 0.012), [dark, dark, dark, dark, this.phoneScreen, dark]);
-    this.phone.position.set(0, -0.28 * s, 0.035);
+    this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.08, 0.008), [dark, dark, dark, dark, this.phoneScreen, dark]);
+    this.phone.position.set(0, -0.05, 0.03);
     this.phone.rotation.x = -0.3;
     this.phone.visible = false;
-    this.arms[1].el.add(this.phone);
-    // 杯子（喝水 / 饮料）
-    this.cup = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.034, 0.12, 14), mat(0xf3e2c7));
-    this.cup.position.set(0, -0.28 * s, 0.045);
+    node(model, 'handL').add(this.phone);
+
+    this.cup = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.016, 0.055, 8), mat(0xf3e2c7));
+    this.cup.position.set(0, -0.02, 0.03);
     this.cup.visible = false;
-    this.arms[1].el.add(this.cup);
+    node(model, 'handL').add(this.cup);
 
-    // 腿：髋 → 膝
-    for (const sx of [-1, 1]) {
-      const hp = new THREE.Group();
-      hp.position.set(sx * 0.080 * g, 0, 0);
-      this.hips.add(hp);
-      const thigh = capsule(0.052 * Math.sqrt(g), 0.3 * s, pants, 12);
-      thigh.position.y = -0.21 * s;
-      hp.add(thigh);
-      const kn = new THREE.Group();
-      kn.position.y = -0.42 * s;
-      hp.add(kn);
-      // 短裤：大腿是裤，小腿露肤（稿 B 剪影是短裤，不是长裤）
-      const shin = capsule(0.042 * Math.sqrt(g), 0.28 * s, skin, 12);
-      shin.position.y = -0.19 * s;
-      kn.add(shin);
-      const foot = new THREE.Group();
-      foot.position.y = -0.42 * s;
-      kn.add(foot);
-      if (L.flipflops) {
-        // 人字拖：薄底 + 露出的脚。拖色跟 shoes（阿鸡为橙，呼应衫）
-        const flop = L.shoes ?? 0x2f7fd1;
-        const sole = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.15, 4, 10), mat(flop, { roughness: 0.6 }));
-        sole.rotation.x = Math.PI / 2;
-        sole.scale.set(1, 1, 0.2);
-        sole.position.set(0, -0.008, 0.05);
-        foot.add(sole);
-        const bare = capsule(0.042, 0.13, skin, 10);
-        bare.rotation.x = Math.PI / 2;
-        bare.scale.set(1, 1, 0.65);
-        bare.position.set(0, 0.022, 0.05);
-        foot.add(bare);
-        const strap = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 12, Math.PI), mat(flop));
-        strap.position.set(0, 0.04, 0.08);
-        strap.rotation.x = -Math.PI / 2;
-        foot.add(strap);
-      } else {
-        // 圆头运动鞋 + 白色鞋底
-        const shoe = capsule(0.056, 0.14, mat(L.shoes ?? 0xe9e9e9, { roughness: 0.6 }), 12);
-        shoe.rotation.x = Math.PI / 2;
-        shoe.scale.set(1, 1, 0.68);
-        shoe.position.set(0, 0.03, 0.045);
-        foot.add(shoe);
-        const sole = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.14, 4, 12), mat(0xf4f4f2, { roughness: 0.7 }));
-        sole.rotation.x = Math.PI / 2;
-        sole.scale.set(1, 1, 0.2);
-        sole.position.set(0, -0.004, 0.045);
-        foot.add(sole);
-      }
-      this.legs.push({ hp, kn });
-    }
-
-    // 碰撞体（点击用）
-    const hit = (this.hit = new THREE.Mesh(new THREE.CylinderGeometry(0.32 * g, 0.32 * g, 1.85 * s, 8), new THREE.MeshBasicMaterial({ visible: false })));
-    hit.position.y = 0.92 * s;
+    const hit = (this.hit = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.22, 1.05, 8),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    ));
+    hit.position.y = 0.52;
     hit.userData.memberId = def.id;
     this.root.add(hit);
 
-    // 头顶昵称与气泡（CSS2D）
     const tag = (this.tagEl = document.createElement('div'));
     tag.className = 'name-tag';
     tag.innerHTML = `<span class="dot" style="background:#${L.shirt.toString(16).padStart(6, '0')}"></span><b>${def.name}</b><i class="st"></i>`;
     tag.dataset.memberId = def.id;
     this.tagStatus = tag.querySelector('.st')!;
     const tagObj = new CSS2DObject(tag);
-    tagObj.position.set(0, 2.1 * s + 0.14, 0);
+    tagObj.position.set(0, 1.12, 0);
     this.root.add(tagObj);
     const bubble = (this.bubbleEl = document.createElement('div'));
     bubble.className = 'bubble';
     const bubbleObj = new CSS2DObject(bubble);
-    bubbleObj.position.set(0, 2.1 * s + 0.52, 0);
+    bubbleObj.position.set(0, 1.38, 0);
     this.root.add(bubbleObj);
 
     this.root.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh && o !== hit) {
-        o.userData.memberId = def.id;
-        o.castShadow = true;
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh && o !== hit) {
+        mesh.userData.memberId = def.id;
+        mesh.castShadow = true;
       }
     });
   }
 
-  // ── 指令 ──
   teleport(p: THREE.Vector3, facing: number, pose: PoseName) {
     this.pos.copy(p);
     this.facing = this.targetFacing = facing;
@@ -434,14 +325,14 @@ export class Character {
     this.phoneScreen.emissive.setHex(color);
   }
 
-  // ── 姿态表：返回各关节目标角 ──
   private poseTargets(name: PoseName, t: number): Pose {
     const P: Pose = {
       hipsY: this.legLen, bodyRX: 0, bodyY: 0, spineRX: 0, spineRY: 0, spineRZ: 0, headRX: 0, headRY: 0, headRZ: 0,
       sh: [[0, 0.08], [0, -0.08]], el: [0, 0], hp: [0, 0], kn: [0, 0],
     };
     const sit = () => {
-      P.hipsY = SEAT_H;
+      // SEAT_H 是世界高度。root 带了身高缩放，关节局部 y 要除掉 fit，坐下才落在椅面上。
+      P.hipsY = SEAT_H / this.fit;
       P.hp = [-Math.PI / 2 + 0.05, -Math.PI / 2 + 0.05];
       P.kn = [Math.PI / 2 - 0.05, Math.PI / 2 - 0.05];
     };
@@ -519,7 +410,7 @@ export class Character {
         P.el = [-0.25, -0.35];
         P.hp = [-0.12, -0.12];
         P.kn = [0.15, 0.15];
-        P.hipsY = this.legLen - 0.03;
+        P.hipsY = this.legLen - 0.03 / OFFICE_FIT;
         if (ph > 0.95 && t - this.lastSlam > 0.3) {
           this.lastSlam = t;
           this.onSlam?.();
@@ -545,7 +436,6 @@ export class Character {
         P.headRX = -Math.max(0, Math.sin(t * 1.2)) * 0.2;
         break;
       case 'reach':
-        // 开冰箱、在零食柜前挑东西：手往前伸、头左右看
         P.spineRX = 0.18;
         P.headRX = 0.15;
         P.headRY = Math.sin(t * 1.3) * 0.3;
@@ -575,7 +465,6 @@ export class Character {
 
   update(dt: number, nowMs: number) {
     this.t += dt;
-    // 沿路径行走
     if (this.path.length) {
       const target = this.path[0];
       const dx = target.x - this.pos.x, dz = target.z - this.pos.z;
@@ -597,7 +486,6 @@ export class Character {
         this.pos.z += (dz / d) * step;
       }
     }
-    // 转身
     let df = this.targetFacing - this.facing;
     while (df > Math.PI) df -= Math.PI * 2;
     while (df < -Math.PI) df += Math.PI * 2;
@@ -605,7 +493,6 @@ export class Character {
     this.root.position.copy(this.pos);
     this.root.rotation.y = this.facing;
 
-    // 关节插值
     const P = this.poseTargets(this.poseName, this.t + this.phase);
     const k = this.cur ? Math.min(1, dt * 9) : 1;
     const c = (this.cur ||= structuredClone(P));
@@ -617,7 +504,7 @@ export class Character {
       c.hp[i] = lerp(c.hp[i], P.hp[i], k);
       c.kn[i] = lerp(c.kn[i], P.kn[i], k);
     }
-    this.hips.position.y = c.hipsY + c.bodyY;
+    this.hips.position.y = c.hipsY + c.bodyY / OFFICE_FIT;
     this.body.rotation.x = c.bodyRX;
     this.spine.rotation.set(c.spineRX, c.spineRY, c.spineRZ);
     this.head.rotation.set(c.headRX, c.headRY, c.headRZ);
@@ -629,11 +516,9 @@ export class Character {
       l.hp.rotation.x = c.hp[i];
       l.kn.rotation.x = c.kn[i];
     });
-    // 躺姿：整个身体绕脚底转 -90°（脸朝上、头朝 -z），再抬到沙发坐垫高度并居中
-    if (this.poseName === 'lie') this.body.position.set(0, 0.62, 0.85 * this.s);
+    if (this.poseName === 'lie') this.body.position.set(0, 0.62 / this.fit, (0.85 * this.s) / this.fit);
     else this.body.position.set(0, 0, 0);
 
-    // 眨眼；睡觉时闭眼
     const sleeping = this.poseName === 'sleep_desk' || this.poseName === 'lie';
     this.blinkAt -= dt;
     let open = 1;

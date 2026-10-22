@@ -147,6 +147,22 @@ button { font-family: inherit; }
 .bubble::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 10px; height: 10px; background: #fffdf8; transform: translateX(-50%) rotate(45deg); }
 .bubble.show { opacity: 1; transform: none; }
 .bubble.emoji { font-size: 20px; padding: 4px 8px; background: rgba(255, 253, 248, 0.95); }
+html.lineup-mode #topbar,
+html.lineup-mode #timebar,
+html.lineup-mode #board,
+html.lineup-mode #card,
+html.lineup-mode #boot,
+html.lineup-mode #toast,
+html.lineup-mode #holdBanner,
+html.lineup-mode #nightHint,
+html.lineup-mode #modal { display: none !important; }
+html.lineup-mode .name-tag {
+  background: transparent; border: none; color: #161616; box-shadow: none;
+  transform: none; padding: 0; font-size: 22px;
+}
+html.lineup-mode .name-tag .dot,
+html.lineup-mode .name-tag i { display: none; }
+html.lineup-mode .name-tag b { font-weight: 800; letter-spacing: 0.06em; }
 
 /* ── 人物卡片 ── */
 #card {
