@@ -1,5 +1,5 @@
 // 低多边形人物：基础几何体拼装，关节为空 Group，姿态用关节角度插值实现
-// 外形按设计文档区分：眼镜、胖瘦、高矮、阿鸡的人字拖；头部比真人略大，远看也能认出是谁
+// 外形按稿 B 剪影加强版：眼镜、胖瘦、高矮、发型、阿鸡的人字拖；头部比真人略大，远看也能认出是谁
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { MemberDef } from '../data/roster';
@@ -7,7 +7,7 @@ import { mat } from './office';
 
 const SEAT_H = 0.5;
 const WALK_SPEED = 1.35;
-const HEAD_R = 0.15;
+const HEAD_R = 0.155;
 
 function capsule(r: number, len: number, material: THREE.Material, seg = 14) {
   const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, seg), material);
@@ -96,11 +96,11 @@ export class Character {
     // 骨盆 + 皮带
     this.hips.position.y = this.legLen;
     this.body.add(this.hips);
-    const pelvis = capsule(0.14 * g, 0.12 * g, pants);
+    const pelvis = capsule(0.11 * g, 0.12 * g, pants);
     pelvis.rotation.z = Math.PI / 2;
     pelvis.scale.set(1, 1, 0.85);
     this.hips.add(pelvis);
-    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.155 * g, 0.155 * g, 0.035, 20), mat(0x2a2420, { roughness: 0.5 }));
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.122 * g, 0.122 * g, 0.035, 20), mat(0x2a2420, { roughness: 0.5 }));
     belt.scale.set(1, 1, 0.86);
     belt.position.y = 0.06;
     this.hips.add(belt);
@@ -111,17 +111,17 @@ export class Character {
     const torsoLen = 0.3 * s;
     const R = 0.17 * g;
     const torsoProfile = [
-      [0, 0], [R * 0.92, 0], [R * 0.98, torsoLen * 0.25], [R * (g > 1.12 ? 1.08 : 0.94), torsoLen * 0.55], [R * 1.04, torsoLen * 0.88],
+      [0, 0], [R * 0.92, 0], [R * 0.98, torsoLen * 0.25], [R * 0.86, torsoLen * 0.55], [R * 1.04, torsoLen * 0.88],
       [R * 0.92, torsoLen + 0.1], [R * 0.55, torsoLen + 0.16], [0.06, torsoLen + 0.19], [0, torsoLen + 0.19],
     ].map(([r, y]) => new THREE.Vector2(r, y));
     const torso = new THREE.Mesh(new THREE.LatheGeometry(torsoProfile, 24), shirt);
     torso.position.y = 0.03;
-    torso.scale.set(1, 1, 0.8);
+    torso.scale.set(1, 1, 0.74);
     torso.castShadow = true;
     this.spine.add(torso);
     const hem = new THREE.Mesh(new THREE.TorusGeometry(R * 0.93, 0.014, 6, 24), shirtDark);
     hem.rotation.x = Math.PI / 2;
-    hem.scale.set(1, 0.8, 1);
+    hem.scale.set(1, 0.74, 1);
     hem.position.y = 0.04;
     this.spine.add(hem);
     const collar = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.016, 6, 18), shirtDark);
@@ -133,9 +133,9 @@ export class Character {
     badge.position.set(R * 0.45, torsoLen * 0.78, R * 0.83);
     badge.rotation.y = 0.35;
     this.spine.add(badge);
-    if (g > 1.12) {
-      const belly = sphere(0.16 * g, shirt);
-      belly.position.set(0, 0.17, 0.05 * g);
+    if (g > 1.15) {
+      const belly = sphere(0.11 * g, shirt);
+      belly.position.set(0, 0.17, 0.03 * g);
       belly.scale.set(1, 0.95, 0.82);
       this.spine.add(belly);
     }
@@ -149,7 +149,7 @@ export class Character {
     this.neck.add(neckM);
     this.head.position.y = 0.17;
     this.neck.add(this.head);
-    const headW = 0.95 + (g - 1) * 0.22;
+    const headW = Math.min(1.02, 0.95 + (g - 1) * 0.10);
     const headM = sphere(HEAD_R, skin, 28, 20);
     headM.scale.set(headW, 1.04, 0.98);
     this.head.add(headM);
@@ -197,7 +197,7 @@ export class Character {
     this.head.add(mouth);
 
     // 发型：主发盖 + 后脑 + 各自的刘海
-    const capPhi = L.hairStyle === 'buzz' ? 0.42 : 0.52;
+    const capPhi = L.hairStyle === 'buzz' ? 0.38 : 0.52;
     const hairCap = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R * 1.06, 28, 14, 0, Math.PI * 2, 0, Math.PI * capPhi), hair);
     hairCap.scale.set(headW, 1.04, 1.0);
     hairCap.position.set(0, 0.01, -0.006);
@@ -212,7 +212,7 @@ export class Character {
     }
     if (L.hairStyle === 'messy') {
       for (let i = 0; i < 9; i++) {
-        const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.1, 5), hair);
+        const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.12, 5), hair);
         const a = (i / 9) * Math.PI * 2;
         tuft.position.set(Math.cos(a) * 0.08, 0.13, Math.sin(a) * 0.08 - 0.02);
         tuft.rotation.set(Math.sin(a) * 0.7, 0, -Math.cos(a) * 0.7);
@@ -269,12 +269,12 @@ export class Character {
     this.head.add(this.headset);
 
     // 手臂：肩 → 肘；短袖露出小臂
-    const armR = 0.05 * Math.sqrt(g);
+    const armR = 0.038 * Math.sqrt(g);
     for (const sx of [-1, 1]) {
       const sh = new THREE.Group();
-      sh.position.set(sx * (0.17 * g + 0.035), shoulderY, 0);
+      sh.position.set(sx * (0.15 * g + 0.055), shoulderY, 0);
       this.spine.add(sh);
-      const sleeve = capsule(armR + 0.012, 0.11 * s, shirt, 12);
+      const sleeve = capsule(armR + 0.008, 0.11 * s, shirt, 12);
       sleeve.position.y = -0.07 * s;
       sh.add(sleeve);
       const upper = capsule(armR - 0.002, 0.2 * s, skin, 10);
@@ -286,7 +286,7 @@ export class Character {
       const fore = capsule(armR - 0.008, 0.18 * s, skin, 10);
       fore.position.y = -0.11 * s;
       el.add(fore);
-      const hand = sphere(0.045, skin, 12, 8);
+      const hand = sphere(0.038, skin, 12, 8);
       hand.scale.set(0.85, 1.15, 0.7);
       hand.position.y = -0.245 * s;
       el.add(hand);
@@ -312,23 +312,25 @@ export class Character {
     // 腿：髋 → 膝
     for (const sx of [-1, 1]) {
       const hp = new THREE.Group();
-      hp.position.set(sx * 0.085 * g, 0, 0);
+      hp.position.set(sx * 0.080 * g, 0, 0);
       this.hips.add(hp);
-      const thigh = capsule(0.074 * Math.sqrt(g), 0.3 * s, pants, 12);
+      const thigh = capsule(0.052 * Math.sqrt(g), 0.3 * s, pants, 12);
       thigh.position.y = -0.21 * s;
       hp.add(thigh);
       const kn = new THREE.Group();
       kn.position.y = -0.42 * s;
       hp.add(kn);
-      const shin = capsule(0.06 * Math.sqrt(g), 0.28 * s, pants, 12);
+      // 短裤：大腿是裤，小腿露肤（稿 B 剪影是短裤，不是长裤）
+      const shin = capsule(0.042 * Math.sqrt(g), 0.28 * s, skin, 12);
       shin.position.y = -0.19 * s;
       kn.add(shin);
       const foot = new THREE.Group();
       foot.position.y = -0.42 * s;
       kn.add(foot);
       if (L.flipflops) {
-        // 人字拖：薄底 + 露出的脚
-        const sole = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.15, 4, 10), mat(0x2f7fd1, { roughness: 0.6 }));
+        // 人字拖：薄底 + 露出的脚。拖色跟 shoes（阿鸡为橙，呼应衫）
+        const flop = L.shoes ?? 0x2f7fd1;
+        const sole = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.15, 4, 10), mat(flop, { roughness: 0.6 }));
         sole.rotation.x = Math.PI / 2;
         sole.scale.set(1, 1, 0.2);
         sole.position.set(0, -0.008, 0.05);
@@ -338,7 +340,7 @@ export class Character {
         bare.scale.set(1, 1, 0.65);
         bare.position.set(0, 0.022, 0.05);
         foot.add(bare);
-        const strap = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 12, Math.PI), mat(0x2f7fd1));
+        const strap = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 12, Math.PI), mat(flop));
         strap.position.set(0, 0.04, 0.08);
         strap.rotation.x = -Math.PI / 2;
         foot.add(strap);
