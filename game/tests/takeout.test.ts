@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createNewGame, type GameState } from '../src/save/state';
-import { DISHES } from '../src/data/takeout';
+import { CHAIN_CHANCE, CHAIN_COOLDOWN_DAYS, CHAINS, DISHES } from '../src/data/takeout';
 import { ROSTER } from '../src/data/roster';
 import { resolveMeal, settleMeals, type TakeoutPerson } from '../src/sim/takeout';
 import { chainCooldownKey } from '../src/data/takeout';
@@ -95,6 +95,31 @@ describe('外卖', () => {
     expect(broke.record.orders.filter((o) => o.delivery).every((o) => o.payer === 'self')).toBe(true);
   });
 
+  it('餐补和请客叠在一起只由餐补付钱；现金不够就改回自付', () => {
+    const stacked = lunch(11, (s) => {
+      s.clock.day = 3;
+      s.venueLevel = 1;
+      s.facilities.push('mealAllowance');
+      s.flags.hostDay = 3;
+      s.flags.hostMeal = 'lunch';
+    });
+    const due = stacked.record.orders.filter((o) => o.delivery).reduce((sum, o) => sum + o.price, 0);
+    expect(due).toBeGreaterThan(0);
+    expect(stacked.state.cash).toBe(5000 - due);
+    expect(stacked.record.orders.filter((o) => o.delivery).every((o) => o.payer === 'subsidy')).toBe(true);
+
+    const short = lunch(11, (s) => {
+      s.clock.day = 3;
+      s.venueLevel = 1;
+      s.facilities.push('mealAllowance');
+      s.flags.hostDay = 3;
+      s.flags.hostMeal = 'lunch';
+      s.cash = 1;
+    });
+    expect(short.state.cash).toBe(1);
+    expect(short.record.orders.filter((o) => o.delivery).every((o) => o.payer === 'self')).toBe(true);
+  });
+
   it('公司餐补付钱，并在吃到的时候加一点心情', () => {
     const s = createNewGame(12);
     s.clock.day = 3;
@@ -153,6 +178,76 @@ describe('外卖', () => {
       blocked++;
     }
     expect(blocked).toBeGreaterThan(0);
+  });
+
+  it('普通连锁大约 15%，同一种冷却 3 天', () => {
+    expect(CHAIN_CHANCE).toBe(0.15);
+    expect(CHAIN_COOLDOWN_DAYS).toBe(3);
+
+    let orders = 0;
+    let chains = 0;
+    for (let seed = 1; seed <= 80; seed++) {
+      const r = lunch(seed, (s) => {
+        s.clock.day = 3;
+      });
+      for (const o of r.record.orders) {
+        if (!o.delivery || o.dishId === 'luosifen') continue;
+        orders++;
+      }
+      chains += r.record.chains.filter((id) => id !== 'luosifen').length;
+    }
+    const rate = chains / orders;
+    expect(rate).toBeGreaterThan(0.08);
+    expect(rate).toBeLessThan(0.24);
+
+    let stamped = 0;
+    for (let seed = 1; seed <= 40 && stamped < 8; seed++) {
+      const state = createNewGame(seed);
+      state.clock.day = 10;
+      const first = resolveMeal({ state, people: peopleOf(state, (p) => { p.status.饥饿 = 90; }), day: 10, meal: 'lunch', place: '网吧角落' });
+      if (first.record.chains.length !== 1) continue;
+      const id = first.record.chains[0];
+      expect(state.cooldowns[chainCooldownKey(id)]).toBe(10 + CHAIN_COOLDOWN_DAYS);
+      stamped++;
+      for (const day of [11, 12]) {
+        const again = resolveMeal({ state, people: peopleOf(state, (p) => { p.status.饥饿 = 90; }), day, meal: 'lunch', place: '网吧角落' });
+        expect(again.record.chains).not.toContain(id);
+      }
+    }
+    expect(stamped).toBeGreaterThan(0);
+
+    let blockedOrders = 0;
+    for (let seed = 1; seed <= 25; seed++) {
+      const state = createNewGame(seed + 200);
+      state.clock.day = 3;
+      for (const c of CHAINS) state.cooldowns[chainCooldownKey(c.id)] = 99;
+      state.cooldowns[chainCooldownKey('luosifen')] = 99;
+      const r = resolveMeal({ state, people: peopleOf(state, (p) => { p.status.饥饿 = 95; }), day: 3, meal: 'lunch', place: '网吧角落' });
+      blockedOrders += r.record.orders.filter((o) => o.delivery).length;
+      expect(r.record.chains).toEqual([]);
+    }
+    expect(blockedOrders).toBeGreaterThan(20);
+  });
+
+  it('周四的快餐旁白不写人设文案', () => {
+    let saw = false;
+    for (let seed = 1; seed <= 50 && !saw; seed++) {
+      const state = createNewGame(seed);
+      const r = resolveMeal({
+        state,
+        people: peopleOf(state, (p) => { p.status.饥饿 = 95; }),
+        day: 4,
+        meal: 'lunch',
+        place: '网吧角落',
+      });
+      if (!r.record.orders.some((o) => o.dishId === 'mcd')) continue;
+      saw = true;
+      const text = r.logs.map((l) => l.text).join('');
+      expect(text).toContain('周四');
+      expect(text).not.toContain('文案');
+      expect(text).not.toContain('那句');
+    }
+    expect(saw).toBe(true);
   });
 
   it('没赢过不会点小龙虾，晚饭可以有烧烤', () => {

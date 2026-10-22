@@ -28,22 +28,21 @@ export function manageHtml(world: World, pick: [string, string]): string {
   };
   const actions = ACTIONS.map((a) => {
     const preview = previewAction(s, a.id, targetsFor(a.id), day, minute);
-    const cost = preview.cost > 0 ? ` · ${preview.cost.toLocaleString('zh-CN')}` : a.id === 'host' ? ' · 餐费按实价' : '';
+    const cost = preview.cost > 0 ? ` · ${preview.cost.toLocaleString('zh-CN')}` : a.id === 'host' ? ' · 餐费按实价' : a.cash === 0 ? ' · 不花钱' : '';
     const scale = preview.ok ? (preview.backfire ? '本次会反噬' : preview.nth > 1 ? `本周第 ${preview.nth} 次 · 效果 ${Math.round(preview.mult * 100)}%` : '效果 100%') : preview.reason;
-    const pending = a.pending ? ' · 价格待定' : '';
     return `<div class="act">
-      <div><b>${a.name}</b><small>${a.ap} 行动点${cost}${pending}<br>${a.blurb}<br>${scale}</small></div>
-      <button class="btn" data-act="${a.id}" ${preview.ok ? '' : 'disabled'}>使用</button>
+      <div><b>${a.name}</b><small>${a.ap} 行动点${cost}<br>${a.blurb}<br>${scale}</small></div>
+      <button class="btn" data-act="${a.id}" ${preview.ok ? '' : 'disabled'}${preview.ok ? '' : ` title="${preview.reason}"`}>使用</button>
     </div>`;
   }).join('');
-  const facs = FACILITIES.filter((f) => f.price > 0).map((f) => {
+  const facs = FACILITIES.filter((f) => f.price > 0 && f.venue === s.venueLevel).map((f) => {
     const owned = s.facilities.includes(f.id);
     const locked = s.venueLevel < f.venue;
     const reason = owned ? '已购买' : locked ? `${VENUE_CN[f.venue]}解锁` : s.cash < f.price ? '现金不够' : '';
     const price = f.monthly ? `${f.price.toLocaleString('zh-CN')}/月` : f.price.toLocaleString('zh-CN');
     return `<div class="act">
       <div><b>${f.name}</b><small>${VENUE_CN[f.venue]} · ${price}${reason ? ` · ${reason}` : ''}</small></div>
-      <button class="btn" data-buy="${f.id}" ${owned || locked || s.cash < f.price ? 'disabled' : ''}>${owned ? '已有' : '购买'}</button>
+      <button class="btn" data-buy="${f.id}" ${owned || locked || s.cash < f.price ? 'disabled' : ''}${reason ? ` title="${reason}"` : ''}>${owned ? '已有' : '购买'}</button>
     </div>`;
   }).join('');
   const sponsors = SPONSORS.map((sp) => {
@@ -51,7 +50,7 @@ export function manageHtml(world: World, pick: [string, string]): string {
     const lock = sponsorLockReason(s, sp.id);
     return `<div class="act">
       <div><b>${sp.name}</b><small>月入 ${sp.income.toLocaleString('zh-CN')} · 目标：${sp.goal}<br>进度：${goalProgress(s, sp.id)}${lock && !signed ? `<br>${lock}` : ''}</small></div>
-      ${signed ? `<button class="btn" data-drop="${sp.id}">解约</button>` : `<button class="btn" data-sign="${sp.id}" ${lock ? 'disabled' : ''}>签约</button>`}
+      ${signed ? `<button class="btn" data-drop="${sp.id}">解约</button>` : `<button class="btn" data-sign="${sp.id}" ${lock ? 'disabled' : ''}${lock ? ` title="${lock}"` : ''}>签约</button>`}
     </div>`;
   }).join('');
   return `
@@ -66,9 +65,16 @@ export function manageHtml(world: World, pick: [string, string]): string {
       <span>欠薪 <b>${s.unpaidMonths}/3</b></span>
     </div>
     <p class="sub">工资 ${monthlySalaryTotal(s).toLocaleString('zh-CN')} · 房租 ${monthlyRent(s).toLocaleString('zh-CN')}。付不出时先动私房钱，连续 3 个月才破产。</p>
-    <div class="row">
-      <button class="btn" data-skim="1000" ${s.cash < 1000 ? 'disabled' : ''}>抽成 1000</button>
-      <button class="btn" data-skim="5000" ${s.cash < 5000 ? 'disabled' : ''}>抽成 5000</button>
+    <h3>抽成</h3>
+    <p class="sub">抽成把公司账上的现金转进老板自己的私房钱。公司少一笔，私房钱多一笔。</p>
+    <div class="act-list">
+      ${[1000, 5000].map((n) => {
+        const why = s.cash < n ? `现金不够 ${n.toLocaleString('zh-CN')}，按不了` : '从公司现金划到私房钱';
+        return `<div class="act">
+          <div><b>抽成 ${n.toLocaleString('zh-CN')}</b><small>${why}</small></div>
+          <button class="btn" data-skim="${n}" ${s.cash < n ? 'disabled' : ''} title="${why}">抽成</button>
+        </div>`;
+      }).join('')}
     </div>
     <h3>对象</h3>
     <div class="row">
@@ -79,7 +85,7 @@ export function manageHtml(world: World, pick: [string, string]): string {
     <h3>老板动作</h3>
     <div class="act-list">${actions}</div>
     <h3>设施</h3>
-    <p class="sub">买了才出现在场地里。网吧角落的零食柜 800。</p>
+    <p class="sub">只列出${VENUE_CN[s.venueLevel]}能买的。买了才出现在这块场地里。</p>
     <div class="act-list">${facs}</div>
     <h3>赞助</h3>
     <p class="sub">同时最多 2 个。完成上一档目标才解锁下一档。胜场要等比赛引擎，现在先挂得上第一档。</p>

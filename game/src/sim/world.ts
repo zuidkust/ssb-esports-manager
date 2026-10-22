@@ -2,7 +2,7 @@
 // 自主行为只用当前场地里有的物件（data/facilities.ts）：网吧角落没有冰箱，就不会有人去开冰箱
 // 事件引擎（M2）会在这一层之上挑选和结算事件
 import { dayInfo, MATCH_MINUTE, opponentForRound, PREMATCH_MINUTE } from '../core/calendar';
-import { DAY_START, fmtHM } from '../core/clock';
+import { DAY_START } from '../core/clock';
 import { availableFacilities, VENUE_CN, type FacilityId } from '../data/facilities';
 import { actionPointMax, isPayday } from '../data/economy';
 import { TIER_CN } from '../data/leagues';
@@ -230,6 +230,11 @@ export class World {
     }
     if (matchDay && t >= PREMATCH_MINUTE && t < MATCH_MINUTE) return { kind: 'meeting', label: this.meetingLabel() };
     const meal = this.mealActivity(m, t);
+    // 非比赛日晚饭：在岗的人都在吃，不要还坐成平时单排的样子
+    if (!matchDay && this.segment(t).id === 'dinner') {
+      if (meal?.kind === 'eat') return meal;
+      return { kind: 'eat', label: meal?.kind === 'wait_food' ? '晚饭时间，外卖还在路上' : '在工位吃晚饭' };
+    }
     if (meal) return meal;
     if (t < 9 * 60 + 15) return { kind: 'training', label: '到岗热身（训练模式）' };
     const partner = this.assignedPartner(m, t);
@@ -427,7 +432,7 @@ export class World {
     let text: string | null = null;
     if (prev.kind === 'absent' && prev.label === '还没到' && next.kind !== 'absent') {
       text = plan.late
-        ? pick(r, [`${n} ${fmtHM(t)} 才到，进门时所有人都在看他。`, `${n}踩着迟到线冲进门，假装自己一直都在。`])
+        ? pick(r, [`${n}才到，进门时所有人都在看他。`, `${n}踩着迟到线冲进门，假装自己一直都在。`])
         : t < 9 * 60 + 5
           ? pick(r, [`${n}第一批到，开机、登录。`, `${n}早早到了，${this.placeName}还很安静。`])
           : pick(r, [`${n}到了，先去接了杯水。`, `${n}到了，开机，登录，排队。`]);
@@ -510,7 +515,7 @@ export class World {
     if (prevSeg == null || advanced <= 0) return;
     const opp = this.opponentToday();
     const lines: Partial<Record<typeof seg.id, string>> = {
-      morning: this.today.round != null && opp ? `今天比赛日：晚上 19:00 ${TIER_CN[this.state.season.tier]}第 ${this.today.round} 轮，对手「${opp.name}」。` : '09:00，上班。有人在单排，有人在刷手机。',
+      morning: this.today.round != null && opp ? `今天比赛日：晚上 19:00 ${TIER_CN[this.state.season.tier]}第 ${this.today.round} 轮，对手「${opp.name}」。` : '上班了。有人在单排，有人在刷手机。',
       lunch: `饭点到了，${this.placeName}里开始讨论吃什么。`,
       team: `下午组排开始，耳机都戴上了，${this.placeName}安静下来。`,
       dinner: '组排结束，晚饭时间。',

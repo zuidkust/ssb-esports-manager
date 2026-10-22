@@ -69,6 +69,19 @@ describe('刷手机细分', () => {
   });
 });
 
+describe('晚饭', () => {
+  it('非比赛日 18:00 在岗的人都在吃', () => {
+    const s = createNewGame(1);
+    s.clock.day = 1;
+    s.clock.minute = 18 * 60;
+    const w = new World(s);
+    w.update(18 * 60, 0, true);
+    const present = w.members.filter((m) => m.present);
+    expect(present.length).toBe(6);
+    for (const m of present) expect(m.activity.kind).toBe('eat');
+  });
+});
+
 describe('饭点', () => {
   it('饭点有人等外卖或在吃，没有人外出吃饭', () => {
     let eating = 0;

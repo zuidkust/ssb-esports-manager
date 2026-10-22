@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createNewGame } from '../src/save/state';
 import { performAction, previewAction } from '../src/sim/actions';
+import { manageHtml } from '../src/ui/manage';
 import { addKnot } from '../src/sim/relations';
 import { actionPointMax } from '../src/data/economy';
 import { World } from '../src/sim/world';
@@ -117,6 +118,47 @@ describe('老板动作', () => {
     expect(s.flags.hostDay).toBe(1);
     expect(s.flags.hostMeal).toBe('lunch');
     expect(s.actionPoints).toBe(1);
+  });
+
+  it('连续请奶茶不会连着三句一样', () => {
+    const s = createNewGame(5);
+    s.actionPoints = 6;
+    s.cash = 10000;
+    const lines = [0, 1, 2].map(() => act(s, 'milktea', [], 1, 11 * 60).logs[0]);
+    expect(new Set(lines).size).toBe(3);
+    expect(lines.join('')).not.toContain('价格待定');
+  });
+
+  it('没买白板不能开复盘会', () => {
+    const s = createNewGame(4);
+    s.venueLevel = 1;
+    s.actionPoints = 4;
+    const blocked = previewAction(s, 'review', [], 1, 11 * 60);
+    expect(blocked.ok).toBe(false);
+    expect(blocked.reason).toContain('白板');
+    s.facilities.push('whiteboard');
+    expect(previewAction(s, 'review', [], 1, 11 * 60).ok).toBe(true);
+  });
+
+  it('经营面板不出现开发用语，设施只列当前场地', () => {
+    const s = createNewGame(3);
+    s.venueLevel = 1;
+    s.cash = 100;
+    s.actionPoints = 4;
+    const html = manageHtml(new World(s), [s.roster[0].id, s.roster[1].id]);
+    expect(html).not.toContain('价格待定');
+    expect(html).toContain('要先买白板');
+    expect(html).toContain('私房钱');
+    expect(html).toContain('抽成把公司账上的现金转进老板自己的私房钱');
+    expect(html).toContain('现金不够');
+    expect(html).toContain('白板（复盘）');
+    expect(html).not.toContain('零食柜');
+    expect(html).toContain('电竞基地之后才解锁');
+    const net = createNewGame(3);
+    net.cash = 100;
+    const netHtml = manageHtml(new World(net), [net.roster[0].id, net.roster[1].id]);
+    expect(netHtml).toContain('零食柜');
+    expect(netHtml).not.toContain('白板（复盘）');
   });
 
   it('没有心结不能调解', () => {

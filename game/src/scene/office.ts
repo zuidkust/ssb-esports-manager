@@ -6,7 +6,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import type { FacilityId } from '../data/facilities';
 import type { MemberDef } from '../data/roster';
 import { OFFICE_NAV } from './nav';
-import { officeMeetingSpots } from './spots';
+import { deliveryStandZ, officeMeetingSpots } from './spots';
 import type { Spot, Venue } from './venue';
 import {
   artTexture, floorTexture, plasterTexture, plinthLabel, posterTexture, rugTexture, screenTexture, slatTexture, SkyTexture, WhiteboardTexture,
@@ -317,7 +317,7 @@ function buildDesk(parent: THREE.Object3D, x: number, z: number, accent: number,
   return {
     group: g, chair, chairBaseZ: chairZ, screens, screenLight, rgbMat, kbGlow, pcGlow, lamp,
     seat: new THREE.Vector3(x, 0, z + chairZ - 0.05),
-    standSpot: new THREE.Vector3(x, 0, z + 0.62),
+    standSpot: new THREE.Vector3(x, 0, deliveryStandZ(z, chairZ)),
     jiggle: 0, monitor: mg,
   };
 }

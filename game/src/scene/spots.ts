@@ -30,17 +30,17 @@ export function netcafeMeetingSpots(): StandingSpot[] {
 
 export function officeMeetingSpots(whiteboard: boolean): StandingSpot[] {
   if (whiteboard) {
-    // 白板在左墙。两列站在过道里，避开工位（最左桌面约到 x=-4.45）
-    const cols = [-6.2, -5.0];
-    const rows = [-2.95, -1.6, 0.05];
-    const spots: StandingSpot[] = [];
-    cols.forEach((x, col) => {
-      rows.forEach((z, row) => {
-        const i = col * rows.length + row;
-        spots.push({ x, z, approach: 'WB', facing: face(x, z, -7, -1.6), lead: i === 0 });
-      });
-    });
-    return spots;
+    // 白板在左墙 z≈-1.6。固定六个点：错开站在过道里，不踩最左工位的桌角，也不挤在同一个寻路点上。
+    // 沙发大约 x∈[-6.95,-5.95]、z∈[1.2,3.6]，这些点都让开。
+    const raw: { x: number; z: number; approach: string }[] = [
+      { x: -6.3, z: -3.6, approach: 'DI' },
+      { x: -5.45, z: -2.5, approach: 'WB' },
+      { x: -6.3, z: -1.15, approach: 'WB' },
+      { x: -5.45, z: 0.25, approach: 'BL' },
+      { x: -5.45, z: 1.75, approach: 'L2' },
+      { x: -4.9, z: 3.15, approach: 'L2' },
+    ];
+    return raw.map((s, i) => ({ ...s, facing: face(s.x, s.z, -7, -1.6), lead: i === 0 }));
   }
   // 没有白板：空地两排，面向中间
   const xs = [-2.4, -0.9, 0.6];
@@ -61,6 +61,11 @@ export function doorQueueSpot(index: number): { x: number; z: number } {
   const row = Math.floor(index / 3);
   const xs = [-7.05, -5.85, -4.65];
   return { x: xs[col], z: -6.35 - row * 1.25 };
+}
+
+/** 外卖员站在椅背外面、朝过道。不能落在桌面和椅子中间。 */
+export function deliveryStandZ(deskZ: number, chairLocalZ: number): number {
+  return deskZ + chairLocalZ + 0.95;
 }
 
 export function minSeparation(pts: { x: number; z: number }[]): number {

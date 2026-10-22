@@ -10,7 +10,7 @@ import {
   box, buildDoor, buildPlinth, cyl, DESK_OWNERS, facingTo, lathe, mat, plant, rbox, ROOM, shadow, wallClock, waterCooler, type Desk,
 } from './office';
 import { neonTexture, plasterTexture, screenTexture, signTexture, SkyTexture, tileTexture, type ScreenKind } from './textures';
-import { netcafeMeetingSpots } from './spots';
+import { deliveryStandZ, netcafeMeetingSpots } from './spots';
 import type { Spot, Venue } from './venue';
 
 const TEAM_X = [-4.3, -2.9, -1.5, -0.1, 1.3, 2.7]; // 战队包下的一排机位（靠后墙）
@@ -149,7 +149,7 @@ function cafeDesk(parent: THREE.Object3D, x: number, z: number, idx: number, num
   return {
     group: g, chair, chairBaseZ: CHAIR_Z, screens, screenLight, rgbMat, kbGlow, pcGlow, lamp: null,
     seat: new THREE.Vector3(x, 0, z + CHAIR_Z - 0.05),
-    standSpot: new THREE.Vector3(x, 0, z + 0.62),
+    standSpot: new THREE.Vector3(x, 0, deliveryStandZ(z, CHAIR_Z)),
     jiggle: 0, monitor: mg,
   };
 }

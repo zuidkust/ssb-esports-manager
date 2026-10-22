@@ -13,7 +13,6 @@ export interface ActionDef {
   venue: number; // 最低场地等级
   needsKnot?: boolean;
   blurb: string;
-  pending?: boolean; // 价格 / 冷却是【待定】
 }
 
 export const ACTIONS: ActionDef[] = [
@@ -27,12 +26,12 @@ export const ACTIONS: ActionDef[] = [
   { id: 'overtime', name: '加班', ap: 2, cash: 0, cooldownDays: 2, scope: 'global', venue: 0, blurb: '今天心得 +50%，心情和疲劳变差' },
   { id: 'party', name: '团建聚餐', ap: 2, cash: 800, cooldownDays: 7, scope: 'global', venue: 0, blurb: '花钱，全员交情和心情上升' },
   { id: 'rest', name: '放假', ap: 3, cash: 0, cooldownDays: 7, scope: 'global', venue: 0, blurb: '心情和疲劳拉满。这一天没有训练心得' },
-  { id: 'review', name: '白板复盘会', ap: 2, cash: 0, cooldownDays: 3, scope: 'global', venue: 1, pending: true, blurb: '全队心得增加。可能吵起来' },
-  { id: 'coach', name: '请教练一天', ap: 2, cash: 1500, cooldownDays: 7, scope: 'member', venue: 1, pending: true, blurb: '花钱，指定 1 人最强的那项属性上涨' },
-  { id: 'scrim', name: '拉练赛', ap: 2, cash: 2000, cooldownDays: 3, scope: 'global', venue: 2, pending: true, blurb: '约训练赛，心得大增' },
-  { id: 'media', name: '媒体采访', ap: 1, cash: 0, cooldownDays: 5, scope: 'member', venue: 2, pending: true, blurb: '安排 1 人出镜，名气小涨。可能说错话' },
-  { id: 'camp', name: '出国集训', ap: 3, cash: 20000, cooldownDays: 28, scope: 'global', venue: 3, pending: true, blurb: '又贵又累，心得和状态一起涨' },
-  { id: 'fanmeet', name: '粉丝见面会', ap: 2, cash: 5000, cooldownDays: 14, scope: 'global', venue: 3, pending: true, blurb: '全员心情大涨。话少的人会不自在' },
+  { id: 'review', name: '白板复盘会', ap: 2, cash: 0, cooldownDays: 3, scope: 'global', venue: 1, blurb: '全队心得增加。可能吵起来' },
+  { id: 'coach', name: '请教练一天', ap: 2, cash: 1500, cooldownDays: 7, scope: 'member', venue: 1, blurb: '花钱，指定 1 人最强的那项属性上涨' },
+  { id: 'scrim', name: '拉练赛', ap: 2, cash: 2000, cooldownDays: 3, scope: 'global', venue: 2, blurb: '约训练赛，心得大增' },
+  { id: 'media', name: '媒体采访', ap: 1, cash: 0, cooldownDays: 5, scope: 'member', venue: 2, blurb: '安排 1 人出镜，名气小涨。可能说错话' },
+  { id: 'camp', name: '出国集训', ap: 3, cash: 20000, cooldownDays: 28, scope: 'global', venue: 3, blurb: '又贵又累，心得和状态一起涨' },
+  { id: 'fanmeet', name: '粉丝见面会', ap: 2, cash: 5000, cooldownDays: 14, scope: 'global', venue: 3, blurb: '全员心情大涨。话少的人会不自在' },
 ];
 
 export const ACTION_BY_ID = Object.fromEntries(ACTIONS.map((a) => [a.id, a])) as Record<string, ActionDef>;

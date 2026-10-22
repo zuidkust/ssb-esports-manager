@@ -61,7 +61,8 @@ export class Courier {
     this.char.setHidden(false);
     this.char.path = [];
     this.char.pos.set(p.x, 0, p.z);
-    this.char.facing = this.char.targetFacing = p.facing;
+    // 递餐时面向工位（朝 -z），不要侧身站进桌椅里
+    this.char.facing = this.char.targetFacing = nearDrop ? Math.PI : p.facing;
     this.char.poseName = nearDrop ? 'reach' : 'walk';
   }
 

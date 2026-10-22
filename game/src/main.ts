@@ -146,7 +146,7 @@ function frame(t: number) {
 
   lighting.update({ sun: sunPosition(clock.minute), present: world.presentCount() });
   $('nightHint').classList.toggle('hidden', !clock.night || !live);
-  director.update(visualDt, clock.minute, lighting.night);
+  director.update(visualDt * (live ? clock.moveScale : 1), clock.minute, lighting.night);
   stage.render(visualDt, lighting.night);
   updateHud();
 

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createNewGame } from '../src/save/state';
+import { World } from '../src/sim/world';
+import { DAY_START } from '../src/core/clock';
 import { actionPointMax, isPayday, MONTH_DAYS, START_CASH, START_STASH } from '../src/data/economy';
 import {
   buyFacility,
@@ -63,6 +65,22 @@ describe('经济', () => {
     expect(c.bankrupt).toBe(true);
     expect(broke.bankrupt).toBe(true);
     expect(broke.cash).toBe(100);
+  });
+
+  it('连续三个发薪日没钱，走到第三次就破产', () => {
+    const s = createNewGame(9);
+    s.cash = 0;
+    s.privateStash = 0;
+    const world = new World(s);
+    for (const day of [29, 57, 85]) {
+      s.clock.day = day;
+      s.clock.minute = DAY_START;
+      world.planDay = -1;
+      world.update(DAY_START, 0, false);
+    }
+    expect(s.unpaidMonths).toBe(3);
+    expect(s.bankrupt).toBe(true);
+    expect(s.eventLog.filter((e) => e.text.includes('发薪')).length).toBe(3);
   });
 
   it('王哥赞助每月进账 3000，没赢满 3 场签不了下一档', () => {

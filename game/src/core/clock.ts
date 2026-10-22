@@ -76,6 +76,11 @@ export class GameClock {
     return this.holds.has(id);
   }
 
+  // 走路和进门跟着时间档位走。×10 时如果还按现实速度排队，名册已经全员在岗，人却还藏在门外。
+  get moveScale(): number {
+    return this.debugRate ?? SPEEDS[this.speed].mult;
+  }
+
   setSpeed(s: SpeedId): void {
     this.speed = s;
     this.debugRate = null;

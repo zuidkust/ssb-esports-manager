@@ -369,7 +369,7 @@ export function resolveMeal(input: ResolveInput): ResolvedMeal {
     const list = drops.map((o) => `${nameOf(o.memberId)}点了${DISH_BY_ID[o.dishId].name}`).join('，');
     const mealName = meal === 'lunch' ? '午饭' : '晚饭';
     let text = line(rand, 'summary', { meal: mealName, list, place });
-    if (thursday && drops.some((o) => o.dishId === 'mcd')) text += '今天周四，有人把那句文案发了一遍。';
+    if (thursday && drops.some((o) => o.dishId === 'mcd')) text += '今天周四，快餐的单子比平时多。';
     logs.unshift({ level: '日常', minute: drops[0].deliveredAt - 4, text, ids: drops.map((o) => o.memberId) });
   }
   if (hosted && drops.length) {

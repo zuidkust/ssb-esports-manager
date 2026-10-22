@@ -3,7 +3,7 @@ import { dayInfo } from '../core/calendar';
 import { seeded, pick, type Rand } from '../core/rng';
 import { ACTION_BY_ID, actionCooldownKey, ACTIONS, type ActionDef } from '../data/actions';
 import { actionPointMax, tierCashMult } from '../data/economy';
-import { VENUE_CN } from '../data/facilities';
+import { availableFacilities, VENUE_CN } from '../data/facilities';
 import { ABILITY_KEYS, pairKey, ROSTER_BY_ID } from '../data/roster';
 import type { GameState, LogEntry, StatusKey } from '../save/state';
 import { addBond, addKnot, clearOneKnot, hasKnot } from './relations';
@@ -62,6 +62,7 @@ export function previewAction(state: GameState, actionId: string, targets: strin
   if (!def) return fail('没有这个动作');
   if (state.bankrupt) return fail('战队已经破产');
   if (state.venueLevel < def.venue) return fail(`${VENUE_CN[def.venue]}之后才解锁`);
+  if (actionId === 'review' && !availableFacilities(state.venueLevel, state.facilities).has('whiteboard')) return fail('要先买白板');
   if (state.flags.restDay === day && actionId === 'overtime') return fail('今天已经放假');
   if (state.flags.overtimeDay === day && actionId === 'rest') return fail('今天已经在加班');
   if (def.scope === 'member') {
@@ -139,14 +140,14 @@ export function performAction(
     case 'milktea': {
       bumpAll(state, '心情', sc(6));
       const quiet = [...state.roster].sort((a, b) => a.persona.话痨 - b.persona.话痨)[0];
-      text = preview.backfire
-        ? '奶茶又来了。有人连杯子都没拿。'
-        : pick(rand, [
-            `老板请了奶茶。${name(quiet.id)}那杯最后才被找到。`,
-            '六杯奶茶放到桌上，先到的人先拿。',
-            '奶茶到了。有人拍了照，有人直接插上吸管。',
-            `老板请奶茶。${name(quiet.id)}的那杯被挡在袋子最里面。`,
-          ]);
+      const lines = [
+        `老板请了奶茶。${name(quiet.id)}那杯最后才被找到。`,
+        '六杯奶茶放到桌上，先到的人先拿。',
+        '奶茶到了。有人拍了照，有人直接插上吸管。',
+        `老板请奶茶。${name(quiet.id)}的那杯被挡在袋子最里面。`,
+      ];
+      const used = state.actionHistory.filter((h) => h.action === 'milktea').length;
+      text = preview.backfire ? '奶茶又来了。有人连杯子都没拿。' : lines[(used - 1) % lines.length];
       break;
     }
     case 'host': {

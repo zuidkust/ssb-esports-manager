@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { allFacilitiesUpTo, availableFacilities, venueScene } from '../src/data/facilities';
 import { OFFICE_NAV, type NavGraph } from '../src/scene/nav';
 import { NETCAFE_NAV } from '../src/scene/netcafe';
-import { doorQueueSpot, minSeparation, netcafeMeetingSpots, officeMeetingSpots } from '../src/scene/spots';
+import { deliveryStandZ, doorQueueSpot, minSeparation, netcafeMeetingSpots, officeMeetingSpots } from '../src/scene/spots';
 import { createNewGame } from '../src/save/state';
 
 describe('场地选择', () => {
@@ -48,6 +48,29 @@ describe('站位', () => {
     apart(open);
     for (const s of withBoard) expect(s.x).toBeLessThanOrEqual(-4.8);
     for (const s of open) expect(s.z).toBeGreaterThan(0.8);
+    // 桌面、椅子、沙发、白板。人和这些盒子至少隔开约 0.4 米，不能站在桌角上。
+    const boxes = [
+      ...[-3.6, -1.5, 0.6].flatMap((x) => [-4.45, -1.75].flatMap((z) => [
+        { x0: x - 0.85, x1: x + 0.85, z0: z - 0.4, z1: z + 0.4 },
+        { x0: x - 0.32, x1: x + 0.32, z0: z + 0.63, z1: z + 1.35 },
+      ])),
+      { x0: -6.95, x1: -5.95, z0: 1.15, z1: 3.65 },
+      { x0: -7.05, x1: -6.82, z0: -2.7, z1: -0.5 },
+    ];
+    const gap = (p: { x: number; z: number }, b: { x0: number; x1: number; z0: number; z1: number }) => {
+      const x = Math.max(b.x0, Math.min(b.x1, p.x));
+      const z = Math.max(b.z0, Math.min(b.z1, p.z));
+      return Math.hypot(p.x - x, p.z - z);
+    };
+    for (const s of withBoard) for (const b of boxes) expect(gap(s, b)).toBeGreaterThanOrEqual(0.4);
+  });
+
+  it('外卖员站在地鼠的椅背外面', () => {
+    const deskZ = -4.45;
+    const chairZ = 0.95;
+    const z = deliveryStandZ(deskZ, chairZ);
+    expect(z).toBeGreaterThan(deskZ + chairZ + 0.4);
+    expect(z).toBeLessThan(-2.2);
   });
 
   it('门外等候位在墙外，横向分开', () => {

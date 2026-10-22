@@ -7,7 +7,7 @@ import type { Desk } from './office';
 import { screenTexture, type ScreenKind } from './textures';
 import type { Stage } from './stage';
 import { Courier } from './courier';
-import { doorQueueSpot } from './spots';
+import { DoorEntry, type EntryCtx, type EntryGoal } from './entry';
 import type { Spot, Venue } from './venue';
 
 const STATUS_ICON: Partial<Record<ActivityKind, string>> = {
@@ -38,10 +38,7 @@ export class Director {
   private shake = 0;
   private courier: Courier;
   // 早上进门排队：同一时间只有一个人穿过门，其余在后墙外等，名字不会叠在门口
-  private entryQueue: string[] = [];
-  private entryPhase: Record<string, 'wait' | 'walk'> = {};
-  private entryGoal: Record<string, { approach: string; at: THREE.Vector3; pose: PoseName; facing: number }> = {};
-  private entrySlot: Record<string, number> = {};
+  private doors = new DoorEntry();
 
   constructor(private stage: Stage, private office: Venue, private world: World) {
     this.screenTex = office.desks.map((_, i) => ({
@@ -69,72 +66,26 @@ export class Director {
     this.office = v;
     this.deskOf = Object.fromEntries(v.desks.map((d) => [d.owner, d]));
     for (const id in this.place) this.place[id] = null;
-    this.resetEntry();
+    this.doors.reset();
   }
 
   // 读档、跳时间之后：所有人直接瞬移到应在的位置
   snapAll() {
-    this.resetEntry();
+    this.doors.reset();
     for (const m of this.world.members) {
       this.place[m.id] = null;
       this.apply(m, true);
     }
   }
 
-  private resetEntry() {
-    this.entryQueue = [];
-    this.entryPhase = {};
-    this.entryGoal = {};
-    this.entrySlot = {};
-  }
-
-  private dropEntry(id: string) {
-    delete this.entryPhase[id];
-    delete this.entryGoal[id];
-    delete this.entrySlot[id];
-    this.entryQueue = this.entryQueue.filter((x) => x !== id);
-  }
-
-  private takeSlot(): number {
-    const used = new Set(Object.values(this.entrySlot));
-    let i = 0;
-    while (used.has(i)) i++;
-    return i;
-  }
-
-  private parkWaiting(id: string) {
-    const c = this.chars[id];
-    const s = doorQueueSpot(this.entrySlot[id]);
-    c.teleport(new THREE.Vector3(s.x, 0, s.z), Math.PI, 'stand');
-    c.setHidden(true);
-  }
-
-  private startEntryWalk(id: string) {
-    const c = this.chars[id];
-    const g = this.entryGoal[id];
+  private entryCtx(): EntryCtx {
     const mouth = this.office.exit;
-    const rest = this.office.nav.route(mouth.x, mouth.z, g.approach, g.at.x, g.at.z, this.office.door);
-    const pts: { x: number; z: number }[] = [];
-    if (Math.hypot(c.pos.x - mouth.x, c.pos.z - mouth.z) > 0.25) pts.push({ x: mouth.x, z: mouth.z });
-    c.walkTo(pts.concat(rest), g.pose, g.facing);
-  }
-
-  // 排头走到门洞里才露脸；进了屋再放下一个人
-  private pumpEntry() {
     const doorZ = this.office.nav.nodes[this.office.door][1];
-    const exit = this.office.exit;
-    for (const id of [...this.entryQueue]) {
-      if (this.entryPhase[id] !== 'walk') continue;
-      const c = this.chars[id];
-      if (c.hidden && c.pos.z > -5.15) c.setHidden(false);
-      const passed = c.pos.z > doorZ + 0.45 && Math.hypot(c.pos.x - exit.x, c.pos.z - exit.z) > 1.2;
-      if (passed) this.dropEntry(id);
-    }
-    const front = this.entryQueue[0];
-    if (front && this.entryPhase[front] === 'wait') {
-      this.entryPhase[front] = 'walk';
-      this.startEntryWalk(front);
-    }
+    return {
+      mouth: { x: mouth.x, z: mouth.z },
+      doorZ,
+      route: (from, goal, startAtDoor) => this.office.nav.route(from.x, from.z, goal.approach, goal.x, goal.z, startAtDoor ? this.office.door : undefined),
+    };
   }
 
   private placement(m: Member): Placement {
@@ -165,9 +116,9 @@ export class Director {
       case 'slack_stream':
         return seat('sit_relax', 'stream');
       case 'wait_food':
-        return seat('sit_phone', 'stream', { phone: 0x6fa8ff, key: 'desk:wait' });
+        return seat('sit_eat', 'stream', { key: 'desk:wait', cup: true });
       case 'eat':
-        return seat('sit_eat', 'stream');
+        return seat('sit_eat', 'stream', { cup: true });
       case 'nap_desk':
         return seat('sleep_desk', 'idle');
       // 模拟层已按场地设施过滤；万一设施刚被移除（读档换场地的那一帧），就留在座位上
@@ -219,7 +170,7 @@ export class Director {
     this.place[m.id] = p.key;
 
     if (p.hidden) {
-      this.dropEntry(m.id);
+      this.doors.drop(m.id);
       const out = this.office.exit;
       if (instant || c.hidden) {
         c.setHidden(true);
@@ -233,27 +184,22 @@ export class Director {
       return;
     }
     const at = p.at!, pose = p.pose!, facing = p.facing!;
+    const goal: EntryGoal = { approach: p.approach ?? this.office.door, x: at.x, z: at.z, pose, facing };
     if (instant) {
-      this.dropEntry(m.id);
+      this.doors.drop(m.id);
       c.setHidden(false);
       c.teleport(at, facing, pose);
       return;
     }
-    const goal = { approach: p.approach ?? this.office.door, at, pose, facing };
-    if (this.entryPhase[m.id] === 'walk') {
-      this.entryGoal[m.id] = goal;
-      this.startEntryWalk(m.id);
+    const order = this.doors.claim(m.id, { x: c.pos.x, z: c.pos.z }, c.hidden, prevKey === 'out' || prevKey == null, goal, this.entryCtx());
+    if (order.kind === 'queue') {
+      c.teleport(new THREE.Vector3(order.at.x, 0, order.at.z), Math.PI, 'stand');
+      c.setHidden(true);
       return;
     }
-    if (c.hidden || prevKey === 'out' || this.entryPhase[m.id] === 'wait') {
-      // 从门外进来：先在墙外排队，不要叠在同一个门口坐标上
-      if (!this.entryQueue.includes(m.id)) {
-        this.entrySlot[m.id] = this.takeSlot();
-        this.entryQueue.push(m.id);
-      }
-      this.entryPhase[m.id] = 'wait';
-      this.entryGoal[m.id] = goal;
-      this.parkWaiting(m.id);
+    if (order.kind === 'hold') return;
+    if (order.kind === 'enter') {
+      c.walkTo(order.path, pose, facing);
       return;
     }
     if (c.pos.distanceTo(at) < 0.9) {
@@ -299,7 +245,18 @@ export class Director {
   update(dt: number, minute: number, night: number) {
     const tnow = performance.now();
     for (const m of this.world.members) this.apply(m);
-    this.pumpEntry();
+    const ctx = this.entryCtx();
+    const pos: Record<string, { x: number; z: number; hidden: boolean }> = {};
+    for (const m of this.world.members) {
+      const c = this.chars[m.id];
+      pos[m.id] = { x: c.pos.x, z: c.pos.z, hidden: c.hidden };
+    }
+    const pumped = this.doors.pump(pos, ctx);
+    for (const id of pumped.unhide) this.chars[id].setHidden(false);
+    if (pumped.start) {
+      const c = this.chars[pumped.start.id];
+      c.walkTo(pumped.start.path, pumped.start.pose as PoseName, pumped.start.facing);
+    }
     for (const m of this.world.members) this.chars[m.id].update(dt, tnow);
     this.courier.sync(this.office, this.world.courierJob(minute), minute);
     this.courier.char.update(dt, tnow);
