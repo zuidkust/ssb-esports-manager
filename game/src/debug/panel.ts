@@ -15,6 +15,10 @@ import {
   parseHM,
   setActionPoints,
   setCash,
+  armWorldCup,
+  crownWorld,
+  jumpToOffseason,
+  jumpToSeasonEnd,
 } from './god';
 
 export interface GodHooks {
@@ -28,6 +32,8 @@ export interface GodHooks {
   dismissBlocking: () => void;
   ensureLive: () => void;
   toast: (msg: string) => void;
+  showOffseason: () => void;
+  showBracket: () => void;
 }
 
 export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
@@ -51,6 +57,12 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
         <button type="button" data-jump="match">下一场比赛</button>
         <button type="button" data-jump="payday">下一次发薪</button>
         <button type="button" data-jump="event">下一事件</button>
+      </div>
+      <div class="god-row god-wrap">
+        <button type="button" data-jump="seasonEnd">跳到赛季末</button>
+        <button type="button" data-jump="offseason">跳到休赛期</button>
+        <button type="button" data-jump="world">触发世界赛</button>
+        <button type="button" data-jump="crown">直接夺冠</button>
       </div>
       <div class="god-row">
         <label class="god-grow">倍速 <b id="godRate">×1</b>
@@ -166,6 +178,20 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
       } else if (kind === 'event') {
         const beat = jumpToNextEvent(hooks.world, clock);
         afterTime(`下一事件 · ${beat.label} · 第 ${beat.day} 天 ${fmtHM(beat.minute)}`);
+      } else if (kind === 'seasonEnd') {
+        const at = jumpToSeasonEnd(hooks.world, clock);
+        afterTime(`赛季结算 · 第 ${at.day} 天 ${fmtHM(at.minute)}`);
+      } else if (kind === 'offseason') {
+        const at = jumpToOffseason(hooks.world, clock);
+        afterTime(`休赛期 · 第 ${at.day} 天 ${fmtHM(at.minute)}`);
+        hooks.showOffseason();
+      } else if (kind === 'world') {
+        const at = armWorldCup(hooks.world, clock);
+        afterTime(`世界赛对阵 · 第 ${at.day} 天 ${fmtHM(at.minute)}`);
+        hooks.showBracket();
+      } else if (kind === 'crown') {
+        const at = crownWorld(hooks.world, clock);
+        afterTime(`夺冠结局 · 第 ${at.day} 天 ${fmtHM(at.minute)}`);
       }
     });
   });

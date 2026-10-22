@@ -447,3 +447,20 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 }
 #god button:hover { background: rgba(255, 255, 255, 0.13); }
 #god .god-note { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.4; }
+
+.season-end { text-align: center; }
+.season-end .kicker, .ending .kicker { margin: 0; color: var(--gold); letter-spacing: 2px; font-size: 12px; }
+.season-end h2, .ending h2 { font-size: 32px; margin: 6px 0; }
+.season-move { font-size: 16px; color: var(--story); }
+.ending { text-align: center; padding: 8px 8px 0; }
+.ending p { font-size: 14px; }
+.bracket { display: grid; gap: 12px; }
+.bracket h3 { margin: 0 0 6px; }
+.bracket .pair { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 4px; font-size: 13px; }
+.bracket .pair.us { border-color: rgba(233, 196, 106, 0.7); color: var(--gold); }
+.bracket .pair.done { background: rgba(255,255,255,0.03); }
+.route-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.route-picks .btn { flex: none; }
+.route-picks small { color: var(--muted); margin-left: 4px; }
+.row.tight { margin: 0; gap: 4px; }
+.row.tight .btn { flex: none; padding: 6px 8px; }

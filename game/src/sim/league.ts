@@ -9,6 +9,7 @@ import { emptySeason, emptyTable, type GameState } from '../save/state';
 import { noteMatch, noteSeasonRank, cutSponsorsAfterMove } from './economy';
 import { autoLineup } from './lineup';
 import { playCpuGame, playOurMatch } from './matchprep';
+import { autoFinishWorldCup, createWorldCup, playerWorldPending } from './worldcup';
 
 export function winsNeeded(tier: Tier): number {
   return tier === 'netcafe' ? 1 : 2;
@@ -49,6 +50,7 @@ export function needsIntermission(state: GameState, day: number, minute: number)
   const ser = state.series;
   if (!ser || ser.day !== day || ser.phase !== 'gap') return false;
   if (minute < MATCH_MINUTE) return false;
+  if (playerWorldPending(state, day)) return true;
   return !roundSettled(state, day);
 }
 
@@ -204,12 +206,13 @@ export function finishSeason(state: GameState): string[] {
   if (old === 'national' && row.rank <= 4) state.record.nationalTop4 = true;
   if (old === 'national' && row.rank <= 2) {
     state.record.worldQualified = true;
-    logs.push('拿到世界赛资格。世界赛这一阶段还不开打。');
+    logs.push('拿到世界赛资格。休赛周打世界赛：八强、半决赛、决赛，每两天一场。');
   }
   const move = tierMove(old, row.rank);
-  if (move.move === 'up') logs.push(`前两名，升入${move.tier === 'city' ? '城市联赛' : '国内联赛'}。场地先不搬，搬家是后面的事。`);
+  if (move.move === 'up') logs.push(`前两名，升入${move.tier === 'city' ? '城市联赛' : '国内联赛'}。休赛期可以搬家。`);
   else if (move.move === 'down') logs.push(`最后两名，降到${move.tier === 'city' ? '城市联赛' : '网吧联赛'}。场地还在，房租照交。`);
   else if (old === 'netcafe' && row.rank >= 7) logs.push('排在最后两名。网吧联赛没有更低的级别，不降级。包夜大叔队把截图发到群里，羞辱了一轮。');
+  else if (move.world) logs.push('国内前两名不升联赛，这个休赛周进世界赛。');
   else logs.push('这个赛季留在原联赛。');
 
   const rng = mulberry32(hashString([state.seed, 'growth', state.season.calendarSeason, old].join('|')));
@@ -219,6 +222,17 @@ export function finishSeason(state: GameState): string[] {
 
   state.season.tier = move.tier;
   state.season.settled = true;
+  state.season.phase = move.world ? 'world' : 'offseason';
+  state.season.report = {
+    from: old, to: move.tier, rank: row.rank, move: move.move, world: move.world, prize, acked: false,
+  };
+  if (move.move !== 'stay') {
+    for (const m of state.roster) m.salaryDeal = null;
+  }
+  if (move.world) {
+    const other = standings(state).find((r) => r.id !== 'ssb' && r.rank <= 2);
+    state.worldCup = createWorldCup(state, other?.id ?? 'jdd');
+  }
   state.meta.seasonCount += 1;
   state.meta.scores.push(row.rank);
   for (const s of cutSponsorsAfterMove(state)) logs.push(`${s.name} 看了排名，把赞助解约了。`);
@@ -289,10 +303,14 @@ export function enterDay(state: GameState, day: number, fresh: boolean): string[
   if (fresh && !state.season.settled && state.season.round > 0 && state.season.calendarSeason < info.season) {
     logs.push(...catchUpThrough(state, 14));
   }
+  if (fresh && state.worldCup && !state.worldCup.done && state.season.calendarSeason < info.season) {
+    logs.push(...autoFinishWorldCup(state));
+  }
   const tier = state.season.tier;
   const growth = state.season.growth;
   state.season = emptySeason(tier, info.season);
   state.season.growth = growth;
+  state.worldCup = null;
   state.series = null;
   state.broadcast = null;
   state.lineup = null;

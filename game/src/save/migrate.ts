@@ -4,6 +4,7 @@ import { DAY_START } from '../core/clock';
 import { ROSTER_BY_ID } from '../data/roster';
 import { STARTER_TACTICS } from '../data/tactics';
 import { canonMemberId, remapLegacyRoster } from './legacy';
+import { armLegacyWorldCup } from '../sim/worldcup';
 import { emptyFlags, emptyMeals, emptyRecord, emptySeason, SAVE_VERSION, type GameState } from './state';
 
 type AnySave = Record<string, unknown> & { version?: unknown };
@@ -68,6 +69,30 @@ const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
       season,
       version: 5,
     };
+  },
+  // v6：休赛期、世界赛、谈薪和训练路线。旧档不重算已经打过的赛季。
+  5: (s) => {
+    const season = (s.season && typeof s.season === 'object' ? s.season : {}) as Record<string, unknown>;
+    if (season.phase == null) season.phase = season.settled ? 'offseason' : 'regular';
+    if (!('report' in season)) season.report = null;
+    if (Array.isArray(s.roster)) {
+      for (const m of s.roster) {
+        if (!m || typeof m !== 'object') continue;
+        const mem = m as Record<string, unknown>;
+        if (!('salaryDeal' in mem)) mem.salaryDeal = null;
+        if (typeof mem.routeGrindUntil !== 'number') mem.routeGrindUntil = 0;
+        if (!('route' in mem)) mem.route = null;
+      }
+    }
+    const meta = (s.meta && typeof s.meta === 'object' ? s.meta : {}) as Record<string, unknown>;
+    if (typeof meta.endingSeen !== 'boolean') meta.endingSeen = false;
+    if (typeof meta.worldChampion !== 'boolean') meta.worldChampion = false;
+    if (!Array.isArray(meta.scores)) meta.scores = [];
+    if (typeof meta.seasonCount !== 'number') meta.seasonCount = 0;
+    if (typeof meta.ngPlus !== 'number') meta.ngPlus = 0;
+    const next = { ...s, season, meta, worldCup: s.worldCup ?? null, version: 6 };
+    armLegacyWorldCup(next as unknown as GameState);
+    return next;
   },
 };
 

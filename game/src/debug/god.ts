@@ -1,10 +1,14 @@
 // 测试用的时间跳转和改数。不碰画面；面板在 debug/panel.ts。
 // 跳转和读档一样：重算当天作息和站位，不重放中间的日子，也不补发薪。
-import { dayInfo, MATCH_MINUTE, nextMatch, PREMATCH_MINUTE } from '../core/calendar';
+import { dayInfo, MATCH_MINUTE, nextMatch, OFFSEASON_DAYS, PREMATCH_MINUTE, ROUNDS, SEASON_DAYS } from '../core/calendar';
 import { DAY_START, GameClock } from '../core/clock';
-import { isPayday, MONTH_DAYS } from '../data/economy';
-import type { GameState } from '../save/state';
+import { actionPointMax, isPayday, MONTH_DAYS } from '../data/economy';
+import { OUR_ID, type Tier } from '../data/leagues';
+import { emptyTable, type GameState } from '../save/state';
 import { runPayday } from '../sim/economy';
+import { finishSeason } from '../sim/league';
+import { autoLineup } from '../sim/lineup';
+import { commitWorldRound, isMatchDay } from '../sim/worldcup';
 import { forceDelivery, type TakeoutPerson } from '../sim/takeout';
 import type { World } from '../sim/world';
 
@@ -191,6 +195,86 @@ export function clampVenue(level: number): number {
 
 export function clearCooldowns(state: GameState): void {
   state.cooldowns = {};
+}
+
+function seasonEndDay(day: number): number {
+  const info = dayInfo(Math.max(1, day));
+  return info.season * SEASON_DAYS - OFFSEASON_DAYS;
+}
+
+function offseasonDay(day: number): number {
+  return seasonEndDay(day) + 1;
+}
+
+function champTable(tier: Tier): Record<string, { w: number; l: number }> {
+  const table = emptyTable(tier);
+  Object.keys(table).forEach((id, i) => {
+    const w = id === OUR_ID ? 12 : Math.max(0, 9 - i);
+    table[id] = { w, l: Math.max(0, 14 - w) };
+  });
+  return table;
+}
+
+function logLines(world: World, lines: string[]): void {
+  for (const text of lines) world.log(/升入|降到|世界赛|冠军|解约|羞辱/.test(text) ? '重大' : '剧情', text, []);
+}
+
+/** 跳到本赛季最后一轮的晚上，并按第 1 名结算，弹出升级。 */
+export function jumpToSeasonEnd(world: World, clock: GameClock): { day: number; minute: number } {
+  const at = applyJump(world, clock, seasonEndDay(world.state.clock.day), 21 * 60);
+  const state = world.state;
+  if (!state.season.settled) {
+    state.season.table = champTable(state.season.tier);
+    state.season.round = ROUNDS;
+    logLines(world, finishSeason(state));
+  } else if (state.season.report) state.season.report.acked = false;
+  return at;
+}
+
+/** 跳到休赛期第二天早上。还没结算的赛季按第 1 名先结算，方便搬家。 */
+export function jumpToOffseason(world: World, clock: GameClock): { day: number; minute: number } {
+  const at = applyJump(world, clock, offseasonDay(world.state.clock.day), 10 * 60);
+  const state = world.state;
+  if (!state.season.settled) {
+    state.season.table = champTable(state.season.tier);
+    state.season.round = ROUNDS;
+    logLines(world, finishSeason(state));
+  }
+  if (state.season.phase === 'regular') state.season.phase = state.worldCup && !state.worldCup.done ? 'world' : 'offseason';
+  if (state.season.report) state.season.report.acked = true;
+  return at;
+}
+
+/** 把当前赛季改成国内第 1，生成世界赛对阵，停在八强开赛前。 */
+export function armWorldCup(world: World, clock: GameClock): { day: number; minute: number } {
+  const at = applyJump(world, clock, offseasonDay(world.state.clock.day), 18 * 60 + 20);
+  const state = world.state;
+  state.season.tier = 'national';
+  state.season.settled = false;
+  state.season.round = ROUNDS;
+  state.season.table = champTable('national');
+  state.worldCup = null;
+  state.meta.worldChampion = false;
+  state.meta.endingSeen = true;
+  state.record.worldQualified = false;
+  logLines(world, finishSeason(state));
+  if (state.season.report) state.season.report.acked = true;
+  const spent = state.actionHistory.some((h) => h.day === state.clock.day);
+  if (!spent) state.actionPoints = actionPointMax(state.venueLevel, isMatchDay(state, state.clock.day));
+  return at;
+}
+
+/** 直接打完世界赛并且玩家全胜，用来看夺冠结局。 */
+export function crownWorld(world: World, clock: GameClock): { day: number; minute: number } {
+  const at = armWorldCup(world, clock);
+  const state = world.state;
+  const slots = autoLineup(state.roster);
+  const logs: string[] = [];
+  for (const round of [0, 1, 2] as const) logs.push(...commitWorldRound(state, round, true, slots));
+  state.meta.endingSeen = false;
+  if (state.season.report) state.season.report.acked = true;
+  logLines(world, logs);
+  return at;
 }
 
 // 15:00 前算午饭，之后算晚饭；21:00 以后改到第二天午饭。先落到饭点让当天订单生成，再把指定的一单叠上去。

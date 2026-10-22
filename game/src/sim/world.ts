@@ -17,6 +17,7 @@ import { performAction } from './actions';
 import { grantDailyInsight, runPayday } from './economy';
 import { expireKnots } from './relations';
 import { enterDay, roundSettled } from './league';
+import { isMatchDay } from './worldcup';
 import { lineupSlots } from './lineup';
 import { buildPlans, MATCH_END, segmentAt, type DayPlan } from './schedule';
 import { courierTrack, orderFor, planMorning, resolveMeal, settleMeals, type CourierTrack, type TakeoutPerson } from './takeout';
@@ -147,8 +148,13 @@ export class World {
         this.logAt(pay.bankrupt ? '重大' : '剧情', pay.text, [], DAY_START);
       }
       this.overnight(day);
+      for (const m of this.members) {
+        if (m.state.route && m.state.routeGrindUntil >= day) {
+          m.state.status.心情 = Math.max(0, m.state.status.心情 - 2);
+        }
+      }
     }
-    const apMax = actionPointMax(this.state.venueLevel, dayInfo(day).round != null);
+    const apMax = actionPointMax(this.state.venueLevel, isMatchDay(this.state, day));
     const spentToday = this.state.actionHistory.some((h) => h.day === day);
     // 比赛日多出来的 1 点写进当天的池子。旧档没记 apDay、或记了当天但池子还是平日的 3，且今天还没花过，就补齐。
     if (this.state.apDay !== day || (!spentToday && this.state.actionPoints !== apMax)) {

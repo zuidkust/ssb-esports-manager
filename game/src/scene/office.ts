@@ -3,7 +3,7 @@
 // 零食柜、冰箱、沙发、白板是可买设施：没买就不渲染（data/facilities.ts）
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import type { FacilityId } from '../data/facilities';
+import type { FacilityId, OfficeLook } from '../data/facilities';
 import type { MemberDef } from '../data/roster';
 import { OFFICE_NAV } from './nav';
 import { deliveryStandZ, officeMeetingSpots } from './spots';
@@ -411,20 +411,37 @@ export function buildDoor(root: THREE.Object3D, door: { x0: number; x1: number; 
   return doorPivot;
 }
 
-export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: ReadonlySet<FacilityId>): Venue {
+const OFFICE_THEME: Record<OfficeLook, { wall: number; glow: number; floor: number; sign: string }> = {
+  office: { wall: 0xead6b4, glow: 0xe8a060, floor: 0xffffff, sign: '' },
+  base: { wall: 0x3e4c66, glow: 0x3ec6ff, floor: 0xd5deea, sign: '电竞基地' },
+  luxury: { wall: 0xf6f0e6, glow: 0xe4c56a, floor: 0xfff6e8, sign: '豪华基地' },
+};
+
+export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: ReadonlySet<FacilityId>, look: OfficeLook = 'office'): Venue {
+  const theme = OFFICE_THEME[look] ?? OFFICE_THEME.office;
   const root = new THREE.Group();
   scene.add(root);
   const { x0, x1, z0, z1, h } = ROOM;
   const W = x1 - x0, D = z1 - z0;
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xead6b4, map: plasterTexture(), roughness: 0.92 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: theme.wall, map: plasterTexture(), roughness: 0.92 });
   const wallTop = mat(0xf2e7d6, { roughness: 0.9 });
   const trim = mat(0x3a2a20, { roughness: 0.6 });
   const frame = mat(0x2b2e34, { roughness: 0.45, metalness: 0.3 });
 
   const glowMat = buildPlinth(root);
+  glowMat.color.setHex(theme.glow);
+  glowMat.emissive.setHex(theme.glow);
+  if (theme.sign) {
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 0.38),
+      new THREE.MeshBasicMaterial({ map: plinthLabel(theme.sign, 64), transparent: true }),
+    );
+    sign.position.set(-1.2, h - 0.28, z0 + 0.03);
+    root.add(sign);
+  }
 
   // ── 地板 ──
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.55, color: 0xffffff }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.55, color: theme.floor }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   root.add(floor);

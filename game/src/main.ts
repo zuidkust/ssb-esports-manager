@@ -22,7 +22,9 @@ import { Board } from './ui/board';
 import { Card } from './ui/card';
 import { bindManage, manageHtml } from './ui/manage';
 import { buyFacility } from './sim/economy';
+import { retuneActionPoints } from './sim/offseason';
 import { applyGameLoad, catchUpThrough, commitRound, needsBroadcast, needsIntermission, ourRank, roundSettled, winsNeeded } from './sim/league';
+import { commitWorldRound, needsWorldBroadcast, needsWorldPrematch, playerWorldOpponent, playerWorldPending, WORLD_ROUND_CN } from './sim/worldcup';
 import { benchOf, validLineup } from './sim/lineup';
 import { playOurMatch } from './sim/matchprep';
 import { cuesFrom } from './sim/script';
@@ -30,6 +32,7 @@ import { mountBroadcast } from './ui/broadcast';
 import { bindPrematch, prematchHtml, standingsTableHtml } from './ui/prematch';
 import { makeRng } from './engine/match';
 import { mountGodPanel } from './debug/panel';
+import { bindBracket, bindEnding, bindOffseason, bindSettlement, bracketHtml, endingHtml, offseasonHtml, settlementHtml } from './ui/season';
 
 const params = new URLSearchParams(location.search);
 const $ = (id: string) => document.getElementById(id)!;
@@ -134,7 +137,7 @@ function frame(t: number) {
   if (running) simDebt += raw;
   else simDebt = 0;
   if (simDebt > 0) {
-    simDebt = drainRealtime(clock, simDebt, simBudget(simDebt), (day) => (dayInfo(day).round != null ? [PREMATCH_MINUTE, MATCH_MINUTE] : []), (r) => {
+    simDebt = drainRealtime(clock, simDebt, simBudget(simDebt), (day) => (dayInfo(day).round != null || playerWorldPending(state, day) ? [PREMATCH_MINUTE, MATCH_MINUTE] : []), (r) => {
       state.clock = clock.snapshot();
       world.update(clock.minute, r.advanced, false);
       if (r.newDay) {
@@ -177,6 +180,22 @@ function checkPrematch() {
   if (!live || state.bankrupt) return;
   state.clock.day = clock.day;
   state.clock.minute = clock.minute;
+  if (state.season.report && !state.season.report.acked) {
+    if (!clock.isHeld('season-end')) clock.hold('season-end', '赛季结算');
+    if (!modalOpen) showSettlement();
+    return;
+  }
+  if (state.worldCup?.champion && !state.meta.endingSeen) {
+    if (!clock.isHeld('ending')) clock.hold('ending', '世界赛夺冠');
+    if (!modalOpen) showEnding();
+    return;
+  }
+  if (needsWorldPrematch(state, clock.day, clock.minute)) {
+    const id = `match-${clock.day}`;
+    if (!clock.isHeld(id)) clock.hold(id, '世界赛：等老板确认首发和战术');
+    if (!modalOpen) showPrematch(id, false);
+    return;
+  }
   if (needsLineupConfirm(state, clock.day, clock.minute)) {
     const id = `match-${clock.day}`;
     if (!clock.isHeld(id)) clock.hold(id, '比赛日：等老板确认首发和战术');
@@ -187,6 +206,12 @@ function checkPrematch() {
     const id = `match-gap-${clock.day}`;
     if (!clock.isHeld(id)) clock.hold(id, '局间：可以换首发和战术');
     if (!modalOpen) showPrematch(id, true);
+    return;
+  }
+  if (needsWorldBroadcast(state, clock.day, clock.minute)) {
+    const id = `match-live-${clock.day}`;
+    if (!clock.isHeld(id)) clock.hold(id, '世界赛直播');
+    if (!modalOpen) showBroadcast(id);
     return;
   }
   if (needsBroadcast(state, clock.day, clock.minute)) {
@@ -217,19 +242,25 @@ function updateHud() {
   $('phaseChip').textContent = clock.night ? '夜里 · 快进中' : `${segName} · 在岗 ${world.presentCount()}/6`;
   const nm = nextMatch(clock.day, clock.minute);
   const opp = nm ? world.opponentToday() : null;
-  const inMatch = info.round != null && clock.minute >= MATCH_MINUTE && world.members.some((m) => m.activity.kind === 'match');
+  const worldFix = playerWorldOpponent(state, clock.day);
+  const inMatch = (info.round != null || worldFix) && clock.minute >= MATCH_MINUTE && world.members.some((m) => m.activity.kind === 'match');
   const rank = state.season.round > 0 ? ourRank(state) : null;
-  $('matchChip').textContent = settledNow
+  const breakOn = state.season.phase === 'offseason' || state.season.phase === 'world';
+  $('breakBtn').classList.toggle('hidden', !breakOn);
+  $('breakBtn').textContent = state.season.phase === 'world' && state.worldCup && !state.worldCup.done ? '世界赛' : '休赛';
+  $('matchChip').textContent = worldFix
+    ? `世界赛${WORLD_ROUND_CN[worldFix.round]} · vs ${worldFix.opponent.name}`
+    : settledNow
     ? `第 ${info.round} 轮已结束 · 目前第 ${rank?.rank ?? ourRank(state).rank} 名`
     : inMatch
     ? `比赛中 · 第 ${info.round} 轮 vs ${world.opponentToday()?.name}`
-    : info.offseason
+    : info.offseason || breakOn
     ? `休赛期 · 还有 ${nm ? nm.inDays : '?'} 天开赛`
     : nm && nm.inDays === 0 && opp
       ? `今晚 19:00 第 ${nm.round} 轮 · vs ${opp.name}`
       : nm ? `下一场：${nm.inDays} 天后 · 第 ${nm.round} 轮` : '—';
-  $('matchChip').classList.toggle('link', state.season.round > 0);
-  $('matchChip').title = state.season.round > 0 ? '点击看积分榜' : '';
+  $('matchChip').classList.toggle('link', state.season.round > 0 || !!state.worldCup);
+  $('matchChip').title = state.worldCup ? '点击看世界赛对阵' : state.season.round > 0 ? '点击看积分榜' : '';
   document.querySelectorAll<HTMLElement>('#speeds button').forEach((b) => {
     b.classList.toggle('on', clock.debugRate == null && b.dataset.s === clock.speed && !clock.paused);
   });
@@ -263,10 +294,16 @@ $('manageBtn').addEventListener('click', () => {
   if (modalOpen && !modalClosable) return;
   showManage();
 });
+$('breakBtn').addEventListener('click', () => {
+  if (!live || (modalOpen && !modalClosable)) return;
+  if (state.season.phase === 'world' && state.worldCup && !state.worldCup.done) showBracket();
+  else showOffseason();
+});
 $('matchChip').addEventListener('click', () => {
-  if (!live || state.season.round <= 0) return;
+  if (!live) return;
   if (modalOpen && !modalClosable) return;
-  showStandings();
+  if (state.worldCup) showBracket();
+  else if (state.season.round > 0) showStandings();
 });
 addEventListener('keydown', (e) => {
   const tag = (e.target as HTMLElement).tagName;
@@ -471,6 +508,67 @@ function checkBankrupt() {
   });
 }
 
+function seasonHooks() {
+  return {
+    toast,
+    log: (text: string) => {
+      world.log('剧情', text, []);
+      board.set(state.eventLog);
+    },
+    onVenue: () => {
+      world.refreshVenue();
+      syncVenue();
+      world.update(clock.minute, 0, true);
+      director.snapAll();
+    },
+    refresh: () => showOffseason(),
+    openBracket: () => {
+      if (state.season.report) state.season.report.acked = true;
+      clock.release('season-end');
+      showBracket();
+    },
+    openOffseason: () => {
+      if (state.season.report) state.season.report.acked = true;
+      clock.release('season-end');
+      showOffseason();
+    },
+    close: () => {
+      modalClosable = true;
+      closeModal();
+    },
+    continueEnding: () => {
+      state.meta.endingSeen = true;
+      clock.release('ending');
+      modalClosable = true;
+      closeModal();
+      persist('auto');
+    },
+  };
+}
+
+function showSettlement() {
+  openModal(settlementHtml(state), false);
+  bindSettlement(seasonHooks());
+}
+
+function showOffseason() {
+  openModal(offseasonHtml(state), true);
+  $('modalBody').classList.add('manage');
+  bindOffseason(state, seasonHooks());
+}
+
+function showBracket() {
+  openModal(bracketHtml(state), true);
+  $('modalBody').classList.add('manage');
+  bindBracket(seasonHooks());
+}
+
+function showEnding() {
+  openModal(endingHtml(state), false);
+  $('modalBody').classList.add('ending-sheet');
+  bindEnding(seasonHooks());
+}
+
 function showStandings() {
   if (!live) return;
   const row = ourRank(state);
@@ -522,16 +620,19 @@ function showPrematch(holdId: string, intermission: boolean) {
 
 function showBroadcast(holdId: string) {
   const info = dayInfo(clock.day);
-  const round = info.round ?? 1;
-  for (const text of catchUpThrough(state, round - 1)) world.log('剧情', text, []);
-  board.set(state.eventLog);
+  const worldFix = playerWorldOpponent(state, clock.day);
+  const round = worldFix ? worldFix.round + 1 : (info.round ?? 1);
+  if (!worldFix) {
+    for (const text of catchUpThrough(state, round - 1)) world.log('剧情', text, []);
+    board.set(state.eventLog);
+  }
   if (!state.series || state.series.day !== clock.day) {
     state.series = { day: clock.day, game: 1, us: 0, them: 0, phase: 'play', accounted: 0, loaded: 0 };
   }
   const series = state.series;
   const slots = state.lineup?.day === clock.day ? state.lineup.slots : world.starters;
   const tactic = state.lineup?.tactic ?? state.tactics[0] ?? 'engage';
-  const opp = opponentForRound(state.season.tier, round);
+  const opp = worldFix ? worldFix.opponent : opponentForRound(state.season.tier, round);
   const result = playOurMatch(state, clock.day, series.game, slots, tactic, opp);
   const bench = benchOf(slots);
   const seed = hashString([state.seed, 'dm', clock.day, series.game, slots.join(','), bench ?? ''].join('|'));
@@ -539,9 +640,9 @@ function showBroadcast(holdId: string) {
   if (!state.broadcast || state.broadcast.day !== clock.day || state.broadcast.game !== series.game || state.broadcast.seed !== seed) {
     state.broadcast = { day: clock.day, game: series.game, cursor: 0, seed };
   }
-  const bo = winsNeeded(state.season.tier) === 1 ? 'BO1' : `BO3 ${series.us}:${series.them}`;
+  const bo = worldFix || winsNeeded(state.season.tier) !== 1 ? `BO3 ${series.us}:${series.them}` : 'BO1';
   const benchName = bench ? (world.byId[bench]?.name ?? bench) : '—';
-  const need = winsNeeded(state.season.tier);
+  const need = worldFix ? 2 : winsNeeded(state.season.tier);
   const usAfter = series.us + (result.win === 'A' ? 1 : 0);
   const themAfter = series.them + (result.win === 'A' ? 0 : 1);
   const seriesOver = usAfter >= need || themAfter >= need;
@@ -549,12 +650,12 @@ function showBroadcast(holdId: string) {
   modalClosable = false;
   $('modal').classList.remove('hidden');
   stopBroadcast = mountBroadcast({
-    title: `直播 · 第 ${round} 轮`,
+    title: worldFix ? `直播 · 世界赛${WORLD_ROUND_CN[worldFix.round]}` : `直播 · 第 ${round} 轮`,
     sub: `${bo} · 第 ${series.game} 局 · vs ${opp.name} · 第二解说 ${benchName}`,
     cues,
     start: state.broadcast.cursor,
     box: result.box,
-    button: seriesOver ? '记入积分榜，回到网吧' : '这一局结束，局间换人',
+    button: seriesOver ? (worldFix ? '记入世界赛，回到场地' : '记入积分榜，回到网吧') : '这一局结束，局间换人',
     onCursor: (n) => {
       if (state.broadcast && state.broadcast.day === clock.day && state.broadcast.game === series.game) state.broadcast.cursor = n;
       if (n % 8 === 0) persist('auto');
@@ -578,12 +679,14 @@ function finishWatchedGame(holdId: string, won: boolean, slots: string[]) {
     else series.them++;
     series.accounted = game;
   }
-  const need = winsNeeded(state.season.tier);
+  const worldFix = playerWorldOpponent(state, clock.day);
+  const need = worldFix ? 2 : winsNeeded(state.season.tier);
   if (series.us >= need || series.them >= need) {
-    const round = dayInfo(clock.day).round ?? 1;
-    const logs = commitRound(state, round, series.us > series.them, slots);
+    const logs = worldFix
+      ? commitWorldRound(state, worldFix.round, series.us > series.them, slots)
+      : commitRound(state, dayInfo(clock.day).round ?? 1, series.us > series.them, slots);
     for (const text of logs) {
-      const major = /升入|降到|世界赛|解约|垫底|羞辱/.test(text);
+      const major = /升入|降到|世界赛|解约|垫底|羞辱|冠军/.test(text);
       world.log(major ? '重大' : '剧情', text, slots);
     }
     state.series = null;
@@ -597,7 +700,11 @@ function finishWatchedGame(holdId: string, won: boolean, slots: string[]) {
     director.snapAll();
     board.set(state.eventLog);
     persist('auto');
-    showStandings();
+    if (worldFix) {
+      if (state.worldCup?.champion && !state.meta.endingSeen) showEnding();
+      else showBracket();
+    } else if (state.season.report && !state.season.report.acked) showSettlement();
+    else showStandings();
     return;
   }
   series.phase = 'gap';
@@ -672,7 +779,9 @@ if (params.get('debug') === '1') {
     checkPrematch,
     checkBankrupt,
     setVenueLevel(level) {
+      const old = state.venueLevel;
       state.venueLevel = level;
+      retuneActionPoints(state, old);
       world.refreshVenue();
       syncVenue();
       world.update(clock.minute, 0, true);
@@ -690,6 +799,8 @@ if (params.get('debug') === '1') {
       closeModal();
     },
     toast,
+    showOffseason: () => showOffseason(),
+    showBracket: () => showBracket(),
   });
   syncGod = () => god.sync();
 }
