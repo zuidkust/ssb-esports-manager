@@ -14,6 +14,7 @@ import { formatWallTime, SaveManager, SLOTS, type SlotId } from './save/saves';
 import { createNewGame, needsLineupConfirm, type GameState } from './save/state';
 import { World } from './sim/world';
 import { Director } from './scene/director';
+import { setupLineup } from './scene/lineup';
 import { Lighting } from './scene/lighting';
 import { detectQuality, Stage } from './scene/stage';
 import { buildVenue, venueKey, type Venue } from './scene/venue';
@@ -32,6 +33,9 @@ import { makeRng } from './engine/match';
 import { mountGodPanel } from './debug/panel';
 
 const params = new URLSearchParams(location.search);
+/** ?lineup=1：白底六人站位，对照稿 B 锁定图 */
+const lineupMode = params.get('lineup') === '1';
+let lineupFrame: ((dt: number) => void) | null = null;
 const $ = (id: string) => document.getElementById(id)!;
 const AUTOSAVE_SECONDS = 60;
 
@@ -153,9 +157,13 @@ function frame(t: number) {
     sinceAutosave = 0;
   }
 
-  lighting.update({ sun: sunPosition(clock.minute), present: world.presentCount() });
-  $('nightHint').classList.toggle('hidden', !clock.night || !live);
-  director.update(visualDt * (live ? clock.moveScale : 1), clock.minute, lighting.night);
+  if (lineupFrame) {
+    lineupFrame(visualDt);
+  } else {
+    lighting.update({ sun: sunPosition(clock.minute), present: world.presentCount() });
+    $('nightHint').classList.toggle('hidden', !clock.night || !live);
+    director.update(visualDt * (live ? clock.moveScale : 1), clock.minute, lighting.night);
+  }
   stage.render(visualDt, lighting.night);
   updateHud();
 
@@ -640,7 +648,10 @@ if (params.get('day') || params.get('t') || params.get('venue')) {
   startGame(s);
 }
 if (params.get('speed')) clock.setSpeed(params.get('speed') as SpeedId);
-if (!params.get('skip') && !params.get('t') && !params.get('venue')) {
+if (lineupMode) {
+  live = false;
+  lineupFrame = setupLineup(stage, venue, lighting, director.chars);
+} else if (!params.get('skip') && !params.get('t') && !params.get('venue')) {
   live = false;
   showTitle();
 }

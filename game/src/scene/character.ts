@@ -1,28 +1,256 @@
-// 低多边形人物：基础几何体拼装，关节为空 Group，姿态用关节角度插值实现
-// 外形按稿 B 剪影加强版：眼镜、胖瘦、高矮、发型、阿鸡的人字拖；头部比真人略大，远看也能认出是谁
+// 低多边形手办人物：关节是空 Group，姿态用关节角度插值实现
+// 外形按稿 B 锁定图（体型修正版）：大头、短腿、切面块状四肢、V 领短袖 + 胸口六边形队标、深藏青短裤、蓝人字拖。
+// 所有尺寸先按「1.00 米手办」写，再乘 FIG 放进办公室；路人和外卖员也走这一套，只是不带队标、穿运动鞋。
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import type { MemberDef } from '../data/roster';
+import type { Look, MemberDef } from '../data/roster';
 import { mat } from './office';
+import { bar, hull, ring, solid, type P3 } from './figure';
 
 const SEAT_H = 0.5;
 const WALK_SPEED = 1.35;
-const HEAD_R = 0.155;
+/** 手办 1.00 → 办公室里的米数（门高 2.2，坐下髋高仍是 SEAT_H） */
+const FIG = 1.72;
 
-function capsule(r: number, len: number, material: THREE.Material, seg = 14) {
-  const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, seg), material);
-  m.castShadow = true;
-  m.receiveShadow = true;
-  return m;
-}
+// 关节位置（手办单位）
+const HIP_Y = 0.4;
+const THIGH = 0.178;
+const SHIN = 0.17;
+const SHOULDER_Y = 0.212;
+const SHOULDER_X = 0.205;
+const UPPER_ARM = 0.15;
+const NECK_Y = 0.268;
+const HEAD_Y = 0.014;
 
-function sphere(r: number, material: THREE.Material, w = 18, h = 12) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(r, w, h), material);
-  m.castShadow = true;
-  return m;
-}
+// 头的截面：y、宽、深、前后偏移。下巴 y=0，头顶 0.335
+const HEAD: [number, number, number, number][] = [
+  [0.0, 0.17, 0.085, 0.058],
+  [0.035, 0.232, 0.175, 0.034],
+  [0.09, 0.254, 0.232, 0.012],
+  [0.17, 0.262, 0.25, 0],
+  [0.25, 0.258, 0.256, -0.004],
+  [0.305, 0.215, 0.215, -0.01],
+  [0.335, 0.13, 0.13, -0.012],
+];
+const HEAD_TOP = 0.335;
+const FZ = 0.125; // 脸正面
+/** 头整体再放大一点：锁定图里头宽≈肩宽 */
+const HEAD_SCALE = 1.06;
+
+// 上衣截面：y、宽、深（相对髋关节）
+const TORSO: [number, number, number][] = [
+  [-0.012, 0.345, 0.222],
+  [0.03, 0.336, 0.212],
+  [0.08, 0.326, 0.205],
+  [0.165, 0.352, 0.22],
+  [0.222, 0.35, 0.195],
+  [0.265, 0.22, 0.13],
+];
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+function headAt(y: number) {
+  const yy = Math.min(HEAD_TOP, Math.max(0, y));
+  for (let i = 0; i < HEAD.length - 1; i++) {
+    const [y0, w0, d0, z0] = HEAD[i], [y1, w1, d1, z1] = HEAD[i + 1];
+    if (yy <= y1) {
+      const t = (yy - y0) / (y1 - y0);
+      return { hw: lerp(w0, w1, t) / 2, hd: lerp(d0, d1, t) / 2, z0: lerp(z0, z1, t) };
+    }
+  }
+  const [, w, d, z0] = HEAD[HEAD.length - 1];
+  return { hw: w / 2, hd: d / 2, z0 };
+}
+
+/** 头壳表面一点：th=0 正前方（+z），th>0 朝人物左手（+x） */
+function shell(th: number, y: number, t = 0): P3 {
+  const { hw, hd, z0 } = headAt(y);
+  const s = Math.sin(th), c = Math.cos(th);
+  const px = Math.sign(s) * Math.pow(Math.abs(s), 0.5);
+  const pz = Math.sign(c) * Math.pow(Math.abs(c), 0.5);
+  return [px * (hw + t), y, z0 + pz * (hd + t)];
+}
+
+/** 发际线：按 |th| 分段插值 [角度, 高度] */
+function hairline(pts: [number, number][]) {
+  return (th: number) => {
+    const a = Math.abs(th);
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (a <= pts[i + 1][0]) return lerp(pts[i][1], pts[i + 1][1], (a - pts[i][0]) / (pts[i + 1][0] - pts[i][0]));
+    }
+    return pts[pts.length - 1][1];
+  };
+}
+
+/**
+ * 一顶头发的外壳：发际线 hl 处厚 t，越往头顶越厚（bulk，体积感），
+ * 额前发际线往前探出一道发檐（brim），头顶整体再抬高 top。
+ */
+interface Dome { hl: (th: number) => number; t: number; bulk: number; top: number; brim: number }
+
+/** 外壳在 (th, y) 处离头皮的厚度 */
+function domeT(d: Dome, th: number, y: number) {
+  const y0 = d.hl(th);
+  const k = clamp01((y - y0) / Math.max(0.01, HEAD_TOP - y0));
+  // 两侧贴头皮，体积堆在头顶和前后
+  const side = 0.45 + 0.55 * Math.abs(Math.cos(th));
+  // 发际线附近贴着长，越往上越蓬：额前不会出现一大片朝下的发檐底面
+  return d.t + d.bulk * Math.pow(k, 0.9) * lerp(side, 1, k * k);
+}
+
+/** 外壳表面一点；inset 往里缩（给凸起埋根用） */
+function domeAt(d: Dome, th: number, y: number, inset = 0): P3 {
+  const p = shell(th, Math.min(y, HEAD_TOP - 0.01), domeT(d, th, y) - inset);
+  const k = clamp01((y - (HEAD_TOP - 0.08)) / 0.08);
+  p[1] += (d.top + domeT(d, th, y) * 0.4) * k * k;
+  return p;
+}
+
+function cap(d: Dome): P3[] {
+  const pts: P3[] = [];
+  const N = 20;
+  for (let i = 0; i < N; i++) {
+    const th = -Math.PI + (i / N) * Math.PI * 2;
+    const y0 = d.hl(th);
+    const front = Math.max(0, Math.cos(th));
+    // 额前发际线做成锯齿：隔一个点往下、往外戳一点，像一缕缕刘海
+    const back = Math.max(0, -Math.cos(th));
+    const jag = (front > 0.35 || back > 0.5) && i % 2 === 0 ? 1 : 0;
+    const edge = shell(th, y0 - jag * (0.016 * front + 0.012 * back), d.t + d.brim * front * front * (0.5 + jag) + jag * 0.004 * back);
+    pts.push(edge);
+    for (let y = Math.ceil(y0 / 0.045) * 0.045; y < HEAD_TOP - 0.01; y += 0.045) if (y > y0 + 0.02) pts.push(domeAt(d, th, y));
+    // 顶圈往里收，头顶是个平缓的拱，不是平顶
+    const tp = shell(th, HEAD_TOP - 0.01, domeT(d, th, HEAD_TOP) * 0.45);
+    tp[1] += d.top + domeT(d, th, HEAD_TOP) * 0.55;
+    pts.push(tp);
+  }
+  pts.push([0, HEAD_TOP + d.t + d.bulk + d.top + 0.012, -0.02]);
+  return pts;
+}
+
+/**
+ * 一个发尖：根埋在外壳里，只露出一截棱角分明的尖。
+ * w 是根部宽度，dir 是尖的朝向，len 是露出外壳的长度。
+ */
+function tuft(d: Dome, th: number, y: number, w: number, dir: P3, len: number): P3[] {
+  const { hw } = headAt(Math.min(y, HEAD_TOP - 0.02));
+  const dth = w / 2 / Math.max(0.06, hw);
+  const v = new THREE.Vector3(...dir).normalize();
+  const c = domeAt(d, th, y, 0.002);
+  const deep = domeT(d, th, y) * 0.8;
+  return [
+    domeAt(d, th - dth, y - 0.02, deep), domeAt(d, th + dth, y - 0.02, deep),
+    domeAt(d, th - dth * 0.6, y + 0.03, deep), domeAt(d, th + dth * 0.6, y + 0.03, deep),
+    domeAt(d, th - dth * 0.5, y, 0.003), domeAt(d, th + dth * 0.5, y, 0.003),
+    [c[0] + v.x * len, c[1] + v.y * len, c[2] + v.z * len],
+  ];
+}
+
+/** 一小片刘海：贴在额前 th0~th1 之间，从发际线盖到 yb，下沿在 tipTh 处收成尖 */
+function bang(d: Dome, th0: number, th1: number, yb: number, tipTh: number, t = 0.026): P3[] {
+  const yt = d.hl((th0 + th1) / 2) + 0.03;
+  return [
+    domeAt(d, th0, yt, 0.004), domeAt(d, th1, yt, 0.004), shell(th0, yt, 0.004), shell(th1, yt, 0.004),
+    shell(th0, yb + 0.014, t), shell(th1, yb + 0.014, t), shell(th0, yb + 0.014, 0.004), shell(th1, yb + 0.014, 0.004),
+    shell(tipTh, yb - 0.01, t * 0.9), shell(tipTh, yb - 0.01, 0.004),
+  ];
+}
+
+/** 鬓角：耳前一小块 */
+function sideburns(t: number, bottom = 0.135): P3[][] {
+  return [-1, 1].map((sx) => {
+    const th = sx * 1.32;
+    return [shell(th, 0.215, t), shell(th + sx * 0.18, 0.215, t), shell(th, bottom, t - 0.006), shell(th + sx * 0.14, bottom + 0.01, t - 0.006), shell(th + sx * 0.08, 0.2, t + 0.012)];
+  });
+}
+
+/** 发际线常用形：前额高 f，耳上 e，后脑 n */
+const line = (f: number, e = 0.19, n = 0.075) => hairline([[0, f], [0.55, f - 0.008], [1.05, f - 0.04], [1.35, e], [1.75, e + 0.005], [2.3, 0.12], [Math.PI, n]]);
+
+/** 各发型：返回若干个凸包点云 */
+function hairParts(style: Look['hairStyle']): P3[][] {
+  const parts: P3[][] = [];
+  switch (style) {
+    case 'tousled': {
+      // 阿鸡：短碎发，贴头皮，头顶和后脑几撮小翘，额前两小撮碎尖
+      const d: Dome = { hl: line(0.264), t: 0.014, bulk: 0.02, top: 0.004, brim: 0.006 };
+      parts.push(cap(d), ...sideburns(0.014));
+      parts.push(tuft(d, 0.35, 0.325, 0.09, [0.5, 1, 0.1], 0.03));
+      parts.push(tuft(d, -0.4, 0.325, 0.09, [-0.5, 1, 0.2], 0.026));
+      parts.push(tuft(d, 1.0, 0.3, 0.09, [1, 0.7, -0.1], 0.022));
+      parts.push(tuft(d, 2.5, 0.3, 0.1, [0.4, 0.6, -1], 0.026));
+      parts.push(tuft(d, -2.6, 0.29, 0.1, [-0.3, 0.5, -1], 0.022));
+      parts.push(bang(d, -0.45, -0.05, 0.238, -0.3, 0.024), bang(d, 0.1, 0.45, 0.245, 0.32, 0.022));
+      break;
+    }
+    case 'quiff': {
+      // 当邓：短发，前额那撮往上、往人物左手边抓起来，其余贴头
+      const d: Dome = { hl: line(0.27), t: 0.014, bulk: 0.026, top: 0.008, brim: 0.006 };
+      parts.push(cap(d), ...sideburns(0.014));
+      parts.push(tuft(d, 0.0, 0.3, 0.14, [0.45, 1, 0.45], 0.04));
+      parts.push(tuft(d, 0.6, 0.31, 0.11, [1, 0.8, 0.1], 0.032));
+      parts.push(tuft(d, Math.PI - 0.3, 0.3, 0.1, [-0.2, 0.55, -1], 0.02));
+      break;
+    }
+    case 'fringe': {
+      // 狗粮：短发，短刘海往下压到额头一半，中间一个小分叉
+      const d: Dome = { hl: line(0.262), t: 0.016, bulk: 0.022, top: 0.006, brim: 0.01 };
+      parts.push(cap(d), ...sideburns(0.014));
+      parts.push(bang(d, -0.62, -0.22, 0.228, -0.45), bang(d, -0.24, 0.16, 0.222, -0.05), bang(d, 0.14, 0.58, 0.232, 0.4));
+      parts.push(tuft(d, 0.4, 0.33, 0.1, [0.7, 1, 0.1], 0.024));
+      parts.push(tuft(d, Math.PI - 0.3, 0.3, 0.1, [-0.2, 0.55, -1], 0.02));
+      break;
+    }
+    case 'sweep': {
+      // 弟必：短侧分，刘海从人物左上薄薄地斜扫到右眉上方
+      const d: Dome = { hl: line(0.272), t: 0.014, bulk: 0.02, top: 0.006, brim: 0.004 };
+      parts.push(cap(d), ...sideburns(0.014));
+      parts.push([
+        domeAt(d, 0.95, 0.3, 0.004), domeAt(d, 0.6, 0.272, -0.004), shell(0.2, 0.25, 0.036), shell(-0.3, 0.225, 0.036), shell(-0.75, 0.215, 0.03),
+        shell(-1.0, 0.25, 0.026), domeAt(d, -0.55, 0.3, -0.008), domeAt(d, 0.1, 0.32, -0.008), domeAt(d, 0.7, 0.33, -0.004),
+        domeAt(d, 0, 0.29, 0.012), domeAt(d, -0.6, 0.27, 0.012),
+      ]);
+      parts.push(tuft(d, -0.7, 0.24, 0.08, [-0.55, -1, 0.35], 0.022));
+      parts.push(tuft(d, Math.PI - 0.3, 0.3, 0.1, [-0.2, 0.55, -1], 0.02));
+      break;
+    }
+    case 'crew': {
+      // 吊隆、撇干：贴头平头，发际线方正
+      const d: Dome = { hl: hairline([[0, 0.262], [0.6, 0.256], [1.0, 0.225], [1.3, 0.2], [1.75, 0.2], [2.2, 0.12], [Math.PI, 0.065]]), t: 0.016, bulk: 0.008, top: 0.006, brim: 0 };
+      parts.push(cap(d), ...sideburns(0.014, 0.15));
+      break;
+    }
+    // ── 路人款：形状更普通 ──
+    case 'buzz':
+      parts.push(cap({ hl: line(0.272, 0.2, 0.09), t: 0.01, bulk: 0.004, top: 0, brim: 0 }));
+      break;
+    case 'short':
+      parts.push(cap({ hl: line(0.258), t: 0.022, bulk: 0.025, top: 0.01, brim: 0.01 }), ...sideburns(0.02));
+      break;
+    case 'messy': {
+      const d: Dome = { hl: line(0.25), t: 0.025, bulk: 0.04, top: 0.015, brim: 0.015 };
+      parts.push(cap(d));
+      for (const th of [0.4, -0.6, 2.4]) parts.push(tuft(d, th, 0.31, 0.11, [Math.sin(th) * 0.6, 1, Math.cos(th) * 0.4 - 0.4], 0.035));
+      break;
+    }
+    case 'side': {
+      const d: Dome = { hl: line(0.25), t: 0.025, bulk: 0.035, top: 0.015, brim: 0.02 };
+      parts.push(cap(d), tuft(d, -0.2, 0.27, 0.14, [-0.8, -0.6, 0.3], 0.04));
+      break;
+    }
+  }
+  return parts;
+}
+
+/** 上衣正面在高度 y 处的 z（手办单位，未乘厚度） */
+function torsoFront(y: number) {
+  for (let i = 0; i < TORSO.length - 1; i++) {
+    const [y0, , d0] = TORSO[i], [y1, , d1] = TORSO[i + 1];
+    if (y <= y1) return lerp(d0, d1, clamp01((y - y0) / (y1 - y0))) / 2;
+  }
+  return TORSO[TORSO.length - 1][2] / 2;
+}
 
 export type PoseName =
   | 'stand' | 'walk' | 'sit_play' | 'sit_phone' | 'sit_relax' | 'sit_eat' | 'sleep_desk' | 'slump'
@@ -47,6 +275,8 @@ export class Character {
   neck = new THREE.Group();
   head = new THREE.Group();
   headset = new THREE.Group();
+  /** 挂脖耳机（弟必展示用），默认不显示 */
+  neckphones = new THREE.Group();
   arms: Limb[] = [];
   legs: { hp: THREE.Group; kn: THREE.Group }[] = [];
   phone: THREE.Mesh;
@@ -75,314 +305,317 @@ export class Character {
   private cur: Pose | null = null;
   private lastSlam = 0;
   private blinkAt = 2 + Math.random() * 3;
+  /** 站位页、截图用：不眨眼 */
+  noBlink = false;
   private eyes: THREE.Group[] = [];
 
   constructor(public def: MemberDef) {
     this.id = def.id;
     const L = def.look;
     const s = (this.s = L.height), g = L.girth;
-    this.legLen = 0.84 * s;
+    const U = FIG * s;
+    this.legLen = HIP_Y * U;
     this.root.userData.memberId = def.id;
     this.root.add(this.body);
 
-    const shirt = mat(L.shirt, { roughness: 0.85 });
-    const shirtDark = mat(new THREE.Color(L.shirt).multiplyScalar(0.72).getHex(), { roughness: 0.85 });
-    const pants = mat(L.pants, { roughness: 0.85 });
-    const skin = mat(L.skin, { roughness: 0.62 });
-    const hair = mat(L.hair, { roughness: 0.8 });
-    const dark = mat(0x1b1b1f, { roughness: 0.45 });
-    const white = mat(0xffffff, { roughness: 0.3 });
+    // 胖瘦：躯干宽厚跟 girth 走；四肢、头只跟一部分
+    const fat = clamp01((g - 1) / 0.3);
+    const tw = g, td = 1 + (g - 1) * 0.9;
+    const lw = 1.12 + (g - 1) * 0.55;
+    const sw = 1 + (g - 1) * 0.8;
+    const hw = 1 + (g - 1) * 0.3;
 
-    // 骨盆 + 皮带
+    const flat = (color: number, roughness = 0.82) => mat(color, { roughness, flatShading: true });
+    const shirt = flat(L.shirt);
+    const shirtDark = flat(new THREE.Color(L.shirt).multiplyScalar(0.8).getHex());
+    const pants = flat(L.pants);
+    const skin = flat(L.skin, 0.7);
+    const skinShade = flat(new THREE.Color(L.skin).multiplyScalar(0.88).getHex(), 0.7);
+    const hairM = flat(L.hair, 0.78);
+    const dark = flat(0x1b1b1f, 0.5);
+    const white = flat(0xffffff, 0.4);
+    const lum = (c: number) => new THREE.Color(c).getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace).l;
+    const hairLum = lum(L.hair);
+    const browM = flat(hairLum > 0.35 ? new THREE.Color(L.hair).multiplyScalar(0.62).getHex() : 0x1e1e22, 0.7);
+
+    /** 挂在关节下的一层，用手办单位建模，再整体缩放到世界尺寸 */
+    const skinOf = (joint: THREE.Object3D, sx: number, sz: number, m = 1) => {
+      const k = new THREE.Group();
+      k.scale.set(U * sx * m, U * m, U * sz * m);
+      joint.add(k);
+      return k;
+    };
+    const add = (parent: THREE.Object3D, pts: P3[], m: THREE.Material) => {
+      const mesh = solid(hull(pts), m);
+      parent.add(mesh);
+      return mesh;
+    };
+    const box = (parent: THREE.Object3D, w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number) => {
+      const mesh = solid(new THREE.BoxGeometry(w, h, d), m);
+      mesh.position.set(x, y, z);
+      parent.add(mesh);
+      return mesh;
+    };
+
+    // ── 骨盆 + 短裤裤腰 ──
     this.hips.position.y = this.legLen;
     this.body.add(this.hips);
-    const pelvis = capsule(0.11 * g, 0.12 * g, pants);
-    pelvis.rotation.z = Math.PI / 2;
-    pelvis.scale.set(1, 1, 0.85);
-    this.hips.add(pelvis);
-    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.122 * g, 0.122 * g, 0.035, 20), mat(0x2a2420, { roughness: 0.5 }));
-    belt.scale.set(1, 1, 0.86);
-    belt.position.y = 0.06;
-    this.hips.add(belt);
+    const hipsK = skinOf(this.hips, tw, td);
+    add(hipsK, [...ring(0.07, 0.3, 0.19, 0.45), ...ring(0.0, 0.33, 0.205, 0.45), ...ring(-0.055, 0.33, 0.205, 0.4)], pants);
 
-    // 躯干：车削出肩宽腰窄的轮廓
-    this.spine.position.y = 0.04;
+    // ── 上衣：肩宽、略收腰的方块 T 恤；胖子肚子往前顶 ──
     this.hips.add(this.spine);
-    const torsoLen = 0.3 * s;
-    const R = 0.17 * g;
-    const torsoProfile = [
-      [0, 0], [R * 0.92, 0], [R * 0.98, torsoLen * 0.25], [R * 0.86, torsoLen * 0.55], [R * 1.04, torsoLen * 0.88],
-      [R * 0.92, torsoLen + 0.1], [R * 0.55, torsoLen + 0.16], [0.06, torsoLen + 0.19], [0, torsoLen + 0.19],
-    ].map(([r, y]) => new THREE.Vector2(r, y));
-    const torso = new THREE.Mesh(new THREE.LatheGeometry(torsoProfile, 24), shirt);
-    torso.position.y = 0.03;
-    torso.scale.set(1, 1, 0.74);
-    torso.castShadow = true;
-    this.spine.add(torso);
-    const hem = new THREE.Mesh(new THREE.TorusGeometry(R * 0.93, 0.014, 6, 24), shirtDark);
-    hem.rotation.x = Math.PI / 2;
-    hem.scale.set(1, 0.74, 1);
-    hem.position.y = 0.04;
-    this.spine.add(hem);
-    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.016, 6, 18), shirtDark);
-    collar.rotation.x = Math.PI / 2;
-    collar.position.y = torsoLen + 0.2;
-    this.spine.add(collar);
-    // 胸前队徽
-    const badge = new THREE.Mesh(new THREE.CircleGeometry(0.032, 16), mat(0xe9c46a, { roughness: 0.4, metalness: 0.4 }));
-    badge.position.set(R * 0.45, torsoLen * 0.78, R * 0.83);
-    badge.rotation.y = 0.35;
-    this.spine.add(badge);
-    if (g > 1.15) {
-      const belly = sphere(0.11 * g, shirt);
-      belly.position.set(0, 0.17, 0.03 * g);
-      belly.scale.set(1, 0.95, 0.82);
-      this.spine.add(belly);
+    const spineK = skinOf(this.spine, tw, td);
+    const tee: P3[] = [];
+    for (const [y, w, d] of TORSO) tee.push(...ring(y, w, d, 0.32));
+    if (fat > 0) tee.push(...ring(0.02, 0.33, 0.21, 0.4, { zf: 0.105 + 0.035 * fat }), ...ring(0.1, 0.32, 0.205, 0.4, { zf: 0.1 + 0.03 * fat }));
+    add(spineK, tee, shirt);
+    // 下摆一圈略深的边
+    // 下摆深色边：只比上衣最下面一圈大一点，贴着衣服，不凸出来
+    add(spineK, [...ring(-0.014, 0.349, 0.226, 0.32), ...ring(0.004, 0.347, 0.224, 0.32)], shirtDark);
+    // 脖子 + V 领露出的皮肤
+    const fzAt = (y: number) => torsoFront(y) + (fat > 0 && y < 0.15 ? 0.03 * fat : 0);
+    const vTip = 0.185, vTop = 0.256, vW = 0.058;
+    add(spineK, [
+      ...ring(0.215, 0.09, 0.085, 0.3, { z0: -0.005 }), ...ring(NECK_Y + 0.03, 0.085, 0.08, 0.3, { z0: -0.005 }),
+      [0, vTip, fzAt(vTip) + 0.003], [vW, vTop, fzAt(vTop) + 0.003], [-vW, vTop, fzAt(vTop) + 0.003],
+    ], flat(new THREE.Color(L.skin).multiplyScalar(0.86).getHex(), 0.7));
+    // 领口包边
+    for (const sx of [-1, 1]) add(spineK, bar([0, vTip - 0.004, fzAt(vTip) + 0.004], [sx * (vW + 0.006), vTop + 0.002, fzAt(vTop) + 0.004], 0.012, 0.004), shirtDark);
+    // 胸口队标：白六边形里套一个衫色小六边形（衫色太浅就反过来）
+    if (L.badge) {
+      const light = lum(L.shirt) > 0.7;
+      const outer = solid(new THREE.CylinderGeometry(0.03 * U, 0.03 * U, 0.006 * U, 6).rotateX(Math.PI / 2), flat(light ? 0x2a2c33 : 0xffffff, 0.5));
+      outer.rotation.z = Math.PI / 2;
+      const by = 0.155;
+      outer.position.set(0.08 * tw * U, by * U, (fzAt(by) * td + 0.002 + 0.03 * fat) * U);
+      this.spine.add(outer);
+      const inner = solid(new THREE.CylinderGeometry(0.014 * U, 0.014 * U, 0.006 * U, 6).rotateX(Math.PI / 2), flat(light ? L.shirt : new THREE.Color(L.shirt).multiplyScalar(0.55).getHex(), 0.5));
+      inner.rotation.copy(outer.rotation);
+      inner.position.copy(outer.position).add(new THREE.Vector3(0, 0, 0.0025 * U));
+      this.spine.add(inner);
     }
-    const shoulderY = torsoLen + 0.16;
 
-    // 头
-    this.neck.position.y = torsoLen + 0.22;
-    this.spine.add(this.neck);
-    const neckM = capsule(0.048, 0.04, skin, 10);
-    neckM.position.y = 0.0;
-    this.neck.add(neckM);
-    this.head.position.y = 0.17;
-    this.neck.add(this.head);
-    const headW = Math.min(1.02, 0.95 + (g - 1) * 0.10);
-    const headM = sphere(HEAD_R, skin, 28, 20);
-    headM.scale.set(headW, 1.04, 0.98);
-    this.head.add(headM);
-    const jaw = sphere(HEAD_R * 0.8, skin, 20, 12);
-    jaw.position.set(0, -0.045, 0.012);
-    jaw.scale.set(headW * 1.05, 0.8, 1);
-    this.head.add(jaw);
-    const fz = HEAD_R * 0.93; // 脸部表面
-    for (const sx of [-1, 1]) {
-      const ear = sphere(0.032, skin, 10, 8);
-      ear.scale.set(0.6, 1, 0.9);
-      ear.position.set(sx * HEAD_R * headW * 0.98, -0.005, -0.005);
-      this.head.add(ear);
-      // 眼睛：眼白 + 瞳孔 + 高光（眨眼时整组压扁）
-      const eye = new THREE.Group();
-      eye.position.set(sx * 0.052, 0.012, fz - 0.012);
-      this.head.add(eye);
-      const sclera = new THREE.Mesh(new THREE.SphereGeometry(0.024, 14, 10), white);
-      sclera.scale.set(1, 1.1, 0.5);
-      eye.add(sclera);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.015, 12, 8), dark);
-      pupil.position.set(0, -0.002, 0.009);
-      pupil.scale.set(1, 1.15, 0.5);
-      eye.add(pupil);
-      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.0045, 6, 4), white);
-      glint.position.set(sx * -0.004 + 0.004, 0.006, 0.016);
-      eye.add(glint);
-      this.eyes.push(eye);
-      const brow = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.034, 2, 6), hair);
-      brow.rotation.z = Math.PI / 2 + sx * 0.12;
-      brow.position.set(sx * 0.052, 0.058, fz - 0.002);
-      this.head.add(brow);
-      const blush = new THREE.Mesh(new THREE.CircleGeometry(0.02, 12), new THREE.MeshStandardMaterial({ color: 0xf08a7a, transparent: true, opacity: 0.35, roughness: 1 }));
-      blush.position.set(sx * 0.082, -0.03, fz - 0.026);
-      blush.rotation.y = sx * 0.55;
-      this.head.add(blush);
-    }
-    const nose = sphere(0.017, skin, 8, 6);
-    nose.scale.set(1, 0.9, 1.1);
-    nose.position.set(0, -0.012, fz + 0.004);
-    this.head.add(nose);
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.0045, 4, 12, Math.PI), mat(0x7a3b30, { roughness: 0.6 }));
-    mouth.rotation.z = Math.PI;
-    mouth.position.set(0, -0.045, fz - 0.008);
-    this.head.add(mouth);
-
-    // 发型：主发盖 + 后脑 + 各自的刘海
-    const capPhi = L.hairStyle === 'buzz' ? 0.38 : 0.52;
-    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R * 1.06, 28, 14, 0, Math.PI * 2, 0, Math.PI * capPhi), hair);
-    hairCap.scale.set(headW, 1.04, 1.0);
-    hairCap.position.set(0, 0.01, -0.006);
-    hairCap.rotation.x = -0.28;
-    hairCap.castShadow = true;
-    this.head.add(hairCap);
-    if (L.hairStyle !== 'buzz') {
-      const back = sphere(HEAD_R * 1.0, hair, 20, 12);
-      back.scale.set(headW * 1.02, 0.82, 0.8);
-      back.position.set(0, 0.01, -0.045);
-      this.head.add(back);
-    }
-    if (L.hairStyle === 'messy') {
-      for (let i = 0; i < 9; i++) {
-        const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.12, 5), hair);
-        const a = (i / 9) * Math.PI * 2;
-        tuft.position.set(Math.cos(a) * 0.08, 0.13, Math.sin(a) * 0.08 - 0.02);
-        tuft.rotation.set(Math.sin(a) * 0.7, 0, -Math.cos(a) * 0.7);
-        tuft.castShadow = true;
-        this.head.add(tuft);
-      }
-    } else if (L.hairStyle === 'side') {
-      const fringe = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.16, 4, 10), hair);
-      fringe.rotation.z = Math.PI / 2 - 0.3;
-      fringe.position.set(0.02, 0.105, 0.1);
-      fringe.scale.set(1, 1, 0.7);
-      this.head.add(fringe);
-    } else if (L.hairStyle === 'short') {
-      const fringe = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.15, 4, 10), hair);
-      fringe.rotation.z = Math.PI / 2;
-      fringe.position.set(0, 0.11, 0.098);
-      fringe.scale.set(1, 1, 0.6);
-      this.head.add(fringe);
-    }
-    // 眼镜
-    if (L.glasses) {
-      const frameMat = mat(0x111114, { roughness: 0.3, metalness: 0.4 });
-      const lens = new THREE.MeshStandardMaterial({ color: 0xbfd8ff, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.2 });
+    // 挂脖耳机（弟必，展示用）
+    {
+      const k = skinOf(this.spine, 1, 1);
+      k.add(this.neckphones);
+      const hc = L.headset?.color ?? L.shirt;
+      const band = solid(new THREE.TorusGeometry(0.105, 0.017, 4, 10, Math.PI), flat(hc, 0.4));
+      band.rotation.x = -(Math.PI / 2 - 0.35);
+      band.position.set(0, NECK_Y - 0.02, 0.05);
+      this.neckphones.add(band);
       for (const sx of [-1, 1]) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.0065, 6, 18), frameMat);
-        ring.position.set(sx * 0.052, 0.012, fz + 0.012);
-        this.head.add(ring);
-        const glass = new THREE.Mesh(new THREE.CircleGeometry(0.032, 16), lens);
-        glass.position.set(sx * 0.052, 0.012, fz + 0.012);
-        this.head.add(glass);
-        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.006, 0.13), frameMat);
-        arm.position.set(sx * HEAD_R * headW * 0.92, 0.018, 0.06);
-        this.head.add(arm);
+        // 耳罩挂在锁骨两侧：外壳朝外前方，灰色耳垫贴着脖子
+        const dir = new THREE.Vector3(sx * 0.85, 0.1, 0.5).normalize();
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        const at = new THREE.Vector3(sx * 0.105, NECK_Y - 0.035, 0.07);
+        const cup = solid(new THREE.CylinderGeometry(0.056, 0.064, 0.05, 8), flat(hc, 0.4));
+        cup.quaternion.copy(q);
+        cup.position.copy(at);
+        this.neckphones.add(cup);
+        const pad = solid(new THREE.CylinderGeometry(0.058, 0.058, 0.024, 8), flat(0x8e8b84, 0.85));
+        pad.quaternion.copy(q);
+        pad.position.copy(at).addScaledVector(dir, -0.034);
+        this.neckphones.add(pad);
+        const yoke = solid(new THREE.BoxGeometry(0.016, 0.07, 0.03), flat(new THREE.Color(hc).multiplyScalar(0.8).getHex(), 0.5));
+        yoke.position.set(sx * 0.1, NECK_Y + 0.012, 0.03);
+        yoke.rotation.z = -sx * 0.5;
+        this.neckphones.add(yoke);
       }
-      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.006), frameMat);
-      bridge.position.set(0, 0.018, fz + 0.016);
-      this.head.add(bridge);
+      this.neckphones.visible = false;
     }
-    // 耳机（打游戏时戴）
-    const band = new THREE.Mesh(new THREE.TorusGeometry(HEAD_R * headW + 0.018, 0.014, 6, 20, Math.PI), dark);
-    band.position.y = 0.02;
-    this.headset.add(band);
-    for (const sx of [-1, 1]) {
-      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.045, 16), mat(L.shirt, { roughness: 0.45 }));
-      cup.rotation.z = Math.PI / 2;
-      cup.position.set(sx * (HEAD_R * headW + 0.018), 0.0, 0);
-      this.headset.add(cup);
-    }
-    const mic = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.09, 2, 6), dark);
-    mic.position.set(-0.13, -0.05, 0.07);
-    mic.rotation.set(0.9, 0, 0.3);
-    this.headset.add(mic);
-    this.headset.visible = false;
-    this.head.add(this.headset);
 
-    // 手臂：肩 → 肘；短袖露出小臂
-    const armR = 0.038 * Math.sqrt(g);
+    // ── 头 ──
+    this.neck.position.y = NECK_Y * U;
+    this.spine.add(this.neck);
+    this.head.position.y = HEAD_Y * U;
+    this.neck.add(this.head);
+    const headK = skinOf(this.head, hw, 1, HEAD_SCALE);
+    const headPts: P3[] = [];
+    for (const [y, w, d, z0] of HEAD) headPts.push(...ring(y, w, d, 0.36, { z0 }));
+    add(headK, headPts, skin);
+    // 耳朵
+    for (const sx of [-1, 1]) {
+      add(headK, [...ring(0.098, 0.03, 0.05, 0.4, { x0: sx * 0.13, z0: -0.01 }), ...ring(0.13, 0.05, 0.07, 0.4, { x0: sx * 0.146, z0: -0.014 }), ...ring(0.175, 0.046, 0.074, 0.45, { x0: sx * 0.148, z0: -0.016 }), [sx * 0.135, 0.196, -0.018]], skin);
+      // 耳窝：略深一点的一小块
+      add(headK, [...ring(0.12, 0.012, 0.03, 0.4, { x0: sx * 0.168, z0: -0.008 }), ...ring(0.165, 0.012, 0.04, 0.4, { x0: sx * 0.168, z0: -0.01 })], skinShade);
+    }
+    // 鼻子：小楔子
+    add(headK, [[-0.013, 0.118, FZ - 0.002], [0.013, 0.118, FZ - 0.002], [0, 0.155, FZ - 0.001], [0, 0.112, FZ + 0.02], [-0.009, 0.106, FZ + 0.004], [0.009, 0.106, FZ + 0.004]], skin);
+    // 嘴：一道短线
+    box(headK, 0.038, 0.007, 0.008, flat(0x7a3e30, 0.7), 0, 0.076, 0.121);
+    // 眼睛：竖六边形黑眼珠 + 一点高光（眨眼时整组压扁）
+    const stern = L.brows === 'stern';
+    for (const sx of [-1, 1]) {
+      const eye = new THREE.Group();
+      eye.position.set(sx * 0.052, 0.145, FZ + 0.001);
+      headK.add(eye);
+      const pupil = solid(new THREE.CylinderGeometry(0.0118, 0.0118, 0.008, 8), flat(0x1c1512, 0.4));
+      pupil.rotation.x = Math.PI / 2;
+      pupil.scale.set(1, 1, 1.6);
+      eye.add(pupil);
+      box(eye, 0.0055, 0.0055, 0.004, white, sx * 0.003 + 0.003, 0.009, 0.004);
+      this.eyes.push(eye);
+      const brow = box(headK, 0.056, 0.014, 0.012, browM, sx * 0.055, stern ? 0.186 : 0.192, FZ + 0.002);
+      brow.rotation.z = stern ? sx * 0.24 : -sx * 0.06;
+    }
+    // 发型
+    for (const pts of hairParts(L.hairStyle)) add(headK, pts, hairM);
+    if (L.helmet != null) {
+      // 外卖头盔：比发盖再大一圈，前沿压到眉上
+      const hl = hairline([[0, 0.235], [1.0, 0.21], [1.57, 0.17], [2.4, 0.11], [Math.PI, 0.1]]);
+      add(headK, cap({ hl, t: 0.05, bulk: 0.02, top: 0.02, brim: 0 }), flat(L.helmet, 0.45));
+      add(headK, [...ring(0.228, 0.22, 0.05, 0.3, { z0: 0.16 }), ...ring(0.242, 0.23, 0.07, 0.3, { z0: 0.16 })], flat(0x1a1a1a, 0.5));
+    }
+    // 眼镜：粗黑框方镜
+    if (L.glasses) {
+      const frame = flat(0x151517, 0.35);
+      const lens = new THREE.MeshStandardMaterial({ color: 0xcfe0ff, transparent: true, opacity: 0.16, roughness: 0.05, metalness: 0.2, depthWrite: false });
+      const W = 0.094, H = 0.066, T = 0.013, z = FZ + 0.014, y = 0.15;
+      for (const sx of [-1, 1]) {
+        const cx = sx * 0.058;
+        box(headK, W, T, 0.012, frame, cx, y + H / 2 - T / 2, z);
+        box(headK, W, T, 0.012, frame, cx, y - H / 2 + T / 2, z);
+        box(headK, T, H, 0.012, frame, cx - W / 2 + T / 2, y, z);
+        box(headK, T, H, 0.012, frame, cx + W / 2 - T / 2, y, z);
+        const glass = new THREE.Mesh(new THREE.PlaneGeometry(W - T * 2, H - T * 2), lens);
+        glass.position.set(cx, y, z - 0.002);
+        headK.add(glass);
+        add(headK, bar([sx * (0.058 + W / 2 - 0.004), y + 0.012, z], [sx * 0.137, y + 0.012, z - 0.03], 0.01, 0.01), frame);
+        add(headK, bar([sx * 0.137, y + 0.012, z - 0.03], [sx * 0.137, y + 0.008, -0.03], 0.01, 0.01), frame);
+      }
+      box(headK, 0.03, 0.012, 0.012, frame, 0, y + 0.008, z);
+    }
+    // 头戴耳机（比赛时戴）：罩色默认跟衫，弟必是白色不带麦
+    {
+      const k = skinOf(this.head, hw, 1, HEAD_SCALE);
+      k.add(this.headset);
+      const hc = L.headset?.color ?? L.shirt;
+      const hm = flat(hc, 0.45);
+      const band = solid(new THREE.TorusGeometry(0.2, 0.018, 4, 14, Math.PI), hm);
+      band.scale.set(0.83, 1, 1.5);
+      band.position.set(0, 0.15, -0.01);
+      this.headset.add(band);
+      for (const sx of [-1, 1]) {
+        const cup = solid(new THREE.CylinderGeometry(0.058, 0.058, 0.045, 8), hm);
+        cup.rotation.z = Math.PI / 2;
+        cup.position.set(sx * 0.166, 0.15, -0.01);
+        this.headset.add(cup);
+        const pad = solid(new THREE.CylinderGeometry(0.05, 0.05, 0.016, 8), dark);
+        pad.rotation.z = Math.PI / 2;
+        pad.position.set(sx * 0.141, 0.15, -0.01);
+        this.headset.add(pad);
+      }
+      if (L.headset?.mic !== false) {
+        add(this.headset, bar([0.17, 0.12, 0.03], [0.07, 0.075, 0.14], 0.011, 0.011), dark);
+        add(this.headset, [...ring(0.065, 0.026, 0.026, 0.3, { x0: 0.062, z0: 0.145 }), ...ring(0.088, 0.026, 0.026, 0.3, { x0: 0.062, z0: 0.145 })], dark);
+      }
+      this.headset.visible = false;
+    }
+
+    // ── 手臂：短袖 → 上臂 → 前臂 + 方拳头 ──
     for (const sx of [-1, 1]) {
       const sh = new THREE.Group();
-      sh.position.set(sx * (0.15 * g + 0.055), shoulderY, 0);
+      sh.position.set(sx * SHOULDER_X * tw * U, SHOULDER_Y * U, 0);
       this.spine.add(sh);
-      const sleeve = capsule(armR + 0.008, 0.11 * s, shirt, 12);
-      sleeve.position.y = -0.07 * s;
-      sh.add(sleeve);
-      const upper = capsule(armR - 0.002, 0.2 * s, skin, 10);
-      upper.position.y = -0.14 * s;
-      sh.add(upper);
+      const shK = skinOf(sh, lw, lw);
+      // 短袖：顺着溜肩往下斜，袖口往外张、开口斜切（腋下高、外侧低）
+      add(shK, [
+        ...ring(0.05, 0.05, 0.13, 0.35, { x0: -sx * 0.055 }),
+        ...ring(0.02, 0.1, 0.13, 0.32, { x0: -sx * 0.01 }),
+        ...ring(-0.05, 0.112, 0.124, 0.3, { x0: sx * 0.006 }),
+        [sx * 0.06, -0.116, 0.05], [sx * 0.06, -0.116, -0.05], [-sx * 0.045, -0.088, 0.048], [-sx * 0.045, -0.088, -0.048],
+      ], shirt);
+      add(shK, [[sx * 0.062, -0.11, 0.054], [sx * 0.062, -0.11, -0.054], [-sx * 0.047, -0.082, 0.052], [-sx * 0.047, -0.082, -0.052],
+        [sx * 0.062, -0.122, 0.054], [sx * 0.062, -0.122, -0.054], [-sx * 0.047, -0.094, 0.052], [-sx * 0.047, -0.094, -0.052]], shirtDark);
+      add(shK, [...ring(-0.07, 0.07, 0.074, 0.3, { x0: sx * 0.01 }), ...ring(-0.16, 0.068, 0.072, 0.3, { x0: sx * 0.004 })], skin);
       const el = new THREE.Group();
-      el.position.y = -0.27 * s;
+      el.position.y = -UPPER_ARM * U;
       sh.add(el);
-      const fore = capsule(armR - 0.008, 0.18 * s, skin, 10);
-      fore.position.y = -0.11 * s;
-      el.add(fore);
-      const hand = sphere(0.038, skin, 12, 8);
-      hand.scale.set(0.85, 1.15, 0.7);
-      hand.position.y = -0.245 * s;
-      el.add(hand);
-      const thumb = capsule(0.013, 0.025, skin, 6);
-      thumb.position.set(-sx * 0.03, -0.23 * s, 0.02);
-      thumb.rotation.z = sx * 0.6;
-      el.add(thumb);
+      const elK = skinOf(el, lw, lw);
+      add(elK, [...ring(0.012, 0.068, 0.07, 0.3), ...ring(-0.06, 0.07, 0.072, 0.3), ...ring(-0.105, 0.062, 0.064, 0.3)], skin);
+      // 方拳头：手背、指节一排，大拇指压在前面
+      add(elK, [...ring(-0.095, 0.064, 0.066, 0.3), ...ring(-0.12, 0.088, 0.09, 0.32), ...ring(-0.175, 0.086, 0.09, 0.32), ...ring(-0.198, 0.066, 0.072, 0.42)], skin);
+      add(elK, [...ring(-0.165, 0.07, 0.03, 0.3, { x0: sx * 0.002, z0: 0.03 }), ...ring(-0.2, 0.06, 0.028, 0.3, { x0: sx * 0.002, z0: 0.026 })], skinShade);
+      add(elK, [...ring(-0.115, 0.03, 0.03, 0.3, { x0: -sx * 0.036, z0: 0.034 }), ...ring(-0.158, 0.028, 0.028, 0.3, { x0: -sx * 0.04, z0: 0.046 })], skin);
       this.arms.push({ sh, el });
     }
     // 手机（摸鱼时拿在右手，屏幕颜色随 App 变）
     this.phoneScreen = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x6fa8ff, emissiveIntensity: 0.9 });
-    this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.14, 0.012), [dark, dark, dark, dark, this.phoneScreen, dark]);
-    this.phone.position.set(0, -0.28 * s, 0.035);
+    const phoneBody = mat(0x1b1b1f, { roughness: 0.45 });
+    this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.14, 0.012), [phoneBody, phoneBody, phoneBody, phoneBody, this.phoneScreen, phoneBody]);
+    this.phone.position.set(0, -0.17 * U, 0.045 * U);
     this.phone.rotation.x = -0.3;
     this.phone.visible = false;
     this.arms[1].el.add(this.phone);
     // 杯子（喝水 / 饮料）
-    this.cup = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.034, 0.12, 14), mat(0xf3e2c7));
-    this.cup.position.set(0, -0.28 * s, 0.045);
+    this.cup = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.034, 0.12, 8), flat(0xf3e2c7));
+    this.cup.position.set(0, -0.17 * U, 0.06 * U);
     this.cup.visible = false;
     this.arms[1].el.add(this.cup);
 
-    // 腿：髋 → 膝
+    // ── 腿：短裤 → 膝 → 小腿 → 脚 ──
+    const flop = L.shoes ?? 0x2458c0;
     for (const sx of [-1, 1]) {
       const hp = new THREE.Group();
-      hp.position.set(sx * 0.080 * g, 0, 0);
+      hp.position.set(sx * 0.075 * tw * U, 0, 0);
       this.hips.add(hp);
-      const thigh = capsule(0.052 * Math.sqrt(g), 0.3 * s, pants, 12);
-      thigh.position.y = -0.21 * s;
-      hp.add(thigh);
+      const shortsK = skinOf(hp, sw, sw);
+      add(shortsK, [...ring(-0.015, 0.155, 0.18, 0.45, { x0: sx * 0.004 }), ...ring(-0.06, 0.175, 0.195, 0.3, { x0: sx * 0.01 }), ...ring(-0.19, 0.18, 0.19, 0.3, { x0: sx * 0.016 })], pants);
+      const thighK = skinOf(hp, lw, lw);
+      add(thighK, [...ring(-0.11, 0.098, 0.104, 0.3), ...ring(-0.182, 0.094, 0.1, 0.3)], skin);
       const kn = new THREE.Group();
-      kn.position.y = -0.42 * s;
+      kn.position.y = -THIGH * U;
       hp.add(kn);
-      // 短裤：大腿是裤，小腿露肤（稿 B 剪影是短裤，不是长裤）
-      const shin = capsule(0.042 * Math.sqrt(g), 0.28 * s, skin, 12);
-      shin.position.y = -0.19 * s;
-      kn.add(shin);
+      const knK = skinOf(kn, lw, lw);
+      add(knK, [...ring(0.015, 0.095, 0.1, 0.3), ...ring(-0.05, 0.096, 0.106, 0.3, { z0: -0.006 }), ...ring(-0.142, 0.078, 0.082, 0.3), ...ring(-0.165, 0.074, 0.078, 0.3)], skin);
       const foot = new THREE.Group();
-      foot.position.y = -0.42 * s;
+      foot.position.y = -SHIN * U;
       kn.add(foot);
+      const fK = skinOf(foot, 1, 1);
       if (L.flipflops) {
-        // 人字拖：薄底 + 露出的脚。拖色跟 shoes（阿鸡为橙，呼应衫）
-        const flop = L.shoes ?? 0x2f7fd1;
-        const sole = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.15, 4, 10), mat(flop, { roughness: 0.6 }));
-        sole.rotation.x = Math.PI / 2;
-        sole.scale.set(1, 1, 0.2);
-        sole.position.set(0, -0.008, 0.05);
-        foot.add(sole);
-        const bare = capsule(0.042, 0.13, skin, 10);
-        bare.rotation.x = Math.PI / 2;
-        bare.scale.set(1, 1, 0.65);
-        bare.position.set(0, 0.022, 0.05);
-        foot.add(bare);
-        const strap = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 12, Math.PI), mat(flop));
-        strap.position.set(0, 0.04, 0.08);
-        strap.rotation.x = -Math.PI / 2;
-        foot.add(strap);
+        // 光脚 + 蓝色人字拖（薄底 + V 形带）
+        // 光脚：脚背 + 一排脚趾
+        add(fK, [...ring(0.0, 0.07, 0.074, 0.3), ...ring(-0.024, 0.096, 0.15, 0.3, { z0: 0.032 }), ...ring(-0.034, 0.1, 0.18, 0.38, { z0: 0.04 })], skin);
+        add(fK, [...ring(-0.022, 0.09, 0.03, 0.4, { z0: 0.122 }), ...ring(-0.035, 0.094, 0.036, 0.4, { z0: 0.124 })], skinShade);
+        // 人字拖：厚底 + 粗 V 字带
+        const flopM = flat(flop, 0.55);
+        add(fK, [...ring(-0.034, 0.122, 0.226, 0.4, { z0: 0.042 }), ...ring(-0.05, 0.122, 0.226, 0.4, { z0: 0.042 })], flopM);
+        add(fK, [...ring(-0.0335, 0.11, 0.214, 0.4, { z0: 0.042 }), ...ring(-0.0345, 0.11, 0.214, 0.4, { z0: 0.042 })], flat(new THREE.Color(flop).lerp(new THREE.Color(0xffffff), 0.25).getHex(), 0.6));
+        for (const ex of [-1, 1]) add(fK, bar([ex * 0.004, -0.012, 0.118], [ex * 0.054, -0.03, 0.034], 0.024, 0.014), flopM);
       } else {
-        // 圆头运动鞋 + 白色鞋底
-        const shoe = capsule(0.056, 0.14, mat(L.shoes ?? 0xe9e9e9, { roughness: 0.6 }), 12);
-        shoe.rotation.x = Math.PI / 2;
-        shoe.scale.set(1, 1, 0.68);
-        shoe.position.set(0, 0.03, 0.045);
-        foot.add(shoe);
-        const sole = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.14, 4, 12), mat(0xf4f4f2, { roughness: 0.7 }));
-        sole.rotation.x = Math.PI / 2;
-        sole.scale.set(1, 1, 0.2);
-        sole.position.set(0, -0.004, 0.045);
-        foot.add(sole);
+        // 路人：运动鞋 + 白底
+        add(fK, [...ring(0.008, 0.08, 0.086, 0.3), ...ring(-0.02, 0.104, 0.19, 0.35, { z0: 0.038 }), ...ring(-0.032, 0.108, 0.208, 0.42, { z0: 0.042 })], flat(L.shoes ?? 0x2e2e34, 0.6));
+        add(fK, [...ring(-0.031, 0.114, 0.216, 0.42, { z0: 0.042 }), ...ring(-0.05, 0.114, 0.216, 0.42, { z0: 0.042 })], flat(0xf2f2ef, 0.7));
       }
       this.legs.push({ hp, kn });
     }
 
     // 碰撞体（点击用）
-    const hit = (this.hit = new THREE.Mesh(new THREE.CylinderGeometry(0.32 * g, 0.32 * g, 1.85 * s, 8), new THREE.MeshBasicMaterial({ visible: false })));
-    hit.position.y = 0.92 * s;
+    const hit = (this.hit = new THREE.Mesh(new THREE.CylinderGeometry(0.34 * g, 0.34 * g, 1.08 * U, 8), new THREE.MeshBasicMaterial({ visible: false })));
+    hit.position.y = 0.54 * U;
     hit.userData.memberId = def.id;
     this.root.add(hit);
 
     // 头顶昵称与气泡（CSS2D）
+    const topY = (HIP_Y + NECK_Y + HEAD_Y + HEAD_TOP * HEAD_SCALE) * U;
     const tag = (this.tagEl = document.createElement('div'));
     tag.className = 'name-tag';
     tag.innerHTML = `<span class="dot" style="background:#${L.shirt.toString(16).padStart(6, '0')}"></span><b>${def.name}</b><i class="st"></i>`;
     tag.dataset.memberId = def.id;
     this.tagStatus = tag.querySelector('.st')!;
     const tagObj = new CSS2DObject(tag);
-    tagObj.position.set(0, 2.1 * s + 0.14, 0);
+    tagObj.position.set(0, topY + 0.3, 0);
     this.root.add(tagObj);
     const bubble = (this.bubbleEl = document.createElement('div'));
     bubble.className = 'bubble';
     const bubbleObj = new CSS2DObject(bubble);
-    bubbleObj.position.set(0, 2.1 * s + 0.52, 0);
+    bubbleObj.position.set(0, topY + 0.68, 0);
     this.root.add(bubbleObj);
 
     this.root.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh && o !== hit) {
+      if ((o as THREE.Mesh).isMesh && o !== hit && !((o as THREE.Mesh).material as THREE.Material).transparent) {
         o.userData.memberId = def.id;
         o.castShadow = true;
       }
@@ -638,7 +871,7 @@ export class Character {
     this.blinkAt -= dt;
     let open = 1;
     if (sleeping) open = 0.12;
-    else if (this.blinkAt < 0.12) open = 0.15;
+    else if (this.blinkAt < 0.12 && !this.noBlink) open = 0.15;
     if (this.blinkAt < 0) this.blinkAt = 2.5 + Math.random() * 3.5;
     for (const e of this.eyes) e.scale.y = open;
 

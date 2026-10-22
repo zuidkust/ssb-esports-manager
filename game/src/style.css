@@ -447,3 +447,12 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 }
 #god button:hover { background: rgba(255, 255, 255, 0.13); }
 #god .god-note { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.4; }
+
+/* ── 白底六人站位（?lineup=1） ── */
+html.lineup-mode #topbar, html.lineup-mode #timebar, html.lineup-mode #board, html.lineup-mode #card,
+html.lineup-mode #boot, html.lineup-mode #toast, html.lineup-mode #holdBanner, html.lineup-mode #nightHint,
+html.lineup-mode #modal, html.lineup-mode #broadcast { display: none !important; }
+html.lineup-mode body { background: #fff; }
+html.lineup-mode .name-tag { background: transparent; border: none; color: #111; box-shadow: none; padding: 0; font-size: 30px; }
+html.lineup-mode .name-tag .dot, html.lineup-mode .name-tag i { display: none; }
+html.lineup-mode .name-tag b { font-weight: 800; letter-spacing: 0.04em; }

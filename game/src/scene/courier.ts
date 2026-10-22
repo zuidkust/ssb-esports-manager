@@ -26,7 +26,7 @@ const COURIER_DEF: MemberDef = {
   taste: { favorites: [], favoriteMul: 1, avoid: [], avoidTags: [], drinks: '', milkTea: true },
   phoneBias: {},
   roles: [],
-  look: { height: 1.04, girth: 0.96, glasses: false, shirt: 0xf5c400, pants: 0x1a1a1a, hair: 0x241c18, skin: 0xf0c8a0, shoes: 0x111111, hairStyle: 'short' },
+  look: { height: 1.04, girth: 0.96, glasses: false, shirt: 0xf5c400, pants: 0x1a1a1a, hair: 0x241c18, skin: 0xf0c8a0, shoes: 0x111111, hairStyle: 'short', helmet: 0xf5c400 },
 };
 
 interface Knot {
@@ -49,7 +49,7 @@ export class Courier {
     const lid = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.24), mat(0x1a1a1a, { roughness: 0.4 }));
     lid.position.y = 0.18;
     bag.add(body, lid);
-    bag.position.set(0, 1.05, -0.16);
+    bag.position.set(0, 0.92, -0.32);
     this.char.root.add(bag);
     this.char.setHidden(true);
     parent.add(this.char.root);
