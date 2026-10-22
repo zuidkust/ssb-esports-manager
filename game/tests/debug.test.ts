@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyJump, clearCooldowns, forceTakeout, jumpToNextPayday, jumpToNextTakeout, nextEventAt, nextMatchAt, nextPaydayDay, setActionPoints, setCash } from '../src/debug/god';
+import { applyJump, clearCooldowns, forceTakeout, jumpToNextPayday, jumpToNextTakeout, nextEventAt, nextMatchAt, nextPaydayDay, prematchOnTheWay, setActionPoints, setCash } from '../src/debug/god';
 import { GameClock } from '../src/core/clock';
 import { createNewGame } from '../src/save/state';
 import { courierTrack } from '../src/sim/takeout';
@@ -62,7 +62,8 @@ describe('调试跳转', () => {
     expect(nextPaydayDay(1, 9 * 60)).toBe(29);
     expect(nextPaydayDay(10, 12 * 60)).toBe(29);
     expect(nextPaydayDay(29, 8 * 60)).toBe(29);
-    expect(nextPaydayDay(29, 9 * 60)).toBe(57);
+    expect(nextPaydayDay(29, 9 * 60)).toBe(29);
+    expect(nextPaydayDay(29, 9 * 60 + 1)).toBe(57);
     expect(nextEventAt(1, 9 * 60)).toEqual({ day: 1, minute: 12 * 60, label: '午饭' });
     expect(nextEventAt(1, 22 * 60)).toEqual({ day: 2, minute: 9 * 60, label: '上班' });
     expect(nextEventAt(28, 22 * 60)).toEqual({ day: 29, minute: 9 * 60, label: '发薪' });
@@ -83,6 +84,30 @@ describe('调试跳转', () => {
     expect(at2).toEqual({ day: 29, minute: 9 * 60 });
     expect(again.s.cash).toBe(cash);
     expect(again.s.eventLog.filter((e) => e.text.includes('发薪'))).toHaveLength(1);
+  });
+
+  it('发薪按钮停在这一次；再按一次还在同一天，不会跳到下个月', () => {
+    const { s, w, c } = boot(1);
+    s.cash = 0;
+    s.privateStash = 0;
+    const at = jumpToNextPayday(w, c);
+    expect(at).toEqual({ day: 29, minute: 9 * 60 });
+    expect(c.manualPause).toBe(true);
+    expect(s.unpaidMonths).toBe(1);
+    expect(s.bankrupt).toBe(false);
+    const at2 = jumpToNextPayday(w, c);
+    expect(at2).toEqual({ day: 29, minute: 9 * 60 });
+    expect(s.unpaidMonths).toBe(1);
+    expect(s.bankrupt).toBe(false);
+    expect(s.eventLog.filter((e) => e.text.includes('发薪'))).toHaveLength(1);
+  });
+
+  it('下一顿外卖不会跳过比赛夜的赛前暂停', () => {
+    expect(prematchOnTheWay(2, 10 * 60, 2, 12 * 60 + 10)).toBeNull();
+    expect(prematchOnTheWay(2, 18 * 60 + 25, 4, 12 * 60)).toEqual({ day: 2, minute: 18 * 60 + 30 });
+    const { w, c } = boot(1, 2, 18 * 60 + 25);
+    const at = jumpToNextTakeout(w, c);
+    expect(at).toEqual({ day: 2, minute: 18 * 60 + 30 });
   });
 
   it('下一顿外卖落在外卖员进门的时刻', () => {

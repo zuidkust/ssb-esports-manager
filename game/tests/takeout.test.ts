@@ -118,6 +118,9 @@ describe('外卖', () => {
     });
     expect(short.state.cash).toBe(1);
     expect(short.record.orders.filter((o) => o.delivery).every((o) => o.payer === 'self')).toBe(true);
+    const notice = short.logs.find((l) => /自己付|自付/.test(l.text));
+    expect(notice?.level).toBe('有趣');
+    expect(notice?.text).not.toMatch(/当没发生/);
   });
 
   it('公司餐补付钱，并在吃到的时候加一点心情', () => {

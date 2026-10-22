@@ -6,6 +6,12 @@ import { doorQueueSpot } from './spots';
 export const ENTRY_WALK_SPEED = 1.35;
 /** 过了后墙才露脸。墙在 z = -5。 */
 export const UNHIDE_Z = -5.15;
+/** 在岗之后最多再走这么多游戏分钟。还没到位置就直接放到座位上，避免排到 10 点还在门口。 */
+export const SEAT_GRACE_MINUTES = 5;
+
+export function needsSeatSnap(since: number, now: number): boolean {
+  return now - since >= SEAT_GRACE_MINUTES;
+}
 
 export interface XZ {
   x: number;

@@ -47,9 +47,9 @@ export function nextMatchAt(day: number, minute: number): { day: number; minute:
   return { day: nm.day, minute: MATCH_MINUTE };
 }
 
-// 已经过了当天 09:00 的发薪日，按钮去下一个；普通跳转不走这里，也就不会发薪。
+// 发薪日 09:00 这一刻还算这一次。过了 09:00 才去下一个。普通跳转不走这里，也就不会发薪。
 export function nextPaydayDay(day: number, minute: number): number {
-  if (isPayday(day) && minute < DAY_START) return day;
+  if (isPayday(day) && minute <= DAY_START) return day;
   const into = (day - 1) % MONTH_DAYS;
   const delta = into === 0 && day > 1 ? MONTH_DAYS : MONTH_DAYS - into;
   return day + delta;
@@ -58,12 +58,33 @@ export function nextPaydayDay(day: number, minute: number): number {
 export function jumpToNextPayday(world: World, clock: GameClock): { day: number; minute: number } {
   const day = nextPaydayDay(world.state.clock.day, world.state.clock.minute);
   const at = applyJump(world, clock, day, DAY_START);
+  // 停在这一次发薪上。时间继续走的话，后面的发薪日会自己结算，再点一次就会跳过一个月。
+  clock.manualPause = true;
   const paid = world.state.eventLog.some((e) => e.day === day && e.text.includes('发薪'));
   if (!paid) {
     const pay = runPayday(world.state, day);
     world.logAt(pay.bankrupt ? '重大' : '剧情', pay.text, [], DAY_START);
   }
   return at;
+}
+
+// 从现在走到目标时刻，中间如果隔着比赛夜的 18:30，就停在那场赛前暂停上。
+export function prematchOnTheWay(
+  fromDay: number,
+  fromMinute: number,
+  toDay: number,
+  toMinute: number,
+): { day: number; minute: number } | null {
+  const start = fromDay * 24 * 60 + fromMinute;
+  const limit = toDay * 24 * 60 + toMinute;
+  if (!(limit > start)) return null;
+  for (let d = fromDay; d <= toDay; d++) {
+    if (dayInfo(d).round == null) continue;
+    const stamp = d * 24 * 60 + PREMATCH_MINUTE;
+    if (stamp <= start || stamp > limit) continue;
+    return { day: d, minute: PREMATCH_MINUTE };
+  }
+  return null;
 }
 
 export interface EventBeat {
@@ -112,6 +133,7 @@ function mealRecord(world: World, day: number, meal: 'lunch' | 'dinner') {
 }
 
 // 走到下一顿还有外卖员的饭点，落在他进门的那一分钟（送达前 6 分钟）。最多找 7 天。
+// 这段路上如果有比赛夜的赛前暂停，停在 18:30，不把暂停跳过去。
 export function jumpToNextTakeout(world: World, clock: GameClock): { day: number; minute: number } | null {
   const startDay = world.state.clock.day;
   const startMin = world.state.clock.minute;
@@ -128,7 +150,9 @@ export function jumpToNextTakeout(world: World, clock: GameClock): { day: number
       const enters = (rec?.orders ?? []).filter((o) => o.delivery).map((o) => o.deliveredAt - 6);
       const future = enters.filter((t) => day > startDay || t > startMin + 1e-6);
       if (!future.length) continue;
-      return applyJump(world, clock, day, Math.min(...future));
+      const at = applyJump(world, clock, day, Math.min(...future));
+      const stop = prematchOnTheWay(startDay, startMin, at.day, at.minute);
+      return stop ? applyJump(world, clock, stop.day, stop.minute) : at;
     }
     day += 1;
   }

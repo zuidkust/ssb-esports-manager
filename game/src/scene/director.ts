@@ -7,7 +7,7 @@ import type { Desk } from './office';
 import { screenTexture, type ScreenKind } from './textures';
 import type { Stage } from './stage';
 import { Courier } from './courier';
-import { DoorEntry, type EntryCtx, type EntryGoal } from './entry';
+import { DoorEntry, needsSeatSnap, type EntryCtx, type EntryGoal } from './entry';
 import type { Spot, Venue } from './venue';
 
 const STATUS_ICON: Partial<Record<ActivityKind, string>> = {
@@ -37,6 +37,7 @@ export class Director {
   private screenTex: Record<'game' | 'game2' | 'stream' | 'idle', THREE.Texture>[];
   private shake = 0;
   private courier: Courier;
+  private routeMark = new Map<string, { key: string; since: number }>();
   // 早上进门排队：同一时间只有一个人穿过门，其余在后墙外等，名字不会叠在门口
   private doors = new DoorEntry();
 
@@ -67,11 +68,13 @@ export class Director {
     this.deskOf = Object.fromEntries(v.desks.map((d) => [d.owner, d]));
     for (const id in this.place) this.place[id] = null;
     this.doors.reset();
+    this.routeMark.clear();
   }
 
   // 读档、跳时间之后：所有人直接瞬移到应在的位置
   snapAll() {
     this.doors.reset();
+    this.routeMark.clear();
     for (const m of this.world.members) {
       this.place[m.id] = null;
       this.apply(m, true);
@@ -242,6 +245,30 @@ export class Director {
     }
   }
 
+  // 在岗超过几分钟还没走到该去的位置（多半还排在门外），直接放到位。
+  private pullToSeat(minute: number) {
+    for (const m of this.world.members) {
+      const c = this.chars[m.id];
+      const p = this.placement(m);
+      const atSeat = !!p.at && !p.hidden && !c.hidden && c.path.length === 0 && c.pos.distanceTo(p.at) <= 0.55;
+      if (!m.present || p.hidden || !p.at || atSeat) {
+        this.routeMark.delete(m.id);
+        continue;
+      }
+      const mark = this.routeMark.get(m.id);
+      if (!mark || mark.key !== p.key || minute < mark.since) {
+        this.routeMark.set(m.id, { key: p.key, since: minute });
+        continue;
+      }
+      if (!needsSeatSnap(mark.since, minute)) continue;
+      this.doors.drop(m.id);
+      c.setHidden(false);
+      c.teleport(p.at, p.facing ?? c.facing, p.pose ?? 'stand');
+      this.place[m.id] = p.key;
+      this.routeMark.delete(m.id);
+    }
+  }
+
   update(dt: number, minute: number, night: number) {
     const tnow = performance.now();
     for (const m of this.world.members) this.apply(m);
@@ -258,6 +285,7 @@ export class Director {
       c.walkTo(pumped.start.path, pumped.start.pose as PoseName, pumped.start.facing);
     }
     for (const m of this.world.members) this.chars[m.id].update(dt, tnow);
+    this.pullToSeat(minute);
     this.courier.sync(this.office, this.world.courierJob(minute), minute);
     this.courier.char.update(dt, tnow);
     this.office.update?.(dt, tnow);

@@ -41,9 +41,9 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
   root.innerHTML = `
     <button type="button" class="god-toggle" id="godToggle">调试</button>
     <div class="god-body">
-      <div class="god-row">
-        <label>第 <input id="godDay" type="number" min="1" step="1" /> 天</label>
-        <input id="godTime" type="text" inputmode="numeric" placeholder="12:00" maxlength="5" />
+      <div class="god-row god-wrap">
+        <label>第 <input id="godDay" type="number" min="1" step="1" aria-label="第几天" /> 天</label>
+        <label>时刻 <input id="godTime" type="text" inputmode="numeric" placeholder="12:00" maxlength="5" aria-label="时刻" /></label>
         <button type="button" id="godJump">跳到</button>
       </div>
       <div class="god-row god-wrap">
@@ -54,17 +54,17 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
       </div>
       <div class="god-row">
         <label class="god-grow">倍速 <b id="godRate">×1</b>
-          <input id="godSlider" type="range" min="1" max="60" step="1" value="1" />
+          <input id="godSlider" type="range" min="1" max="60" step="1" value="1" aria-label="倍速" />
         </label>
         <button type="button" id="godPause">暂停</button>
       </div>
       <p class="god-note">夜间快进大约 6 秒，不吃这个倍率。底部的正常 / ×3 / ×10 会把它清掉。</p>
       <div class="god-row">
-        <label>现金 <input id="godCash" type="number" min="0" step="1" /></label>
+        <label>现金 <input id="godCash" type="number" min="0" step="1" aria-label="现金" /></label>
         <button type="button" id="godCashSet">设置</button>
       </div>
       <div class="god-row">
-        <label>行动点 <input id="godAp" type="number" min="0" max="99" step="1" /></label>
+        <label>行动点 <input id="godAp" type="number" min="0" max="99" step="1" aria-label="行动点" /></label>
         <button type="button" id="godApSet">设置</button>
       </div>
       <div class="god-row">

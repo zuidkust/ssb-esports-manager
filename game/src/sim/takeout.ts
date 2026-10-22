@@ -183,10 +183,10 @@ const LINES: Record<string, readonly string[]> = {
     '餐补生效。外卖软件上的付款人换成了公司。',
   ],
   short: [
-    '公司账上不够报销这顿，还是大家自己付了。',
-    '老板说请，收银台没通过。这单改回自付。',
-    '餐补这个月见了底，外卖还是队员自己掏。',
-    '想报销，现金不够。群里当没发生。',
+    '公司现金不够付这顿外卖，改成大家自己付钱。',
+    '账上不够报销，这顿外卖改回队员自付。',
+    '公司现金付不出这单，大家还是自己掏了。',
+    '报销没通过：现金不够，外卖改成自己付。',
   ],
   summary: [
     '{meal}：{list}。穿黄色美团外卖服的外卖员进了{place}。',
@@ -374,14 +374,14 @@ export function resolveMeal(input: ResolveInput): ResolvedMeal {
   }
   if (hosted && drops.length) {
     logs.push({
-      level: '日常',
+      level: short ? '有趣' : '日常',
       minute: mealStart,
       text: short ? line(rand, 'short', {}) : line(rand, 'host', {}),
       ids: [],
     });
   } else if (subsidy && drops.length) {
     logs.push({
-      level: '日常',
+      level: short ? '有趣' : '日常',
       minute: mealStart,
       text: short ? line(rand, 'short', {}) : line(rand, 'subsidy', {}),
       ids: [],

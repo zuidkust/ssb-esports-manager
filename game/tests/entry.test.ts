@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OFFICE_NAV } from '../src/scene/nav';
-import { DoorEntry, ENTRY_WALK_SPEED, UNHIDE_Z, entryPath, type EntryCtx, type EntryGoal, type XZ } from '../src/scene/entry';
+import { DoorEntry, ENTRY_WALK_SPEED, SEAT_GRACE_MINUTES, UNHIDE_Z, entryPath, needsSeatSnap, type EntryCtx, type EntryGoal, type XZ } from '../src/scene/entry';
 
 const MOUTH = { x: -5.85, z: -5.7 };
 const DOOR_Z = OFFICE_NAV.nodes.D[1];
@@ -109,5 +109,11 @@ describe('进门', () => {
     expect(path.length).toBeGreaterThan(0);
     expect(path[0].z).toBeGreaterThan(pos.z - 0.05);
     expect(path.some((p) => p.z > UNHIDE_Z)).toBe(true);
+  });
+
+  it('在岗几分钟还没到座位，就该直接放过去', () => {
+    expect(needsSeatSnap(9 * 60, 9 * 60 + SEAT_GRACE_MINUTES - 0.1)).toBe(false);
+    expect(needsSeatSnap(9 * 60, 9 * 60 + SEAT_GRACE_MINUTES)).toBe(true);
+    expect(SEAT_GRACE_MINUTES).toBeLessThanOrEqual(5);
   });
 });
