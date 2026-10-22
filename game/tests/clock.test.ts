@@ -59,6 +59,35 @@ describe('GameClock', () => {
     expect(c.minute).toBeGreaterThan(600);
   });
 
+  it('调试倍率只加速白天，不写进快照，切回档位后消失', () => {
+    const fast = new GameClock({ day: 1, minute: DAY_START, speed: 'x1', paused: false });
+    fast.setDebugRate(60);
+    fast.tick(1);
+    const slow = new GameClock({ day: 1, minute: DAY_START, speed: 'x1', paused: false });
+    slow.tick(1);
+    expect(fast.minute - DAY_START).toBeGreaterThan((slow.minute - DAY_START) * 30);
+    expect(fast.snapshot()).toEqual({ day: 1, minute: fast.minute, speed: 'x1', paused: false });
+    fast.setSpeed('x1');
+    expect(fast.debugRate).toBeNull();
+
+    const night = new GameClock({ day: 1, minute: DAY_END, speed: 'x1', paused: false });
+    night.setDebugRate(60);
+    const plain = new GameClock({ day: 1, minute: DAY_END, speed: 'x1', paused: false });
+    night.tick(1);
+    plain.tick(1);
+    expect(night.minute).toBeCloseTo(plain.minute, 5);
+    expect(night.day).toBe(plain.day);
+  });
+
+  it('跳时间会丢掉比赛日的自动暂停，保留别的暂停', () => {
+    const c = new GameClock({ day: 2, minute: 18 * 60 + 30, speed: 'x1', paused: false });
+    c.hold('match-2', '比赛日');
+    c.hold('bankrupt', '破产');
+    c.releasePrefixed('match-');
+    expect(c.isHeld('match-2')).toBe(false);
+    expect(c.isHeld('bankrupt')).toBe(true);
+  });
+
   it('停靠点：走到 18:30 精确停下，解除后不会重复停', () => {
     const c = new GameClock({ day: 2, minute: 18 * 60 + 20, speed: 'x10', paused: false });
     c.tick(30, [18 * 60 + 30]);

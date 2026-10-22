@@ -6,6 +6,8 @@ import { Character, type PoseName } from './character';
 import type { Desk } from './office';
 import { screenTexture, type ScreenKind } from './textures';
 import type { Stage } from './stage';
+import { Courier } from './courier';
+import { DoorEntry, needsSeatSnap, type EntryCtx, type EntryGoal } from './entry';
 import type { Spot, Venue } from './venue';
 
 const STATUS_ICON: Partial<Record<ActivityKind, string>> = {
@@ -34,6 +36,10 @@ export class Director {
   private deskOf: Record<string, Desk> = {};
   private screenTex: Record<'game' | 'game2' | 'stream' | 'idle', THREE.Texture>[];
   private shake = 0;
+  private courier: Courier;
+  private routeMark = new Map<string, { key: string; since: number }>();
+  // 早上进门排队：同一时间只有一个人穿过门，其余在后墙外等，名字不会叠在门口
+  private doors = new DoorEntry();
 
   constructor(private stage: Stage, private office: Venue, private world: World) {
     this.screenTex = office.desks.map((_, i) => ({
@@ -52,6 +58,7 @@ export class Director {
         this.shake = Math.max(this.shake, 0.6);
       };
     }
+    this.courier = new Courier(stage.scene);
     this.setVenue(office);
   }
 
@@ -60,14 +67,28 @@ export class Director {
     this.office = v;
     this.deskOf = Object.fromEntries(v.desks.map((d) => [d.owner, d]));
     for (const id in this.place) this.place[id] = null;
+    this.doors.reset();
+    this.routeMark.clear();
   }
 
   // 读档、跳时间之后：所有人直接瞬移到应在的位置
   snapAll() {
+    this.doors.reset();
+    this.routeMark.clear();
     for (const m of this.world.members) {
       this.place[m.id] = null;
       this.apply(m, true);
     }
+  }
+
+  private entryCtx(): EntryCtx {
+    const mouth = this.office.exit;
+    const doorZ = this.office.nav.nodes[this.office.door][1];
+    return {
+      mouth: { x: mouth.x, z: mouth.z },
+      doorZ,
+      route: (from, goal, startAtDoor) => this.office.nav.route(from.x, from.z, goal.approach, goal.x, goal.z, startAtDoor ? this.office.door : undefined),
+    };
   }
 
   private placement(m: Member): Placement {
@@ -98,9 +119,9 @@ export class Director {
       case 'slack_stream':
         return seat('sit_relax', 'stream');
       case 'wait_food':
-        return seat('sit_phone', 'stream', { phone: 0x6fa8ff, key: 'desk:wait' });
+        return seat('sit_eat', 'stream', { key: 'desk:wait', cup: true });
       case 'eat':
-        return seat('sit_eat', 'stream');
+        return seat('sit_eat', 'stream', { cup: true });
       case 'nap_desk':
         return seat('sleep_desk', 'idle');
       // 模拟层已按场地设施过滤；万一设施刚被移除（读档换场地的那一帧），就留在座位上
@@ -152,6 +173,7 @@ export class Director {
     this.place[m.id] = p.key;
 
     if (p.hidden) {
+      this.doors.drop(m.id);
       const out = this.office.exit;
       if (instant || c.hidden) {
         c.setHidden(true);
@@ -165,17 +187,22 @@ export class Director {
       return;
     }
     const at = p.at!, pose = p.pose!, facing = p.facing!;
+    const goal: EntryGoal = { approach: p.approach ?? this.office.door, x: at.x, z: at.z, pose, facing };
     if (instant) {
+      this.doors.drop(m.id);
       c.setHidden(false);
       c.teleport(at, facing, pose);
       return;
     }
-    if (c.hidden || prevKey === 'out') {
-      // 从门外进来
-      const out = this.office.exit;
-      c.setHidden(false);
-      c.teleport(out, Math.PI, 'walk');
-      c.walkTo(this.office.nav.route(out.x, out.z, p.approach!, at.x, at.z, this.office.door), pose, facing);
+    const order = this.doors.claim(m.id, { x: c.pos.x, z: c.pos.z }, c.hidden, prevKey === 'out' || prevKey == null, goal, this.entryCtx());
+    if (order.kind === 'queue') {
+      c.teleport(new THREE.Vector3(order.at.x, 0, order.at.z), Math.PI, 'stand');
+      c.setHidden(true);
+      return;
+    }
+    if (order.kind === 'hold') return;
+    if (order.kind === 'enter') {
+      c.walkTo(order.path, pose, facing);
       return;
     }
     if (c.pos.distanceTo(at) < 0.9) {
@@ -218,10 +245,49 @@ export class Director {
     }
   }
 
+  // 在岗超过几分钟还没走到该去的位置（多半还排在门外），直接放到位。
+  private pullToSeat(minute: number) {
+    for (const m of this.world.members) {
+      const c = this.chars[m.id];
+      const p = this.placement(m);
+      const atSeat = !!p.at && !p.hidden && !c.hidden && c.path.length === 0 && c.pos.distanceTo(p.at) <= 0.55;
+      if (!m.present || p.hidden || !p.at || atSeat) {
+        this.routeMark.delete(m.id);
+        continue;
+      }
+      const mark = this.routeMark.get(m.id);
+      if (!mark || mark.key !== p.key || minute < mark.since) {
+        this.routeMark.set(m.id, { key: p.key, since: minute });
+        continue;
+      }
+      if (!needsSeatSnap(mark.since, minute)) continue;
+      this.doors.drop(m.id);
+      c.setHidden(false);
+      c.teleport(p.at, p.facing ?? c.facing, p.pose ?? 'stand');
+      this.place[m.id] = p.key;
+      this.routeMark.delete(m.id);
+    }
+  }
+
   update(dt: number, minute: number, night: number) {
     const tnow = performance.now();
     for (const m of this.world.members) this.apply(m);
+    const ctx = this.entryCtx();
+    const pos: Record<string, { x: number; z: number; hidden: boolean }> = {};
+    for (const m of this.world.members) {
+      const c = this.chars[m.id];
+      pos[m.id] = { x: c.pos.x, z: c.pos.z, hidden: c.hidden };
+    }
+    const pumped = this.doors.pump(pos, ctx);
+    for (const id of pumped.unhide) this.chars[id].setHidden(false);
+    if (pumped.start) {
+      const c = this.chars[pumped.start.id];
+      c.walkTo(pumped.start.path, pumped.start.pose as PoseName, pumped.start.facing);
+    }
     for (const m of this.world.members) this.chars[m.id].update(dt, tnow);
+    this.pullToSeat(minute);
+    this.courier.sync(this.office, this.world.courierJob(minute), minute);
+    this.courier.char.update(dt, tnow);
     this.office.update?.(dt, tnow);
 
     const q = this.stage.quality;
@@ -240,9 +306,9 @@ export class Director {
       }
     }
     // 有人经过时开门；有人在冰箱前时开冰箱门
-    const chars = Object.values(this.chars);
+    const chars = [...Object.values(this.chars), this.courier.char];
     const [dx, dz] = this.office.nav.nodes[this.office.door];
-    const nearDoor = chars.some((c) => !c.hidden && Math.hypot(c.pos.x - dx, c.pos.z - (dz - 0.6)) < 1.25);
+    const nearDoor = chars.some((c) => !c.hidden && Math.hypot(c.pos.x - dx, c.pos.z - (dz - 0.6)) < 1.35);
     const dp = this.office.doorPivot;
     dp.rotation.y += ((nearDoor ? -1.35 : 0) - dp.rotation.y) * Math.min(1, dt * 4);
     const fd = this.office.fridgeDoor, fs = this.office.spots.fridge;

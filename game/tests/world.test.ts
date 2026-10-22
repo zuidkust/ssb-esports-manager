@@ -69,13 +69,36 @@ describe('刷手机细分', () => {
   });
 });
 
+describe('晚饭', () => {
+  it('非比赛日 18:00 在岗的人都在吃', () => {
+    const s = createNewGame(1);
+    s.clock.day = 1;
+    s.clock.minute = 18 * 60;
+    const w = new World(s);
+    w.update(18 * 60, 0, true);
+    const present = w.members.filter((m) => m.present);
+    expect(present.length).toBe(6);
+    for (const m of present) expect(m.activity.kind).toBe('eat');
+  });
+});
+
 describe('饭点', () => {
-  it('不再外出吃饭：12:20 所有人都在工位等饭或吃饭', () => {
-    for (const seed of [1, 2, 3, 4, 5]) {
-      const { trace } = simulateDay(seed, 3);
+  it('饭点有人等外卖或在吃，没有人外出吃饭', () => {
+    let eating = 0;
+    let delivered = 0;
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
+    for (const seed of seeds) {
+      const { trace, w } = simulateDay(seed, 3);
       const kinds = trace[12 * 60 + 20 - DAY_START].split(',');
-      expect(kinds.every((k) => k === 'eat' || k === 'wait_food')).toBe(true);
+      expect(kinds.some((k) => k === 'out')).toBe(false);
+      expect(w.state.eventLog.some((e) => e.text.includes('出去吃'))).toBe(false);
+      eating += kinds.filter((k) => k === 'eat' || k === 'wait_food').length;
+      delivered += w.state.meals.lunch?.orders.filter((o) => o.delivery).length ?? 0;
     }
+    const avg = eating / seeds.length;
+    expect(avg).toBeGreaterThan(1);
+    expect(avg).toBeLessThan(5);
+    expect(delivered / seeds.length).toBeGreaterThan(1.5);
   });
 });
 
@@ -133,6 +156,36 @@ describe('性格：爱睡觉', () => {
       return n;
     };
     expect(naps(100)).toBeGreaterThan(naps(0) * 2);
+  });
+});
+
+describe('场地文案', () => {
+  it('称呼跟着场地等级走', () => {
+    const s = createNewGame(1);
+    const w = new World(s);
+    expect(w.placeName).toBe('网吧角落');
+    s.venueLevel = 1;
+    expect(w.placeName).toBe('小办公室');
+    s.venueLevel = 2;
+    expect(w.placeName).toBe('电竞基地');
+  });
+
+  it('赛前会文案跟着场地和白板走', () => {
+    const text = (setup?: (s: GameState) => void) => simulateDay(4, 2, setup).s.eventLog.map((e) => e.text).join('\n');
+    const cafe = text();
+    expect(cafe).toMatch(/站到自己机位后面/);
+    expect(cafe).not.toMatch(/白板/);
+    expect(text((s) => {
+      s.venueLevel = 1;
+      s.facilities = ['whiteboard'];
+    })).toMatch(/白板前分开站好/);
+    const bare = text((s) => {
+      s.venueLevel = 1;
+      s.facilities = [];
+    });
+    expect(bare).toMatch(/空地上分开站好/);
+    expect(bare).toMatch(/小办公室安静下来/);
+    expect(bare).not.toMatch(/白板/);
   });
 });
 

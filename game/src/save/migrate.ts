@@ -1,6 +1,7 @@
 // 存档版本迁移：每次改存档结构，SAVE_VERSION +1，并在 MIGRATIONS 里补一个 “旧版本 → 新版本” 函数
+import { DAY_START } from '../core/clock';
 import { ROSTER_BY_ID } from '../data/roster';
-import { SAVE_VERSION, type GameState } from './state';
+import { emptyFlags, emptyMeals, emptyRecord, SAVE_VERSION, type GameState } from './state';
 
 type AnySave = Record<string, unknown> & { version?: unknown };
 
@@ -19,6 +20,29 @@ const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
       : s.roster,
     version: 2,
   }),
+  // v3：外卖当日记录、赞助进度、发薪标记、行动点所属日；战队成立固定在第 1 天早上
+  2: (s) => {
+    const clock = s.clock as { day?: number } | undefined;
+    const day = typeof clock?.day === 'number' ? clock.day : 1;
+    const log = Array.isArray(s.eventLog) ? s.eventLog : [];
+    for (const e of log) {
+      if (e && typeof e === 'object' && typeof (e as { text?: unknown }).text === 'string' && (e as { text: string }).text.includes('战队今天正式成立')) {
+        (e as { day: number; minute: number }).day = 1;
+        (e as { day: number; minute: number }).minute = DAY_START;
+      }
+    }
+    return {
+      ...s,
+      eventLog: log,
+      bankrupt: typeof s.bankrupt === 'boolean' ? s.bankrupt : false,
+      // 旧档没有“行动点是哪一天填的”。记 0，下一次进入当天会按上限补齐（含比赛日 +1），而不是把今天标成已经填过。
+      apDay: typeof s.apDay === 'number' ? s.apDay : 0,
+      meals: s.meals ?? emptyMeals(day),
+      record: s.record ?? emptyRecord(),
+      flags: s.flags ?? emptyFlags(),
+      version: 3,
+    };
+  },
 };
 
 export class SaveError extends Error {}

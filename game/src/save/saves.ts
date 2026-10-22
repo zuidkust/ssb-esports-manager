@@ -22,6 +22,18 @@ export function describeState(s: GameState): string {
   return `第 ${d.season} 赛季 第 ${d.dayInSeason} 天 ${d.weekdayCn} ${fmtHM(s.clock.minute)}`;
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+// 存档列表和导出文件名用本地墙钟。不要用 toISOString（那是 UTC，文件名会差几个小时）。
+export function formatWallTime(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+export function formatWallStamp(ms: number): string {
+  return formatWallTime(ms).replace(/[-: ]/g, '');
+}
+
 export class SaveManager {
   constructor(private store: KeyValueStore) {}
 
@@ -66,10 +78,9 @@ export class SaveManager {
     return JSON.stringify({ ...state, savedAt: Date.now() }, null, 2);
   }
 
-  static exportFilename(state: GameState): string {
+  static exportFilename(state: GameState, now = Date.now()): string {
     const d = dayInfo(state.clock.day);
-    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-    return `SSB电竞经理-存档-S${d.season}D${d.dayInSeason}-${stamp}.json`;
+    return `SSB电竞经理-存档-S${d.season}D${d.dayInSeason}-${formatWallStamp(now)}.json`;
   }
 
   // 解析导入文件；格式不对会抛 SaveError，界面负责提示

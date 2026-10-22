@@ -1,6 +1,7 @@
 // 人物卡片：此刻在干嘛、状态、能力（7 属性）、性格、交情
 import { ABILITY_CN, ABILITY_KEYS, PERSONA_KEYS, POSITION_CN } from '../data/roster';
 import { fmtHM } from '../core/clock';
+import { visibleLogText } from './board';
 import { STATUS_KEYS } from '../save/state';
 import type { World } from '../sim/world';
 
@@ -63,7 +64,7 @@ export class Card {
       <div class="card-sec"><h4>交情</h4>
         <div class="card-events">${bonds.map(({ o, v }) => `<div>${o.name}　<b>${tier(v)}</b>（${Math.round(v)}）</div>`).join('')}</div></div>
       <div class="card-sec"><h4>最近动态</h4>
-        <div class="card-events">${mine.length ? mine.map((e) => `<div><time>${fmtHM(e.minute)}</time>${e.text}</div>`).join('') : '<div style="color:var(--dim)">还没有他的动态</div>'}</div></div>`;
+        <div class="card-events">${mine.length ? mine.map((e) => `<div><time>${fmtHM(e.minute)}</time>${visibleLogText(e.minute, e.text)}</div>`).join('') : '<div style="color:var(--dim)">还没有他的动态</div>'}</div></div>`;
     if (html !== this.lastHtml) {
       this.el.innerHTML = html;
       this.lastHtml = html;

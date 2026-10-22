@@ -25,6 +25,9 @@ const cases = process.argv[2]
       { name: '09-night-2230', q: 't=22:30&day=3&paused=1' },
       { name: '10-office-1030', q: 'venue=1&t=10:30&day=3&paused=1' },
       { name: '11-office-nap-1350', q: 'venue=1&t=13:50&day=3&paused=1' },
+      { name: '12-lunch-courier', q: 't=12:10&day=3&paused=1' },
+      { name: '13-manage', q: 't=10:30&day=3&paused=1', manage: true },
+      { name: '14-snack', q: 't=10:40&day=3&paused=1', buy: 'snack' },
     ];
 
 const gpuArgs = process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--enable-gpu', '--ignore-gpu-blocklist'];
@@ -37,6 +40,9 @@ for (const c of cases) {
   page.on('console', (m) => m.type() === 'error' && errors.push(`${c.name}: ${m.text()}`));
   await page.goto(`${html}${c.q ? '?' + c.q : ''}`);
   await new Promise((r) => setTimeout(r, 2500));
+  if (c.buy) await page.evaluate((id) => __ssb.buy(id), c.buy);
+  if (c.manage) await page.evaluate(() => __ssb.showManage());
+  if (c.buy || c.manage) await new Promise((r) => setTimeout(r, 600));
   await page.screenshot({ path: path.join(out, `${c.name}.png`) });
   await page.close();
 }

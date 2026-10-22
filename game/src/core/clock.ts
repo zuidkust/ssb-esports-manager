@@ -28,6 +28,7 @@ export interface ClockState {
 export interface TickResult {
   advanced: number; // 本帧推进的游戏分钟
   newDay: boolean;
+  used: number; // 实际消化掉的现实秒（停靠点或单次推进上限会提前停）
 }
 
 export class GameClock {
@@ -35,6 +36,8 @@ export class GameClock {
   minute: number;
   speed: SpeedId;
   manualPause: boolean;
+  // 调试面板的自由倍速（1–60）。不进存档；切回底部 1/2/3 档位时清掉。夜间快进不看这个数。
+  debugRate: number | null = null;
   private holds = new Map<string, string>(); // 自动暂停：原因 id → 说明
 
   constructor(s: ClockState) {
@@ -64,12 +67,29 @@ export class GameClock {
     this.holds.delete(id);
   }
 
+  // 跳时间时丢掉「match-第几天」这类自动暂停，避免停在已经过去的比赛日
+  releasePrefixed(prefix: string): void {
+    for (const id of [...this.holds.keys()]) if (id.startsWith(prefix)) this.holds.delete(id);
+  }
+
   isHeld(id: string): boolean {
     return this.holds.has(id);
   }
 
+  // 走路和进门跟着时间档位走。×10 时如果还按现实速度排队，名册已经全员在岗，人却还藏在门外。
+  get moveScale(): number {
+    return this.debugRate ?? SPEEDS[this.speed].mult;
+  }
+
   setSpeed(s: SpeedId): void {
     this.speed = s;
+    this.debugRate = null;
+    this.manualPause = false;
+  }
+
+  setDebugRate(mult: number): void {
+    const n = Math.round(Number.isFinite(mult) ? mult : 1);
+    this.debugRate = Math.max(1, Math.min(60, n));
     this.manualPause = false;
   }
 
@@ -84,15 +104,17 @@ export class GameClock {
   }
 
   // realDt：现实秒。按“白天 → 22:00 → 午夜 → 09:00”分段推进，夜间固定快进
-  // stopAt：当天的这些分钟是停靠点，走到就停在那里（本帧剩余时间作废），由调用方决定是否暂停
+  // stopAt：当天的这些分钟是停靠点，走到就停在那里（本次调用的剩余时间作废），由调用方决定是否暂停
+  // 单次调用最多跨过几个边界，避免一帧把好几天跳完；主循环用 drainRealtime 把积压的现实时间分批喂进来
   tick(realDt: number, stopAt: number[] = []): TickResult {
-    if (this.paused) return { advanced: 0, newDay: false };
+    if (this.paused || !(realDt > 0)) return { advanced: 0, newDay: false, used: 0 };
     let remaining = realDt;
     let advanced = 0;
     let newDay = false;
     for (let guard = 0; guard < 4 && remaining > 1e-9; guard++) {
       const night = this.night;
-      const rate = night ? NIGHT_RATE : BASE_RATE * SPEEDS[this.speed].mult;
+      const mult = this.debugRate ?? SPEEDS[this.speed].mult;
+      const rate = night ? NIGHT_RATE : BASE_RATE * mult;
       let boundary = !night ? DAY_END : this.minute >= DAY_END ? 24 * 60 : DAY_START;
       let isStop = false;
       for (const s of stopAt) {
@@ -105,6 +127,7 @@ export class GameClock {
       if (need > remaining) {
         this.minute += remaining * rate;
         advanced += remaining * rate;
+        remaining = 0;
         break;
       }
       advanced += boundary - this.minute;
@@ -117,7 +140,7 @@ export class GameClock {
         newDay = true;
       }
     }
-    return { advanced, newDay };
+    return { advanced, newDay, used: realDt - remaining };
   }
 
   snapshot(): ClockState {

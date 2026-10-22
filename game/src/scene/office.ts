@@ -6,6 +6,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import type { FacilityId } from '../data/facilities';
 import type { MemberDef } from '../data/roster';
 import { OFFICE_NAV } from './nav';
+import { deliveryStandZ, officeMeetingSpots } from './spots';
 import type { Spot, Venue } from './venue';
 import {
   artTexture, floorTexture, plasterTexture, plinthLabel, posterTexture, rugTexture, screenTexture, slatTexture, SkyTexture, WhiteboardTexture,
@@ -316,7 +317,7 @@ function buildDesk(parent: THREE.Object3D, x: number, z: number, accent: number,
   return {
     group: g, chair, chairBaseZ: chairZ, screens, screenLight, rgbMat, kbGlow, pcGlow, lamp,
     seat: new THREE.Vector3(x, 0, z + chairZ - 0.05),
-    standSpot: new THREE.Vector3(x, 0, z + 0.62),
+    standSpot: new THREE.Vector3(x, 0, deliveryStandZ(z, chairZ)),
     jiggle: 0, monitor: mg,
   };
 }
@@ -662,16 +663,20 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: Reado
   rug2.position.set(4.6, 0.005, 2.7);
   rug2.receiveShadow = true;
   root.add(rug2);
-  for (const [bx, bz, c] of [[3.8, 3.2, 0xb5643a], [5.4, 2.2, 0x4d5b70]] as const) {
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.45, 24, 16), mat(c, { roughness: 1 }));
-    b.scale.set(1, 0.6, 1);
-    b.position.set(bx, 0.27, bz);
-    b.castShadow = b.receiveShadow = true;
-    root.add(b);
-    const dent = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 10), mat(c, { roughness: 1 }));
-    dent.scale.set(1, 0.35, 1);
-    dent.position.set(bx, 0.52, bz);
-    root.add(shadow(dent));
+  // 两只懒人沙发跟着「沙发」设施。没买就不放；地毯和矮桌还在。
+  if (fac.has('sofa')) {
+    for (const [bx, bz, c] of [[3.8, 3.2, 0xb5643a], [5.4, 2.2, 0x4d5b70]] as const) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.45, 24, 16), mat(c, { roughness: 1 }));
+      b.name = 'beanbag';
+      b.scale.set(1, 0.6, 1);
+      b.position.set(bx, 0.27, bz);
+      b.castShadow = b.receiveShadow = true;
+      root.add(b);
+      const dent = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 10), mat(c, { roughness: 1 }));
+      dent.scale.set(1, 0.35, 1);
+      dent.position.set(bx, 0.52, bz);
+      root.add(shadow(dent));
+    }
   }
   lathe(root, [[0, 0], [0.3, 0], [0.33, 0.26], [0.34, 0.3], [0, 0.3]], mat(0xd9cbb4, { roughness: 0.8 }), 4.6, 0, 2.75, 28);
   rbox(root, 0.3, 0.04, 0.2, mat(0x2b2b30), 4.6, 0.3, 2.75, 0.015, 0.5);
@@ -686,16 +691,9 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: Reado
   // ── 走位用的关键位置 ──
   const drinkAt = [new THREE.Vector3(2.05, 0, -4.05), new THREE.Vector3(2.6, 0, -3.75), new THREE.Vector3(1.5, 0, -3.75)];
   const meeting = (i: number): Spot => {
-    if (wb) {
-      // 围着白板站成扇形，间距约 0.8 米
-      const a = -1.05 + i * 0.42;
-      const at = new THREE.Vector3(-6.95 + 1.95 * Math.cos(a), 0, -1.6 + 1.95 * Math.sin(a));
-      return { at, approach: 'WB', facing: facingTo(at, -7, -1.6), lead: i === 0 };
-    }
-    // 没有白板：在中间空地围一圈
-    const a = (i / 6) * Math.PI * 2;
-    const at = new THREE.Vector3(0.0 + Math.cos(a) * 0.9, 0, 1.8 + Math.sin(a) * 0.9);
-    return { at, approach: 'C', facing: facingTo(at, 0.0, 1.8), lead: i === 0 };
+    const spots = officeMeetingSpots(fac.has('whiteboard'));
+    const s = spots[Math.max(0, Math.min(spots.length - 1, i))];
+    return { at: new THREE.Vector3(s.x, 0, s.z), approach: s.approach, facing: s.facing, lead: s.lead };
   };
   const spots: Venue['spots'] = {
     snack: fac.has('snack') ? [3.4, 3.95, 4.7].map((x) => ({ at: new THREE.Vector3(x, 0, -4.2), approach: 'SN', facing: Math.PI })) : undefined,

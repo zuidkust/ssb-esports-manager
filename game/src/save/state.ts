@@ -1,11 +1,14 @@
-// 存档数据结构（设计文档第 12 章）。M1 只真正用到时间、成员状态和日常动态，其余字段先按设计预留
+// 存档数据结构（设计文档第 12 章）
 import { dayInfo, MATCH_MINUTE, PREMATCH_MINUTE } from '../core/calendar';
 import type { ClockState } from '../core/clock';
 import { DAY_START } from '../core/clock';
+import { START_CASH, START_STASH } from '../data/economy';
 import type { Tier } from '../data/leagues';
 import { ROSTER, INITIAL_BOND, type AbilityKey, type PersonaKey } from '../data/roster';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+
+export const FOUNDING_TEXT = '老板在网吧包下了角落的 6 台机器，SSB 战队今天正式成立。目标：打出网吧联赛。';
 
 export const STATUS_KEYS = ['体力', '心情', '专注', '手感', '饥饿', '疲劳', '压力'] as const;
 export type StatusKey = (typeof STATUS_KEYS)[number];
@@ -39,6 +42,102 @@ export interface LogEntry {
   ids: string[];
 }
 
+export type Payer = 'self' | 'host' | 'subsidy';
+
+export interface MealOrder {
+  memberId: string;
+  dishId: string;
+  price: number;
+  payer: Payer;
+  deliveredAt: number;
+  eatUntil: number;
+  delivery: boolean; // false = 泡面 / 煎饼，没有外卖员
+}
+
+export interface StatusDelta {
+  id: string;
+  体力?: number;
+  心情?: number;
+  专注?: number;
+  手感?: number;
+  饥饿?: number;
+  疲劳?: number;
+  压力?: number;
+}
+
+export interface SocialDelta {
+  type: 'bond' | 'knot';
+  a: string;
+  b: string;
+  n?: number;
+  cause?: string;
+}
+
+export interface MealEffect {
+  at: number;
+  status: StatusDelta[];
+  social: SocialDelta[];
+  applied: boolean;
+}
+
+export interface MealRecord {
+  meal: 'lunch' | 'dinner';
+  orders: MealOrder[];
+  effects: MealEffect[];
+  chains: string[];
+}
+
+export interface MorningSnack {
+  memberId: string;
+  dishId: string;
+}
+
+export interface MealsState {
+  day: number;
+  morning: MorningSnack[];
+  lunch?: MealRecord;
+  dinner?: MealRecord;
+}
+
+export interface GameRecord {
+  wins: number;
+  losses: number;
+  huangmenji: number;
+  bestRank: number | null;
+  lastMatchWon: boolean | null;
+  citySafe: boolean;
+  reachedNational: boolean;
+  nationalTop4: boolean;
+  worldQualified: boolean;
+  worldTop4: boolean;
+  fame: number;
+}
+
+export interface DayFlags {
+  restDay: number;
+  overtimeDay: number;
+  hostDay: number;
+  hostMeal: '' | 'lunch' | 'dinner';
+  duoDay: number;
+  duoA: string;
+  duoB: string;
+}
+
+export function emptyRecord(): GameRecord {
+  return {
+    wins: 0, losses: 0, huangmenji: 0, bestRank: null, lastMatchWon: null,
+    citySafe: false, reachedNational: false, nationalTop4: false, worldQualified: false, worldTop4: false, fame: 0,
+  };
+}
+
+export function emptyFlags(): DayFlags {
+  return { restDay: 0, overtimeDay: 0, hostDay: 0, hostMeal: '', duoDay: 0, duoA: '', duoB: '' };
+}
+
+export function emptyMeals(day = 0): MealsState {
+  return { day, morning: [] };
+}
+
 export interface GameState {
   version: number;
   seed: number;
@@ -59,9 +158,14 @@ export interface GameState {
   cooldowns: Record<string, number>;
   actionHistory: { action: string; target?: string; day: number }[];
   actionPoints: number;
+  apDay: number; // 行动点是哪一天填的，读档同一天不重置
   eventLog: LogEntry[];
   nextLogId: number;
   sponsors: string[];
+  bankrupt: boolean;
+  meals: MealsState;
+  record: GameRecord;
+  flags: DayFlags;
   meta: { seasonCount: number; scores: number[]; ngPlus: number; worldChampion: boolean };
 }
 
@@ -88,9 +192,9 @@ export function createNewGame(seed = Math.floor(Math.random() * 2 ** 31)): GameS
     savedAt: now,
     clock: { day: 1, minute: DAY_START, speed: 'x1', paused: false },
     season: { tier: 'netcafe', round: 0, table: {} },
-    cash: 5000,
+    cash: START_CASH,
     insight: 0,
-    privateStash: 20000,
+    privateStash: START_STASH,
     unpaidMonths: 0,
     venueLevel: 0,
     facilities: [],
@@ -101,9 +205,14 @@ export function createNewGame(seed = Math.floor(Math.random() * 2 ** 31)): GameS
     cooldowns: {},
     actionHistory: [],
     actionPoints: 3,
-    eventLog: [],
-    nextLogId: 1,
+    apDay: 0,
+    eventLog: [{ id: 1, day: 1, minute: DAY_START, level: '剧情', text: FOUNDING_TEXT, ids: [] }],
+    nextLogId: 2,
     sponsors: [],
+    bankrupt: false,
+    meals: emptyMeals(0),
+    record: emptyRecord(),
+    flags: emptyFlags(),
     meta: { seasonCount: 0, scores: [], ngPlus: 0, worldChampion: false },
   };
 }

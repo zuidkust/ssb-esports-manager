@@ -12,6 +12,17 @@ function esc(s: string) {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
 
+/** 新的在上。按天、时刻、写入顺序排，跳时间之后不会把早先的条目甩到另一天的下面。 */
+export function orderedLog(entries: LogEntry[]): LogEntry[] {
+  return [...entries].sort((a, b) => b.day - a.day || b.minute - a.minute || b.id - a.id);
+}
+
+/** 看板已经单独显示时刻，正文开头再写一遍就会连成 09:0009:00。 */
+export function visibleLogText(minute: number, text: string): string {
+  const clock = fmtHM(minute);
+  return text.replace(new RegExp(`^${clock}(?:[，,：:\\s]+)?`), '');
+}
+
 export class Board {
   private feed = document.getElementById('feed')!;
   private count = document.getElementById('boardCount')!;
@@ -51,7 +62,7 @@ export class Board {
       } else out.push(...foldRun.map((e) => this.item(e)));
       foldRun = [];
     };
-    for (const e of this.entries.slice(0, 160)) {
+    for (const e of orderedLog(this.entries).slice(0, 160)) {
       if (e.day !== lastDay) {
         flush();
         const d = dayInfo(e.day);
@@ -66,12 +77,13 @@ export class Board {
     }
     flush();
     this.feed.innerHTML = out.join('') || '<div class="day-divider">还没有动态</div>';
-    const today = this.entries.length ? this.entries.filter((e) => e.day === this.entries[0].day).length : 0;
+    const newest = this.entries.reduce<LogEntry | null>((a, b) => (!a || b.id > a.id ? b : a), null);
+    const today = newest ? this.entries.filter((e) => e.day === newest.day).length : 0;
     this.count.textContent = `今日 ${today} 条`;
   }
 
   private item(e: LogEntry) {
-    const text = esc(e.text).replace(NAME_RE, '<span class="who name-link">$1</span>');
+    const text = esc(visibleLogText(e.minute, e.text)).replace(NAME_RE, '<span class="who name-link">$1</span>');
     if (e.level === '日常') return `<div class="ev daily"><span class="time">${fmtHM(e.minute)}</span><span class="text">${text}</span></div>`;
     return `<div class="ev ${LEVEL_CLASS[e.level]}"><div class="meta"><span class="time">${fmtHM(e.minute)}</span><span class="tag">${e.level}</span></div><div class="text">${text}</div></div>`;
   }

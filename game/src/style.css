@@ -149,7 +149,14 @@ button { font-family: inherit; }
 .bubble.emoji { font-size: 20px; padding: 4px 8px; background: rgba(255, 253, 248, 0.95); }
 
 /* ── 人物卡片 ── */
-#card { left: 22px; top: 110px; width: 330px; max-height: calc(100% - 200px); z-index: 5; overflow-y: auto; padding: 16px; animation: cardIn 0.3s ease-out; scrollbar-width: thin; }
+#card {
+  left: 22px; top: auto; bottom: 72px; width: 260px; max-height: min(52vh, 520px);
+  z-index: 5; overflow-y: auto; padding: 12px 14px; animation: cardIn 0.3s ease-out; scrollbar-width: thin;
+}
+#card .card-name { font-size: 17px; }
+#card .stats-row { gap: 4px; }
+#card .stat { padding: 6px 2px; }
+#card .stat b { font-size: 14px; }
 @keyframes cardIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
 .card-head { display: flex; gap: 12px; align-items: center; }
 .avatar { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; font-weight: 800; color: #fff; flex: none; }
@@ -310,17 +317,30 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .day-divider { text-align: center; font-size: 11px; color: var(--dim); margin: 12px 0 8px; display: flex; align-items: center; gap: 8px; }
 .day-divider::before, .day-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
-.modal-back { position: absolute; inset: 0; z-index: 40; background: rgba(5,8,14,0.55); display: grid; place-items: center; backdrop-filter: blur(3px); }
-.modal { position: relative; width: min(520px, 92vw); padding: 20px 22px; }
+.modal-back {
+  position: absolute; inset: 0; z-index: 40; background: rgba(5,8,14,0.55); backdrop-filter: blur(3px);
+  display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px 24px; overflow: auto;
+}
+.modal { position: relative; width: min(520px, 92vw); padding: 20px 22px; max-height: min(78vh, 760px); overflow: auto; scrollbar-gutter: stable; }
+.modal.manage { width: min(720px, 94vw); }
+.ledger { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.ledger span { padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 12px; color: var(--muted); }
+.ledger b { color: var(--text); font-weight: 600; }
+.act-list { display: flex; flex-direction: column; gap: 6px; }
+.act { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); }
+.act small { display: block; color: var(--muted); font-size: 11px; line-height: 1.45; margin-top: 2px; }
+.act .btn { flex: none; }
+.modal select { background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .modal h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: 1px; }
 .modal h3 { margin: 18px 0 8px; font-size: 12px; color: var(--muted); letter-spacing: 1px; font-weight: 600; }
 .modal p { color: #cfd6e4; font-size: 13px; line-height: 1.6; margin: 6px 0; }
 .modal .sub { color: var(--muted); font-size: 12px; }
 .modal .row { margin-top: 10px; }
-.slot { display: grid; grid-template-columns: 64px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); margin-bottom: 6px; font-size: 13px; }
+.slot { display: grid; grid-template-columns: 64px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); margin-bottom: 6px; font-size: 13px; min-height: 52px; }
 .slot b { font-size: 12px; color: var(--muted); font-weight: 600; }
-.slot small { display: block; color: var(--dim); font-size: 11px; margin-top: 2px; }
+.slot small { display: block; color: var(--dim); font-size: 11px; margin-top: 2px; min-height: 14px; }
 .slot .btn { flex: none; padding: 6px 12px; }
+.slot-ghost { visibility: hidden; pointer-events: none; }
 .warn { padding: 8px 12px; border-radius: 10px; background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3); color: #ffd0d0; font-size: 12px; line-height: 1.5; margin-top: 10px; }
 .title-logo { width: 64px; height: 64px; font-size: 32px; border-radius: 16px; margin-bottom: 12px; }
 .lineup { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
@@ -341,3 +361,34 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 }
 @media (min-width: 761px) { #nightHint { left: calc(50% - 200px); } }
 @media (max-width: 760px) { .res { width: 100%; } .res-item { font-size: 11px; padding: 4px 9px; } }
+
+/* 调试面板：只有 ?debug=1 才会创建 #god，平时这些规则不作用在任何元素上 */
+#god {
+  position: absolute; left: 16px; top: 78px; z-index: 46; width: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35); backdrop-filter: blur(14px); font-size: 12px;
+}
+#god .god-toggle {
+  background: transparent; color: var(--muted); border: 0; padding: 6px 10px; cursor: pointer; font-size: 12px;
+}
+#god:not(.collapsed) { width: 292px; }
+#god.collapsed .god-body { display: none; }
+#god .god-body { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+#god .god-row { display: flex; gap: 6px; align-items: center; }
+#god .god-wrap { flex-wrap: wrap; }
+#god .god-grow { flex: 1; }
+#god label { display: flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
+#god input, #god select {
+  background: rgba(255, 255, 255, 0.06); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 6px; font: inherit; min-width: 0;
+}
+#god input[type="number"] { width: 72px; }
+#god input[type="text"] { width: 64px; }
+#god input[type="range"] { width: 100%; padding: 0; }
+#god select { flex: 1; max-width: 100%; }
+#god button {
+  background: rgba(255, 255, 255, 0.07); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 8px; font: inherit; cursor: pointer; white-space: nowrap;
+}
+#god button:hover { background: rgba(255, 255, 255, 0.13); }
+#god .god-note { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.4; }
