@@ -1,14 +1,16 @@
 // 白底六人站位（?lineup=1）：和稿 B 锁定图同排列、同角度，站在八角彩色底座上，用来逐个对照造型
 import * as THREE from 'three';
+import { HEAD_MID, STAND_TOP, fromLegacyScale } from './body';
 import type { Character } from './character';
 import type { Stage } from './stage';
 import type { Lighting } from './lighting';
 import type { Venue } from './venue';
 
 export const LINEUP_ORDER = ['aji', 'dangdeng', 'gouliang', 'dibi', 'diaolong', 'piegan'];
-const SPACING = 1.0;
-const BASE_R = 0.42;
-const BASE_H = 0.1;
+// 间距和底座跟着人一起缩，六人仍是一排手办，不会叠在一起
+const SPACING = fromLegacyScale(1.15);
+const BASE_R = fromLegacyScale(0.42);
+const BASE_H = fromLegacyScale(0.1);
 
 export function setupLineup(stage: Stage, venue: Venue, lighting: Lighting, chars: Record<string, Character>) {
   document.documentElement.classList.add('lineup-mode');
@@ -82,25 +84,40 @@ export function setupLineup(stage: Stage, venue: Venue, lighting: Lighting, char
   const focus = new URLSearchParams(location.search).get('focus');
   const fi = focus ? LINEUP_ORDER.indexOf(focus) : -1;
   const q = new URLSearchParams(location.search);
+  const feet = BASE_H;
+  const headY = feet + HEAD_MID;
   if (q.get('heads') === '1') {
-    // 六个头一排：?lineup=1&heads=1（看发型、五官）
-    stage.camera.position.set(0, 1.7, 4.3);
-    c.target.set(0, 1.66, 0);
+    // 六个头一排：?lineup=1&heads=1（看发型、五官、配饰）
+    const span = SPACING * (LINEUP_ORDER.length - 1) + fromLegacyScale(0.7);
+    const dist = fitWidth(stage, span);
+    stage.camera.position.set(0, headY + fromLegacyScale(0.04), dist);
+    c.target.set(0, headY, 0);
   } else if (fi >= 0) {
     // 单人近景：?lineup=1&focus=aji；加 &head=1 只拍头，&yaw=3.14 转到背面
     const x = (fi - (LINEUP_ORDER.length - 1) / 2) * SPACING;
     const yaw = +(q.get('yaw') ?? 0);
     const head = q.get('head') === '1';
-    const d = head ? 2.3 : 4.2, ty = head ? 1.66 : 0.95;
-    stage.camera.position.set(x + Math.sin(yaw) * d, ty + (head ? 0.08 : 0.25), Math.cos(yaw) * d);
+    const d = fromLegacyScale(head ? 2.3 : 4.2);
+    const ty = head ? headY : feet + STAND_TOP * 0.48;
+    stage.camera.position.set(x + Math.sin(yaw) * d, ty + fromLegacyScale(head ? 0.08 : 0.25), Math.cos(yaw) * d);
     c.target.set(x, ty, 0);
   } else {
-    stage.camera.position.set(0, 1.15, 9.0);
-    c.target.set(0, 0.98, 0);
+    const span = SPACING * (LINEUP_ORDER.length - 1) + fromLegacyScale(0.9);
+    const dist = Math.max(fitWidth(stage, span), fromLegacyScale(9));
+    stage.camera.position.set(0, feet + STAND_TOP * 0.59, dist);
+    c.target.set(0, feet + STAND_TOP * 0.46, 0);
   }
   c.update();
 
   return (dt: number) => {
     for (const id of LINEUP_ORDER) chars[id]?.update(dt, performance.now());
   };
+}
+
+/** 让横向 span 米刚好落进当前画面，fov 用舞台相机的竖向视角 */
+function fitWidth(stage: Stage, span: number) {
+  const aspect = stage.camera.aspect || 16 / 9;
+  const v = (stage.camera.fov * Math.PI) / 180;
+  const halfW = Math.tan(v / 2) * aspect;
+  return (span / 2) / halfW * 1.06;
 }

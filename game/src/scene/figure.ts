@@ -4,18 +4,6 @@ import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 
 export type P3 = [number, number, number];
 
-/** 固定种子的随机数，同一个人每次生成的切面一样 */
-export function rng(seed: string) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  return () => {
-    h = Math.imul(h ^ (h >>> 15), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    h ^= h >>> 16;
-    return (h >>> 0) / 4294967296;
-  };
-}
-
 /** 点云 → 切面凸包，再按 (sx, sy, sz) 缩放到世界尺寸 */
 export function hull(pts: P3[], sx = 1, sy = 1, sz = 1): THREE.BufferGeometry {
   const g = new ConvexGeometry(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])));
@@ -36,22 +24,6 @@ export function ring(y: number, w: number, d: number, c = 0.3, o: { x0?: number;
     [x0 + hw - cx, y, zf], [x0 + hw, y, zf - cz], [x0 + hw, y, zb + cz], [x0 + hw - cx, y, zb],
     [x0 - hw + cx, y, zb], [x0 - hw, y, zb + cz], [x0 - hw, y, zf - cz], [x0 - hw + cx, y, zf],
   ];
-}
-
-/** 一段尖锥（头发尖、刘海尖）：底面四点 + 尖 */
-export function spike(base: P3, dir: P3, len: number, r: number, twist = 0): P3[] {
-  const d = new THREE.Vector3(...dir).normalize();
-  const up = Math.abs(d.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-  const a = new THREE.Vector3().crossVectors(d, up).normalize();
-  const b = new THREE.Vector3().crossVectors(d, a).normalize();
-  const pts: P3[] = [];
-  for (let i = 0; i < 4; i++) {
-    const t = twist + (i / 4) * Math.PI * 2;
-    const v = new THREE.Vector3(...base).addScaledVector(a, Math.cos(t) * r).addScaledVector(b, Math.sin(t) * r * 0.75);
-    pts.push([v.x, v.y, v.z]);
-  }
-  pts.push([base[0] + d.x * len, base[1] + d.y * len, base[2] + d.z * len]);
-  return pts;
 }
 
 /** 两点之间的细方条（眼镜腿、麦克风杆、拖鞋带） */
