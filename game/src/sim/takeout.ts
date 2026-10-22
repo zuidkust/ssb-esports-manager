@@ -1,8 +1,8 @@
-// 饭点外卖：谁点、点什么、谁付钱、连锁。本命外卖等人设，选择只看状态和标签。
+// 饭点外卖：谁点、点什么、谁付钱、连锁。本命和忌口看 roster.ts 的 taste。
 import { dayInfo, PREMATCH_MINUTE } from '../core/calendar';
 import { pick, seeded, weightedPick, type Rand } from '../core/rng';
 import { availableFacilities } from '../data/facilities';
-import { ROSTER } from '../data/roster';
+import { ROSTER, ROSTER_BY_ID } from '../data/roster';
 import {
   CHAIN_CHANCE,
   CHAIN_COOLDOWN_DAYS,
@@ -51,7 +51,11 @@ function deliveryPool(slot: MealSlot, ctx: { lastMatchWon: boolean; lowMood: boo
   });
 }
 
-function dishWeight(d: DishDef, ctx: { lowMood: boolean; monthEnd: boolean; unpaid: boolean; matchEve: boolean; thursday: boolean }): number {
+export function memberDishWeight(
+  memberId: string,
+  d: DishDef,
+  ctx: { lowMood: boolean; monthEnd: boolean; unpaid: boolean; matchEve: boolean; thursday: boolean },
+): number {
   let w = 1;
   if (ctx.monthEnd || ctx.unpaid) {
     if (d.tags.includes('便宜')) w += 2;
@@ -59,9 +63,13 @@ function dishWeight(d: DishDef, ctx: { lowMood: boolean; monthEnd: boolean; unpa
   }
   if (ctx.lowMood && (d.id === 'milktea' || d.id === 'friedchicken')) w += 2;
   if (ctx.matchEve && d.tags.includes('稳')) w += 2;
-  // 赛前晚饭避开螺蛳粉。谁例外等人设，这里一视同仁【待定】
-  if (ctx.matchEve && d.id === 'luosifen') w = 0.05;
+  // 赛前晚饭大家都避开螺蛳粉。阿鸡不挑，什么都吃，仍按正常权重。
+  if (ctx.matchEve && d.id === 'luosifen') w = memberId === 'aji' ? 1.2 : 0.05;
   if (ctx.thursday && d.id === 'mcd') w *= 2;
+  const taste = ROSTER_BY_ID[memberId]?.taste;
+  if (taste?.avoids.includes(d.id)) w *= 0.05;
+  if (taste?.favorites.includes(d.id)) w *= taste.favoriteMul;
+  if (taste?.noMilktea && d.id === 'milktea') w *= 0.15;
   return w;
 }
 
@@ -291,7 +299,7 @@ export function resolveMeal(input: ResolveInput): ResolvedMeal {
     const prob = orderProbability(p, { unpaid, monthEnd });
     if (rand() < prob) {
       const pool = deliveryPool(meal, { lastMatchWon: !!state.record.lastMatchWon, lowMood: p.status.心情 < 45, monthEnd, unpaid, matchEve, thursday });
-      const dish = weightedPick(rand, pool, (d) => dishWeight(d, { lowMood: p.status.心情 < 45, monthEnd, unpaid, matchEve, thursday })) ?? pool[0];
+      const dish = weightedPick(rand, pool, (d) => memberDishWeight(p.id, d, { lowMood: p.status.心情 < 45, monthEnd, unpaid, matchEve, thursday })) ?? pool[0];
       orders.push({
         memberId: p.id,
         dishId: dish.id,
@@ -397,6 +405,26 @@ export function resolveMeal(input: ResolveInput): ResolvedMeal {
     });
   }
   for (const o of drops) if (o.dishId === 'huangmen') state.record.huangmenji += 1;
+
+  const fav = drops.find((o) => ROSTER_BY_ID[o.memberId]?.taste.favorites.includes(o.dishId));
+  if (fav) {
+    logs.push({
+      level: '日常',
+      minute: fav.deliveredAt,
+      text: `${nameOf(fav.memberId)}点了${DISH_BY_ID[fav.dishId].name}，说这就是本命。`,
+      ids: [fav.memberId],
+    });
+  } else {
+    const easy = drops.find((o) => ROSTER_BY_ID[o.memberId]?.taste.favorites.length === 0);
+    if (easy && rand() < 0.45) {
+      logs.push({
+        level: '日常',
+        minute: easy.deliveredAt,
+        text: `${nameOf(easy.memberId)}说随便，什么都吃，点了${DISH_BY_ID[easy.dishId].name}。`,
+        ids: [easy.memberId],
+      });
+    }
+  }
 
   return { record: { meal, orders, effects, chains }, logs };
 }

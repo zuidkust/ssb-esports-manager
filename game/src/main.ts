@@ -351,7 +351,7 @@ function showTitle() {
     `
     <div class="logo title-logo">S</div>
     <h2>SSB电竞经理</h2>
-    <p class="sub">网页试玩版 · M2（外卖、经营、经济）</p>
+    <p class="sub">网页试玩版 · M5（人设、外卖、经营）</p>
     <p>你是 SSB 战队的老板兼经理。六个朋友在网吧角落开始打联赛：白天训练、摸鱼、吃外卖，比赛日晚上 19:00 开打。</p>
     ${storageWarning()}
     <div class="row">

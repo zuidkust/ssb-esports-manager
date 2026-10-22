@@ -4,6 +4,7 @@ import { formatWallStamp, formatWallTime, SaveManager } from '../src/save/saves'
 import { createNewGame, needsPrematch, SAVE_VERSION } from '../src/save/state';
 import { PREMATCH_MINUTE } from '../src/core/calendar';
 import { migrate, SaveError } from '../src/save/migrate';
+import { pairKey } from '../src/data/roster';
 
 describe('存档', () => {
   it('保存后读回内容一致', () => {
@@ -114,7 +115,7 @@ describe('存档迁移 v2 → v3', () => {
     founding.minute = 14 * 60 + 5;
     const s = migrate(JSON.parse(JSON.stringify(raw)));
     expect(s.version).toBe(SAVE_VERSION);
-    expect(s.version).toBe(3);
+    expect(SAVE_VERSION).toBe(4);
     expect(s.cash).toBe(4321);
     expect(s.record.wins).toBe(0);
     expect(s.bankrupt).toBe(false);
@@ -146,7 +147,7 @@ describe('存档迁移 v1 → v2', () => {
     expect(s.version).toBe(SAVE_VERSION);
     expect(s.facilities).toEqual([]);
     expect(s.prematchConfirmedDay).toBe(0);
-    expect(s.roster.find((m) => m.id === 'shidian')!.persona.爱睡觉).toBeGreaterThan(0);
+    expect(s.roster.find((m) => m.id === 'aji')!.persona.爱睡觉).toBeGreaterThan(0);
     expect(s.apDay).toBe(0);
     expect(s.actionPoints).toBe(3);
     expect(s.meals.day).toBe(1);
@@ -167,5 +168,69 @@ describe('存档时间', () => {
     expect(name.includes('Z')).toBe(false);
     const utc = new Date(ms).toISOString().slice(0, 16).replace(/[-:T]/g, '');
     if (d.getTimezoneOffset() !== 0) expect(name.includes(utc)).toBe(false);
+  });
+});
+
+describe('存档迁移 v3 → v4', () => {
+  it('旧 id 和旧昵称改成正式名，能力按人设稿重写', () => {
+    const raw = createNewGame(3) as unknown as Record<string, unknown>;
+    raw.version = 3;
+    const back: Record<string, string> = { aji: 'shidian', gouliang: 'dishu', piegan: 'piju' };
+    const roster = raw.roster as { id: string; ability: { pool: number } }[];
+    for (const m of roster) {
+      if (back[m.id]) m.id = back[m.id];
+      if (m.id === 'shidian') m.ability.pool = 60;
+    }
+    const relations = raw.relations as Record<string, { bond: number; knots: { cause: string; expireDay: number }[]; unlocked: string[] }>;
+    const rewritten: typeof relations = {};
+    for (const [key, rel] of Object.entries(relations)) {
+      const nk = key.split('|').map((id) => back[id] ?? id).sort().join('|');
+      rewritten[nk] = rel;
+    }
+    rewritten['dangdeng|shidian'].knots = [{ cause: '施颠的出装', expireDay: 9 }];
+    raw.relations = rewritten;
+    const flags = raw.flags as { duoA: string; duoB: string };
+    flags.duoA = 'shidian';
+    flags.duoB = 'piju';
+    raw.actionHistory = [
+      { action: 'talk', target: 'shidian', day: 1 },
+      { action: 'duo', target: 'piju|shidian', day: 1 },
+    ];
+    raw.cooldowns = { 'act:talk:dishu': 9, 'act:duo:dangdeng|shidian': 4 };
+    const log = raw.eventLog as { text: string; ids: string[] }[];
+    log.push({ id: 9, day: 1, minute: 600, level: '日常', text: '施颠穿着人字拖，地鼠说了一句，吊龙和批菊在看。', ids: ['shidian', 'dishu', 'diaolong', 'piju'] } as unknown as { text: string; ids: string[] });
+    raw.meals = {
+      day: 1,
+      morning: [{ memberId: 'piju', dishId: 'jianbing' }],
+      lunch: {
+        meal: 'lunch',
+        orders: [{ memberId: 'shidian', dishId: 'huangmen', price: 22, payer: 'self', deliveredAt: 1, eatUntil: 2, delivery: true }],
+        effects: [{ at: 1, status: [{ id: 'dishu', 心情: 1 }], social: [{ type: 'knot', a: 'piju', b: 'shidian', cause: '批菊甩锅' }], applied: false }],
+        chains: [],
+      },
+    };
+    const s = migrate(JSON.parse(JSON.stringify(raw)));
+    expect(s.version).toBe(4);
+    expect(s.roster.map((m) => m.id).sort()).toEqual(['aji', 'dangdeng', 'diaolong', 'dibi', 'gouliang', 'piegan']);
+    expect(s.roster.find((m) => m.id === 'aji')!.ability.pool).toBeGreaterThan(60);
+    expect(s.flags.duoA).toBe('aji');
+    expect(s.flags.duoB).toBe('piegan');
+    expect(s.relations['aji|dangdeng']!.bond).toBeGreaterThan(0);
+    expect(s.relations['aji|dangdeng']!.knots[0].cause).toBe('阿鸡的出装');
+    expect(s.relations['dangdeng|shidian']).toBeUndefined();
+    expect(s.cooldowns['act:talk:gouliang']).toBe(9);
+    expect(s.cooldowns['act:duo:aji|dangdeng']).toBe(4);
+    expect(s.actionHistory.map((h) => h.target)).toEqual(['aji', pairKey('aji', 'piegan')]);
+    const line = s.eventLog.find((e) => e.text.includes('人字拖'))!;
+    expect(line.text).toContain('阿鸡');
+    expect(line.text).toContain('狗粮');
+    expect(line.text).toContain('吊隆');
+    expect(line.text).toContain('撇干');
+    expect(line.text).not.toMatch(/施颠|地鼠|吊龙|批菊/);
+    expect(line.ids).toEqual(['aji', 'gouliang', 'diaolong', 'piegan']);
+    expect(s.meals.morning[0].memberId).toBe('piegan');
+    expect(s.meals.lunch?.orders[0].memberId).toBe('aji');
+    expect(s.meals.lunch?.effects[0].status[0].id).toBe('gouliang');
+    expect(s.meals.lunch?.effects[0].social[0]).toMatchObject({ a: 'piegan', b: 'aji', cause: '撇干甩锅' });
   });
 });

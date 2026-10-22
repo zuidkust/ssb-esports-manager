@@ -6,7 +6,7 @@ import { START_CASH, START_STASH } from '../data/economy';
 import type { Tier } from '../data/leagues';
 import { ROSTER, INITIAL_BOND, type AbilityKey, type PersonaKey } from '../data/roster';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export const FOUNDING_TEXT = '老板在网吧包下了角落的 6 台机器，SSB 战队今天正式成立。目标：打出网吧联赛。';
 

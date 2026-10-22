@@ -9,12 +9,13 @@ import { TIER_CN } from '../data/leagues';
 import { PHONE_APPS } from '../data/phoneApps';
 import { DISH_BY_ID } from '../data/takeout';
 import { pick, range, seeded, shuffle, weightedPick, type Rand } from '../core/rng';
-import { POSITIONS, ROSTER, positionFit, type MemberDef, type Position } from '../data/roster';
+import { POSITIONS, ROSTER, phoneWeight, positionFit, type MemberDef, type Position } from '../data/roster';
 import type { GameState, LogEntry, MemberState, StatusKey } from '../save/state';
 import { performAction } from './actions';
 import { grantDailyInsight, runPayday } from './economy';
 import { expireKnots } from './relations';
 import { buildPlans, MATCH_END, segmentAt, type DayPlan } from './schedule';
+import { rollPersonaBeat } from './personaEvents';
 import { courierTrack, orderFor, planMorning, resolveMeal, settleMeals, type CourierTrack, type TakeoutPerson } from './takeout';
 
 export type ActivityKind =
@@ -34,6 +35,7 @@ export interface Activity {
 
 // 下午组排：英雄联盟一局 5 个人，约 35 分钟一局；局间 4 分钟排队，可以起身接水、上厕所
 const TEAM_START = 14 * 60 + 30;
+const PERSONA_TICKS = [10 * 60 + 20, 11 * 60 + 40, 15 * 60 + 10, 16 * 60 + 40, 20 * 60 + 15];
 const GAME_MIN = 35;
 const QUEUE_MIN = 4;
 
@@ -125,7 +127,7 @@ export class World {
     return r == null ? null : opponentForRound(this.state.season.tier, r);
   }
 
-  // 首发：每个位置选“能力 × 位置适性 + 心情”最高的人；上单在施颠和批菊之间竞争
+  // 首发：每个位置选“能力 × 位置适性 + 心情”最高的人；上单在阿鸡和撇干之间竞争
   // M3 改成老板在赛前手动选
   computeStarters(): string[] {
     const used = new Set<string>();
@@ -216,7 +218,10 @@ export class World {
         if (m.slacking && !m.activity.bench) m.slackMin += advanced; // 轮空不算摸鱼
       }
     }
-    if (!jumped) this.segmentLines(minute, advanced);
+    if (!jumped) {
+      this.segmentLines(minute, advanced);
+      if (advanced > 0) this.personaTicks(minute, advanced);
+    }
   }
 
   private activityAt(m: Member, t: number): Activity {
@@ -296,7 +301,7 @@ export class World {
     }
     if (k === 'eat') return { kind: 'eat', label: '这把轮空，趁空吃点东西', bench: true };
     if (k === 'stream') return { kind: 'slack_stream', label: '这把轮空，在电脑上看比赛直播', bench: true };
-    const app = weightedPick(r, PHONE_APPS, (a) => a.weight)!;
+    const app = weightedPick(r, PHONE_APPS, (a) => phoneWeight(m.id, a.id, a.weight))!;
     return { kind: 'slack_phone', label: `${app.label}（这把轮空）`, app: app.id, bench: true };
   }
 
@@ -373,7 +378,7 @@ export class World {
       const kinds: [ActivityKind, number, string][] = [
         ['slack_phone', 2 + p.摸鱼倾向 / 30, '耍手机'],
         ['slack_stream', 1 + p.话痨 / 50, '在电脑上看直播“复盘”'],
-        ['snack', !this.has('snack') ? 0 : s.饥饿 > 55 ? 3 : 0.8, '去零食柜觅食'],
+        ['snack', !this.has('snack') ? 0 : m.def.taste.snacks.length === 0 ? 0.2 : s.饥饿 > 55 ? 3 : 0.8, '去零食柜觅食'],
         ['fridge', this.has('fridge') ? 0.8 : 0, '开冰箱拿饮料'],
         ['drink', this.has('cooler') ? 1.2 : 0, '去饮水机接水'],
         ['toilet', 0.8, '带薪如厕'],
@@ -382,8 +387,16 @@ export class World {
       // 去茶水区、厕所只占半个时间块，其余时间回去单排
       if ((k[0] === 'snack' || k[0] === 'fridge' || k[0] === 'drink' || k[0] === 'toilet') && sub >= 5) return { kind: 'solo', label: '单排冲分' };
       if (k[0] === 'slack_phone') {
-        const app = weightedPick(r, PHONE_APPS, (a) => a.weight)!;
-        return { kind: 'slack_phone', label: `${app.label}（摸鱼）`, app: app.id };
+        const app = weightedPick(r, PHONE_APPS, (a) => phoneWeight(m.id, a.id, a.weight))!;
+        let label = `${app.label}（摸鱼）`;
+        let appId = app.id;
+        if ((m.id === 'aji' || m.id === 'dibi') && r() < 0.18) {
+          label = '偷偷玩三角洲（摸鱼）';
+          appId = 'mobilegame';
+        } else if (m.id === 'aji' && r() < 0.34) {
+          label = r() < 0.5 ? '研究歪出装（摸鱼）' : '溜去抽烟（摸鱼）';
+        }
+        return { kind: 'slack_phone', label, app: appId };
       }
       return { kind: k[0], label: k[2] };
     }
@@ -492,12 +505,25 @@ export class World {
         return a.partner && a.partner < m.id ? null : `${n}拉上${other}双排。`;
       case 'chat':
         if (!a.host) return null;
-        return m.id === 'dishu' ? `地鼠凑到${other}旁边：“如何评价……”` : pick(r, [`${n}溜到${other}旁边闲聊。`, `${n}和${other}聊起了昨晚那把。`]);
+        if (m.def.chatLines.length) return pick(r, m.def.chatLines).replaceAll('{other}', other);
+        return pick(r, [`${n}溜到${other}旁边闲聊。`, `${n}和${other}聊起了昨晚那把。`]);
       case 'snack':
-        return pick(r, [`${n}去零食柜翻了翻，拿走一包薯片。`, `${n}在零食柜前犹豫了很久。`]);
+        if (m.id === 'piegan') return `${n}去零食柜拿了包辣条。`;
+        if (m.id === 'gouliang' || m.id === 'dibi') return `${n}去零食柜翻了翻，拿走一包薯片。`;
+        if (m.id === 'diaolong') return `${n}在零食柜前停了一下，没拿。`;
+        return pick(r, [`${n}去零食柜翻了翻，拿走一包零食。`, `${n}在零食柜前犹豫了很久。`]);
       case 'fridge':
+        if (m.id === 'aji') return `${n}打开冰箱，拿了可乐，没拿奶茶。`;
+        if (m.id === 'dangdeng') return `${n}在冰箱里找红牛。`;
+        if (m.id === 'diaolong') return `${n}打开冰箱看了看，没有咖啡。`;
+        if (m.id === 'gouliang') return `${n}拿了瓶无糖饮料。`;
         return pick(r, [`${n}打开冰箱拿了瓶饮料。`, `${n}在冰箱前站了半天，不知道在找什么。`]);
       case 'drink':
+        if (m.id === 'aji') return `${n}去接水，嘴里念着想喝可乐。`;
+        if (m.id === 'dangdeng') return `${n}去接水，包里的红牛已经空了。`;
+        if (m.id === 'gouliang') return `${n}接了杯白开水。`;
+        if (m.id === 'diaolong') return `${n}想喝咖啡，饮水机只有水。`;
+        if (m.id === 'piegan') return `${n}接了杯水，另一只手还拿着零食。`;
         return `${n}起身去饮水机接水。`;
       case 'toilet':
         return pick(r, [`${n}起身去了趟厕所，带薪的那种。`, `${n}：“我去趟厕所。”手机也一起带走了。`]);
@@ -529,6 +555,22 @@ export class World {
     };
     const text = lines[seg.id];
     if (text) this.log(seg.id === 'match' || (seg.id === 'morning' && this.today.round != null) ? '有趣' : '日常', text, []);
+  }
+
+  private personaTicks(minute: number, advanced: number) {
+    const from = minute - advanced;
+    for (const tick of PERSONA_TICKS) {
+      if (from >= tick || minute < tick) continue;
+      const beat = rollPersonaBeat({
+        state: this.state,
+        day: this.state.clock.day,
+        minute: tick,
+        segment: this.segment(tick).id,
+        present: this.members.filter((m) => this.presentAt(m, tick)).map((m) => m.id),
+        bondOf: (a, b) => this.bond(a, b),
+      });
+      if (beat) this.logAt(beat.level, beat.text, beat.ids, tick);
+    }
   }
 
   log(level: LogEntry['level'], text: string, ids: string[]) {

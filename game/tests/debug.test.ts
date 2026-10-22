@@ -133,8 +133,8 @@ describe('调试跳转', () => {
 
   it('强制点单和连锁会进当天的外卖，并写进动态', () => {
     const spill = boot(2);
-    const at = forceTakeout(spill.w, spill.c, 'shidian', 'huangmen', 'spill');
-    const order = spill.s.meals.lunch?.orders.find((o) => o.memberId === 'shidian');
+    const at = forceTakeout(spill.w, spill.c, 'aji', 'huangmen', 'spill');
+    const order = spill.s.meals.lunch?.orders.find((o) => o.memberId === 'aji');
     expect(order?.dishId).toBe('huangmen');
     expect(order?.delivery).toBe(true);
     expect(spill.s.meals.lunch?.chains).toContain('spill');
@@ -142,8 +142,8 @@ describe('调试跳转', () => {
     expect(courierTrack(spill.s.meals, at.minute)).not.toBeNull();
 
     const hot = boot(3);
-    forceTakeout(hot.w, hot.c, 'dishu', 'huangmen', 'luosifen');
-    expect(hot.s.meals.lunch?.orders.some((o) => o.memberId === 'dishu' && o.dishId === 'luosifen')).toBe(true);
+    forceTakeout(hot.w, hot.c, 'gouliang', 'huangmen', 'luosifen');
+    expect(hot.s.meals.lunch?.orders.some((o) => o.memberId === 'gouliang' && o.dishId === 'luosifen')).toBe(true);
 
     const bill = boot(5);
     forceTakeout(bill.w, bill.c, 'dangdeng', 'huangmen', 'spicybill');

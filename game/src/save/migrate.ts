@@ -1,6 +1,6 @@
 // 存档版本迁移：每次改存档结构，SAVE_VERSION +1，并在 MIGRATIONS 里补一个 “旧版本 → 新版本” 函数
 import { DAY_START } from '../core/clock';
-import { ROSTER_BY_ID } from '../data/roster';
+import { LEGACY_ID_MAP, LEGACY_NAME_MAP, ROSTER_BY_ID, mapLegacyId, pairKey } from '../data/roster';
 import { emptyFlags, emptyMeals, emptyRecord, SAVE_VERSION, type GameState } from './state';
 
 type AnySave = Record<string, unknown> & { version?: unknown };
@@ -43,7 +43,167 @@ const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
       version: 3,
     };
   },
+  // v4：正式名。旧 id 和动态里的旧昵称改过来，能力 / 性格按人设稿重写，状态和工资保留。
+  3: (s) => remapLegacyRoster(s),
 };
+
+const LEGACY_ID_RE = /\b(shidian|dishu|piju)\b/g;
+
+function mapIds(text: string): string {
+  return text.replace(LEGACY_ID_RE, (id) => LEGACY_ID_MAP[id] ?? id);
+}
+
+function mapNames(text: string): string {
+  let out = mapIds(text);
+  for (const [from, to] of LEGACY_NAME_MAP) out = out.split(from).join(to);
+  return out;
+}
+
+function mapKey(key: string): string {
+  const mapped = mapIds(key);
+  const idx = mapped.lastIndexOf(':');
+  const head = idx >= 0 ? mapped.slice(0, idx + 1) : '';
+  const tail = idx >= 0 ? mapped.slice(idx + 1) : mapped;
+  if (!tail.includes('|')) return mapped;
+  const parts = tail.split('|');
+  if (parts.length !== 2) return mapped;
+  return head + pairKey(parts[0], parts[1]);
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  return v as Record<string, unknown>;
+}
+
+function remapLegacyRoster(s: AnySave): AnySave {
+  const next: AnySave = { ...s, version: 4 };
+  if (Array.isArray(s.roster)) {
+    next.roster = s.roster.map((raw) => {
+      const m = asRecord(raw);
+      if (!m || typeof m.id !== 'string') return raw;
+      const id = mapLegacyId(m.id);
+      const def = ROSTER_BY_ID[id];
+      if (!def) return { ...m, id };
+      return { ...m, id, ability: { ...def.ability }, persona: { ...def.persona } };
+    });
+  }
+  const relations = asRecord(s.relations);
+  if (relations) {
+    const merged: Record<string, unknown> = {};
+    for (const [key, raw] of Object.entries(relations)) {
+      const rel = asRecord(raw) ?? {};
+      const knots = Array.isArray(rel.knots)
+        ? rel.knots.map((k) => {
+            const knot = asRecord(k);
+            if (!knot || typeof knot.cause !== 'string') return k;
+            return { ...knot, cause: mapNames(knot.cause) };
+          })
+        : rel.knots;
+      const mapped: Record<string, unknown> = { ...rel, knots };
+      const nk = mapKey(key);
+      const prev = asRecord(merged[nk]);
+      if (!prev) merged[nk] = mapped;
+      else {
+        const prevKnots = Array.isArray(prev.knots) ? prev.knots : [];
+        const nextKnots = Array.isArray(mapped.knots) ? mapped.knots : [];
+        merged[nk] = {
+          ...prev,
+          ...mapped,
+          bond: Math.max(Number(prev.bond) || 0, Number(mapped.bond) || 0),
+          knots: [...prevKnots, ...nextKnots].slice(0, 2),
+          unlocked: [...new Set([...(Array.isArray(prev.unlocked) ? prev.unlocked : []), ...(Array.isArray(mapped.unlocked) ? mapped.unlocked : [])])],
+        };
+      }
+    }
+    next.relations = merged;
+  }
+  const cooldowns = asRecord(s.cooldowns);
+  if (cooldowns) {
+    const mapped: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(cooldowns)) mapped[mapKey(key)] = value;
+    next.cooldowns = mapped;
+  }
+  if (Array.isArray(s.actionHistory)) {
+    next.actionHistory = s.actionHistory.map((raw) => {
+      const h = asRecord(raw);
+      if (!h) return raw;
+      const target = typeof h.target === 'string' ? mapKey(h.target) : h.target;
+      return { ...h, target };
+    });
+  }
+  const flags = asRecord(s.flags);
+  if (flags) {
+    next.flags = {
+      ...flags,
+      duoA: typeof flags.duoA === 'string' ? mapLegacyId(flags.duoA) : flags.duoA,
+      duoB: typeof flags.duoB === 'string' ? mapLegacyId(flags.duoB) : flags.duoB,
+    };
+  }
+  if (Array.isArray(s.eventLog)) {
+    next.eventLog = s.eventLog.map((raw) => {
+      const e = asRecord(raw);
+      if (!e) return raw;
+      return {
+        ...e,
+        text: typeof e.text === 'string' ? mapNames(e.text) : e.text,
+        ids: Array.isArray(e.ids) ? e.ids.map((id) => (typeof id === 'string' ? mapLegacyId(id) : id)) : e.ids,
+      };
+    });
+  }
+  next.meals = remapMeals(s.meals);
+  return next;
+}
+
+function remapMeals(raw: unknown): unknown {
+  const meals = asRecord(raw);
+  if (!meals) return raw;
+  const mapOrder = (order: unknown) => {
+    const o = asRecord(order);
+    if (!o || typeof o.memberId !== 'string') return order;
+    return { ...o, memberId: mapLegacyId(o.memberId) };
+  };
+  const mapEffect = (fx: unknown) => {
+    const e = asRecord(fx);
+    if (!e) return fx;
+    return {
+      ...e,
+      status: Array.isArray(e.status)
+        ? e.status.map((st) => {
+            const row = asRecord(st);
+            if (!row || typeof row.id !== 'string') return st;
+            return { ...row, id: mapLegacyId(row.id) };
+          })
+        : e.status,
+      social: Array.isArray(e.social)
+        ? e.social.map((soc) => {
+            const row = asRecord(soc);
+            if (!row) return soc;
+            return {
+              ...row,
+              a: typeof row.a === 'string' ? mapLegacyId(row.a) : row.a,
+              b: typeof row.b === 'string' ? mapLegacyId(row.b) : row.b,
+              cause: typeof row.cause === 'string' ? mapNames(row.cause) : row.cause,
+            };
+          })
+        : e.social,
+    };
+  };
+  const mapMeal = (meal: unknown) => {
+    const rec = asRecord(meal);
+    if (!rec) return meal;
+    return {
+      ...rec,
+      orders: Array.isArray(rec.orders) ? rec.orders.map(mapOrder) : rec.orders,
+      effects: Array.isArray(rec.effects) ? rec.effects.map(mapEffect) : rec.effects,
+    };
+  };
+  return {
+    ...meals,
+    morning: Array.isArray(meals.morning) ? meals.morning.map(mapOrder) : meals.morning,
+    lunch: mapMeal(meals.lunch),
+    dinner: mapMeal(meals.dinner),
+  };
+}
 
 export class SaveError extends Error {}
 

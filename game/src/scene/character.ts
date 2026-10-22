@@ -1,5 +1,5 @@
 // 低多边形人物：基础几何体拼装，关节为空 Group，姿态用关节角度插值实现
-// 外形按设计文档区分：眼镜、胖瘦、高矮、施颠的人字拖；头部比真人略大，远看也能认出是谁
+// 外形按设计文档区分：眼镜、胖瘦、高矮、阿鸡的人字拖；头部比真人略大，远看也能认出是谁
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { MemberDef } from '../data/roster';

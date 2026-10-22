@@ -2,6 +2,7 @@
 import { dayInfo } from '../core/calendar';
 import { seeded, pick, type Rand } from '../core/rng';
 import { ACTION_BY_ID, actionCooldownKey, ACTIONS, type ActionDef } from '../data/actions';
+import { personaActionLine } from '../data/bossLines';
 import { actionPointMax, tierCashMult } from '../data/economy';
 import { availableFacilities, VENUE_CN } from '../data/facilities';
 import { ABILITY_KEYS, pairKey, ROSTER_BY_ID } from '../data/roster';
@@ -134,20 +135,19 @@ export function performAction(
       bump(state, targets[0], '压力', sc(-6));
       text = preview.backfire
         ? `${name(targets[0])}听老板说了两句，反而更烦了。`
-        : pick(rand, [`老板把${name(targets[0])}叫到一边说了会儿话。`, `${name(targets[0])}点点头，回到座位上。`, `单独谈完，${name(targets[0])}的肩膀松了一点。`, `老板没当着大家的面说，${name(targets[0])}听完没接话。`]);
+        : personaActionLine('talk', targets, rand, false) ?? pick(rand, [`老板把${name(targets[0])}叫到一边说了会儿话。`, `${name(targets[0])}点点头，回到座位上。`, `单独谈完，${name(targets[0])}的肩膀松了一点。`, `老板没当着大家的面说，${name(targets[0])}听完没接话。`]);
       break;
     }
     case 'milktea': {
       bumpAll(state, '心情', sc(6));
-      const quiet = [...state.roster].sort((a, b) => a.persona.话痨 - b.persona.话痨)[0];
       const lines = [
-        `老板请了奶茶。${name(quiet.id)}那杯最后才被找到。`,
-        '六杯奶茶放到桌上，先到的人先拿。',
-        '奶茶到了。有人拍了照，有人直接插上吸管。',
-        `老板请奶茶。${name(quiet.id)}的那杯被挡在袋子最里面。`,
+        '老板请了奶茶。阿鸡那杯换成了可乐，他说奶茶不喝。',
+        '六杯放到桌上。阿鸡的是可乐，别人的是奶茶。',
+        '奶茶到了。狗粮边喝边损，阿鸡举了举可乐。',
+        '老板请奶茶。弟必接过去，吊隆的那杯被挡在袋子最里面。',
       ];
       const used = state.actionHistory.filter((h) => h.action === 'milktea').length;
-      text = preview.backfire ? '奶茶又来了。有人连杯子都没拿。' : lines[(used - 1) % lines.length];
+      text = preview.backfire ? '奶茶又来了。有人连杯子都没拿。阿鸡的可乐也剩在袋子里。' : lines[(used - 1) % lines.length];
       break;
     }
     case 'host': {
@@ -168,7 +168,7 @@ export function performAction(
       else addBond(state, targets[0], targets[1], 2);
       text = preview.backfire
         ? `老板安排${name(targets[0])}和${name(targets[1])}双排。两个人都没说好。`
-        : `老板安排${name(targets[0])}和${name(targets[1])}今天双排。`;
+        : personaActionLine('duo', targets, rand, false) ?? `老板安排${name(targets[0])}和${name(targets[1])}今天双排。`;
       break;
     }
     case 'praise': {
@@ -176,7 +176,7 @@ export function performAction(
       for (const m of state.roster) if (m.id !== targets[0]) bump(state, m.id, '心情', sc(-2));
       text = preview.backfire
         ? `老板又当众夸${name(targets[0])}。旁边的人没什么反应。`
-        : pick(rand, [
+        : personaActionLine('praise', targets, rand, false) ?? pick(rand, [
             `老板当众表扬了${name(targets[0])}。`,
             `${name(targets[0])}被点名夸了。有人鼓掌，有人在看自己的屏幕。`,
             `表扬完，${name(targets[0])}耳根有点红。`,
@@ -191,9 +191,9 @@ export function performAction(
       bump(state, targets[0], '压力', sc(6));
       text = preview.backfire
         ? `老板点名说了${name(targets[0])}。对方回了句“知道了”，语气很硬。`
-        : fired
+        : personaActionLine('scold', targets, rand, false) ?? (fired
           ? `${name(targets[0])}被点名之后反而坐直了，说下一把打回来。`
-          : `老板点名批评了${name(targets[0])}。座位那边安静了一会儿。`;
+          : `老板点名批评了${name(targets[0])}。座位那边安静了一会儿。`);
       break;
     }
     case 'mediate': {
@@ -206,7 +206,9 @@ export function performAction(
         addBond(state, targets[0], targets[1], 4);
         bump(state, targets[0], '心情', sc(4));
         bump(state, targets[1], '心情', sc(4));
-        text = `老板把${name(targets[0])}和${name(targets[1])}拉到一起。心结解开了一层。`;
+        text = targets.includes('dibi')
+          ? `弟必把话接软了。${name(targets[0])}和${name(targets[1])}的心结解开了一层。`
+          : `老板把${name(targets[0])}和${name(targets[1])}拉到一起。心结解开了一层。`;
       }
       break;
     }
@@ -233,7 +235,7 @@ export function performAction(
       } else {
         for (let i = 0; i < state.roster.length; i++) for (let j = i + 1; j < state.roster.length; j++) addBond(state, state.roster[i].id, state.roster[j].id, 2);
       }
-      text = preview.backfire ? '团建又来了。饭吃完，群里比去之前更安静。' : '团建聚餐。饭桌上聊的还是昨天那把。';
+      text = preview.backfire ? '团建又来了。饭吃完，群里比去之前更安静。' : personaActionLine('party', [], rand, false) ?? '团建聚餐。饭桌上聊的还是昨天那把。';
       break;
     }
     case 'rest': {
@@ -243,7 +245,7 @@ export function performAction(
           m.status.心情 = 100;
           m.status.疲劳 = 0;
         }
-        text = '老板放假一天。训练心得没有了，人是松下来了。';
+        text = personaActionLine('rest', [], rand, false) ?? '老板放假一天。训练心得没有了，人是松下来了。';
       } else {
         bumpAll(state, '心情', -8);
         bumpAll(state, '疲劳', 8);
