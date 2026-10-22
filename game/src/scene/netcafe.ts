@@ -304,10 +304,10 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
   const front = FRONT_X.map((x, i) => cafeDesk(root, x, FRONT_Z, i + 11, `C0${i + 1}`, false));
   const seatOf = (d: Omit<Desk, 'owner' | 'approach'>) => d.seat;
   const looks: Look[] = [
-    { height: 0.95, girth: 0.95, glasses: false, shirt: 0x6b6f78, pants: 0x2c3038, hair: 0x1b1816, skin: 0xeec39c, hairStyle: 'short' },
-    { height: 1.02, girth: 1.05, glasses: true, shirt: 0x2a2c30, pants: 0x3b4a66, hair: 0x231e1c, skin: 0xe8bd95, hairStyle: 'messy' },
-    { height: 0.9, girth: 0.9, glasses: false, shirt: 0xe0ddd5, pants: 0x2d2f36, hair: 0x2a211c, skin: 0xf2caa6, hairStyle: 'side' },
-    { height: 1.0, girth: 1.3, glasses: false, shirt: 0x4b5d3f, pants: 0x3a3a40, hair: 0x3a3430, skin: 0xd9aa80, hairStyle: 'buzz' },
+    { glasses: false, shirt: 0x6b6f78, pants: 0x2c3038, hair: 0x1b1816, skin: 0xeec39c, hairStyle: 'short' },
+    { glasses: true, shirt: 0x2a2c30, pants: 0x3b4a66, hair: 0x231e1c, skin: 0xe8bd95, hairStyle: 'messy' },
+    { glasses: false, shirt: 0xe0ddd5, pants: 0x2d2f36, hair: 0x2a211c, skin: 0xf2caa6, hairStyle: 'side' },
+    { glasses: false, shirt: 0x4b5d3f, pants: 0x3a3a40, hair: 0x3a3430, skin: 0xd9aa80, hairStyle: 'buzz' },
   ];
   const seated: [Omit<Desk, 'owner' | 'approach'>, PoseName, ScreenKind][] = [
     [pub[1], 'sit_play', 'game'],
@@ -368,7 +368,7 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
   }
   shadow(cg);
   shadow(shelf);
-  npcs.push(npc(root, 'npc-admin', { height: 1.05, girth: 1.2, glasses: true, shirt: 0xb03a2e, pants: 0x2d2f36, hair: 0x151312, skin: 0xe8bd95, hairStyle: 'buzz' },
+  npcs.push(npc(root, 'npc-admin', { glasses: true, shirt: 0xb03a2e, pants: 0x2d2f36, hair: 0x151312, skin: 0xe8bd95, hairStyle: 'buzz' },
     new THREE.Vector3(5.5, 0, 3.4), Math.PI, 'watch'));
 
   // “小心地滑”黄牌 + 拖把桶：网管刚拖过地

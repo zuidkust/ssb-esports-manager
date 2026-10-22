@@ -1,6 +1,7 @@
 // 外卖员：黄衣服、保温箱。位置按游戏分钟贴在进门 → 各工位 → 出门的路径上，暂停和时间跳跃都对得上。
 import * as THREE from 'three';
 import type { MemberDef } from '../data/roster';
+import { fromLegacyScale } from './body';
 import { Character } from './character';
 import { mat } from './office';
 import type { Venue } from './venue';
@@ -26,7 +27,7 @@ const COURIER_DEF: MemberDef = {
   taste: { favorites: [], favoriteMul: 1, avoid: [], avoidTags: [], drinks: '', milkTea: true },
   phoneBias: {},
   roles: [],
-  look: { height: 1.04, girth: 0.96, glasses: false, shirt: 0xf5c400, pants: 0x1a1a1a, hair: 0x241c18, skin: 0xf0c8a0, shoes: 0x111111, hairStyle: 'short' },
+  look: { glasses: false, shirt: 0xf5c400, pants: 0x1a1a1a, hair: 0x241c18, skin: 0xf0c8a0, shoes: 0x111111, hairStyle: 'short', helmet: 0xf5c400 },
 };
 
 interface Knot {
@@ -49,7 +50,10 @@ export class Courier {
     const lid = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.24), mat(0x1a1a1a, { roughness: 0.4 }));
     lid.position.y = 0.18;
     bag.add(body, lid);
-    bag.position.set(0, 1.05, -0.16);
+    // 箱子跟着人一起缩，仍然背在背上
+    const k = fromLegacyScale(1);
+    bag.scale.setScalar(k);
+    bag.position.set(0, fromLegacyScale(0.92), -fromLegacyScale(0.32));
     this.char.root.add(bag);
     this.char.setHidden(true);
     parent.add(this.char.root);

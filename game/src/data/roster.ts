@@ -1,6 +1,7 @@
 // 开局 6 人。文案和数值以 docs/人设稿-开局6人.md 为准。
 // 7 属性：人设稿第 8 节的强 / 弱 / 未强调，落成可打的初值，微调仍【待定】。
-// 外形沿用已有模型（眼镜、胖瘦、高矮、阿鸡的人字拖），人设稿没有改外观。
+// 外形：六人全是黑发、同一标准体型（体型只在 scene/body.ts，不写在每人身上）。
+// 靠衫色和配饰区分：眼镜、发型、耳机的颜色，以及戴在头上还是挂在脖子上。
 
 export type Position = 'top' | 'jungle' | 'mid' | 'adc' | 'support';
 export const POSITIONS: Position[] = ['top', 'jungle', 'mid', 'adc', 'support'];
@@ -14,16 +15,29 @@ export const PERSONA_KEYS = ['嘴硬', '心态倾向', '胜负心', '逆风意�
 export type PersonaKey = (typeof PERSONA_KEYS)[number];
 
 export interface Look {
-  height: number;
-  girth: number;
   glasses: boolean;
   flipflops?: boolean;
   shirt: number;
   pants: number;
+  /** 发色。六名选手都是黑发，不要单独换成别的颜色。 */
   hair: number;
   skin: number;
   shoes?: number;
-  hairStyle: 'messy' | 'short' | 'side' | 'buzz';
+  /**
+   * 主角发型：tousled 阿鸡蓬松乱短发 / quiff 当邓上梳 / fringe 狗粮碎刘海 / sweep 弟必侧分斜刘海 / crew 平头。
+   * 路人用旧名：messy / short / side / buzz（普通款，不跟主角撞型）。
+   */
+  hairStyle: 'tousled' | 'quiff' | 'fringe' | 'sweep' | 'crew' | 'messy' | 'short' | 'side' | 'buzz';
+  /** 眉形：stern 是吊隆、撇干那种压眉 */
+  brows?: 'calm' | 'stern';
+  /** 胸口战队六边形标。只有队员有 */
+  badge?: boolean;
+  /** 耳机颜色，默认跟衫色；mic=false 不带麦（弟必的白耳机） */
+  headset?: { color?: number; mic?: boolean };
+  /** 展示用：耳机挂在脖子上（弟必） */
+  neckphones?: boolean;
+  /** 外卖员头盔颜色 */
+  helmet?: number;
 }
 
 export interface Taste {
@@ -125,7 +139,7 @@ export const ROSTER: MemberDef[] = [
     taste: noFav('可乐', false, { avoid: ['milktea'] }),
     phoneBias: { douyin: 1.4, mobilegame: 1.8 },
     roles: ['开心果', '背锅常客'],
-    look: { height: 1.0, girth: 1.10, glasses: true, flipflops: true, shirt: 0xff8a2b, pants: 0x3d4f66, hair: 0x2b2420, skin: 0xf0c8a0, shoes: 0xe8833a, hairStyle: 'messy' },
+    look: { glasses: true, flipflops: true, badge: true, shirt: 0xee6512, pants: 0x121a2e, hair: 0x3a3a40, skin: 0xeab07c, shoes: 0x2458c0, hairStyle: 'tousled' },
   },
   {
     id: 'dangdeng', name: '当邓', position: 'jungle', secondary: 'top',
@@ -161,7 +175,7 @@ export const ROSTER: MemberDef[] = [
     taste: burger('红牛、东鹏，也喝无糖'),
     phoneBias: { douyin: 1.15, bilibili: 2.2, wechat: 2.4 },
     roles: ['指挥'],
-    look: { height: 0.84, girth: 0.86, glasses: true, shirt: 0x2f8a4a, pants: 0x1e2430, hair: 0x1d1a18, skin: 0xeec39c, shoes: 0x1a1a1e, hairStyle: 'short' },
+    look: { glasses: true, flipflops: true, badge: true, shirt: 0x2c8a34, pants: 0x121a2e, hair: 0x3a3a40, skin: 0xeab07c, shoes: 0x2458c0, hairStyle: 'quiff' },
   },
   {
     id: 'gouliang', name: '狗粮', position: 'adc',
@@ -197,7 +211,7 @@ export const ROSTER: MemberDef[] = [
     taste: burger('无糖、茶、白开水'),
     phoneBias: { douyin: 1.35, wechat: 2.3 },
     roles: ['队伍保障'],
-    look: { height: 0.9, girth: 0.90, glasses: true, shirt: 0x4a8ad4, pants: 0x2a2e3a, hair: 0x2a2420, skin: 0xf2caa6, shoes: 0xf0f0ee, hairStyle: 'short' },
+    look: { glasses: true, flipflops: true, badge: true, shirt: 0x1256d2, pants: 0x121a2e, hair: 0x3a3a40, skin: 0xeab07c, shoes: 0x2458c0, hairStyle: 'fringe' },
   },
   {
     id: 'dibi', name: '弟必', position: 'mid',
@@ -233,7 +247,7 @@ export const ROSTER: MemberDef[] = [
     taste: { ...burger('可乐，也喝茶'), favoriteMul: 2.2 },
     phoneBias: { douyin: 1.2, wechat: 2, mobilegame: 2.8 },
     roles: ['和事佬'],
-    look: { height: 1.15, girth: 0.88, glasses: true, shirt: 0xf2efe8, pants: 0x2c3f5c, hair: 0x231e1c, skin: 0xefc7a2, shoes: 0x2e2e34, hairStyle: 'side' },
+    look: { glasses: true, flipflops: true, badge: true, shirt: 0xf0dab2, pants: 0x121a2e, hair: 0x3a3a40, skin: 0xeab07c, shoes: 0x2458c0, hairStyle: 'sweep', headset: { color: 0xeceae4, mic: false }, neckphones: true },
   },
   {
     id: 'diaolong', name: '吊隆', position: 'support',
@@ -269,7 +283,7 @@ export const ROSTER: MemberDef[] = [
     taste: { ...burger('咖啡'), avoidTags: ['内脏'] },
     phoneBias: { douyin: 1.05, bilibili: 2.4, wechat: 2, hupu: 2.2 },
     roles: ['指挥'],
-    look: { height: 1.02, girth: 0.98, glasses: false, shirt: 0x1e3a6e, pants: 0x4a453f, hair: 0x0e0c0b, skin: 0xe8bd95, shoes: 0xd4d4d0, hairStyle: 'buzz' },
+    look: { glasses: false, flipflops: true, badge: true, shirt: 0x15254d, pants: 0x121a2e, hair: 0x323237, skin: 0xeab07c, shoes: 0x2458c0, hairStyle: 'crew', brows: 'stern', headset: { color: 0x182a5e } },
   },
   {
     id: 'piegan', name: '撇干', position: 'top',
@@ -306,7 +320,7 @@ export const ROSTER: MemberDef[] = [
     taste: noFav('可乐', true),
     phoneBias: { douyin: 1.1, bilibili: 2, wechat: 1.8, xiaohongshu: 2.6 },
     roles: ['甩锅', '也会背锅'],
-    look: { height: 0.98, girth: 1.18, glasses: false, shirt: 0xc43a3a, pants: 0x22252c, hair: 0x2a211c, skin: 0xedc29b, shoes: 0xe9e9e9, hairStyle: 'short' },
+    look: { glasses: false, flipflops: true, badge: true, shirt: 0xcc1d1a, pants: 0x121a2e, hair: 0x323237, skin: 0xeab07c, shoes: 0x2458c0, hairStyle: 'crew', brows: 'stern', headset: { color: 0xc41a17 } },
   },
 ];
 
