@@ -9,13 +9,15 @@ import { TIER_CN } from '../data/leagues';
 import { PHONE_APPS } from '../data/phoneApps';
 import { DISH_BY_ID } from '../data/takeout';
 import { pick, range, seeded, shuffle, weightedPick, type Rand } from '../core/rng';
-import { POSITIONS, ROSTER, positionFit, type MemberDef, type Position } from '../data/roster';
+import { ROSTER, type MemberDef } from '../data/roster';
 import { habitLine, phoneLabel, phoneWeight, snackWeightMul, soloLabel } from '../data/voice';
 import { tryPersonaEvent } from './personaEvents';
 import type { GameState, LogEntry, MemberState, StatusKey } from '../save/state';
 import { performAction } from './actions';
 import { grantDailyInsight, runPayday } from './economy';
 import { expireKnots } from './relations';
+import { enterDay, roundSettled } from './league';
+import { lineupSlots } from './lineup';
 import { buildPlans, MATCH_END, segmentAt, type DayPlan } from './schedule';
 import { courierTrack, orderFor, planMorning, resolveMeal, settleMeals, type CourierTrack, type TakeoutPerson } from './takeout';
 
@@ -128,26 +130,14 @@ export class World {
     return r == null ? null : opponentForRound(this.state.season.tier, r);
   }
 
-  // 首发：每个位置选“能力 × 位置适性 + 心情”最高的人。上单主要在阿鸡和撇干之间，心情能翻盘
-  // M3 改成老板在赛前手动选
+  // 当天确认过的首发优先；还没确认就按能力 × 位置适性 + 心情自动排，赛前可以改
   computeStarters(): string[] {
-    const used = new Set<string>();
-    const out: string[] = [];
-    const score = (m: Member, pos: Position) => {
-      const a = m.state.ability;
-      const core = pos === 'top' ? a.lane + a.mech : pos === 'jungle' ? a.roam + a.sense : pos === 'mid' ? a.lane + a.fight : pos === 'adc' ? a.mech + a.fight : a.sense + a.roam;
-      return core * positionFit(m.def, pos) + m.state.status.心情 * 0.2;
-    };
-    for (const pos of POSITIONS) {
-      const best = this.members.filter((m) => !used.has(m.id)).sort((x, y) => score(y, pos) - score(x, pos))[0];
-      used.add(best.id);
-      out.push(best.id);
-    }
-    return out;
+    return lineupSlots(this.state, this.state.clock.day);
   }
 
   // ───── 推进 ─────
   startDay(day: number, fresh: boolean) {
+    for (const text of enterDay(this.state, day, fresh)) this.logAt('剧情', text, [], DAY_START);
     if (fresh && day > 1) {
       const gained = grantDailyInsight(this.state, this.members.map((m) => m.slackMin), day - 1);
       expireKnots(this.state, day);
@@ -233,7 +223,9 @@ export class World {
     if (t < plan.arrive) return { kind: 'absent', label: '还没到' };
     if (t >= plan.leave) return { kind: 'absent', label: '已下班' };
     if (matchDay && t >= MATCH_MINUTE && t < MATCH_END) {
-      return this.starters.includes(m.id) ? { kind: 'match', label: '比赛中' } : { kind: 'sub', label: '台下 · 第二解说' };
+      const done = roundSettled(this.state);
+      if (this.starters.includes(m.id)) return { kind: 'match', label: done ? '赛后还坐在机位上' : '比赛中' };
+      return { kind: 'sub', label: done ? '台下 · 第二解说收工' : '台下 · 第二解说' };
     }
     if (matchDay && t >= PREMATCH_MINUTE && t < MATCH_MINUTE) return { kind: 'meeting', label: this.meetingLabel() };
     const meal = this.mealActivity(m, t);
@@ -535,7 +527,7 @@ export class World {
         : this.has('whiteboard')
           ? '赛前会：大家在白板前分开站好。'
           : '赛前会：大家在空地上分开站好。',
-      match: opp ? `比赛开始！vs「${opp.name}」。（比赛引擎 M3 实装）` : '比赛开始！',
+      match: opp ? `直播打开了，对阵「${opp.name}」。` : '直播打开了。',
     };
     const text = lines[seg.id];
     if (text) this.log(seg.id === 'match' || (seg.id === 'morning' && this.today.round != null) ? '有趣' : '日常', text, []);

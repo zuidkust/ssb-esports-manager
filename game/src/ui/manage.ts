@@ -88,7 +88,7 @@ export function manageHtml(world: World, pick: [string, string]): string {
     <p class="sub">只列出${VENUE_CN[s.venueLevel]}能买的。买了才出现在这块场地里。</p>
     <div class="act-list">${facs}</div>
     <h3>赞助</h3>
-    <p class="sub">同时最多 2 个。完成上一档目标才解锁下一档。胜场要等比赛引擎，现在先挂得上第一档。</p>
+    <p class="sub">同时最多 2 个。完成上一档目标才解锁下一档。赢场和名次会在比赛打完后推进。</p>
     <div class="act-list">${sponsors}</div>
     <div class="row"><button class="btn accent" id="manageClose">回到场地</button></div>`;
 }

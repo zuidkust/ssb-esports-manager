@@ -3,10 +3,11 @@ import { dayInfo, MATCH_MINUTE, PREMATCH_MINUTE } from '../core/calendar';
 import type { ClockState } from '../core/clock';
 import { DAY_START } from '../core/clock';
 import { START_CASH, START_STASH } from '../data/economy';
-import type { Tier } from '../data/leagues';
+import { OPPONENTS, OUR_ID, type Tier } from '../data/leagues';
 import { ROSTER, INITIAL_BOND, type AbilityKey, type PersonaKey } from '../data/roster';
+import { STARTER_TACTICS, type TacticId } from '../data/tactics';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export const FOUNDING_TEXT = '老板在网吧包下了角落的 6 台机器，SSB 战队今天正式成立。目标：打出网吧联赛。';
 
@@ -138,13 +139,71 @@ export function emptyMeals(day = 0): MealsState {
   return { day, morning: [] };
 }
 
+export interface SeasonState {
+  tier: Tier;
+  /** 本赛季已经打完的轮次 */
+  round: number;
+  table: Record<string, { w: number; l: number }>;
+  /** 这份积分榜属于第几个日历赛季 */
+  calendarSeason: number;
+  /** 各联赛对手累计加的实力 */
+  growth: Partial<Record<Tier, number>>;
+  /** 本日历赛季的升降和排名奖已经发过 */
+  settled: boolean;
+}
+
+export interface LineupSave {
+  day: number;
+  /** 五个位置的队员 id，顺序是上、野、中、AD、辅 */
+  slots: string[];
+  tactic: TacticId;
+}
+
+export interface SeriesSave {
+  day: number;
+  /** 正在打的局，从 1 开始 */
+  game: number;
+  us: number;
+  them: number;
+  phase: 'play' | 'gap';
+  /** 已经把胜负加进 us/them 的局数 */
+  accounted: number;
+  /** 已经扣过疲劳的局数 */
+  loaded: number;
+}
+
+export interface BroadcastSave {
+  day: number;
+  game: number;
+  cursor: number;
+  seed: number;
+}
+
+export function emptyTable(tier: Tier): Record<string, { w: number; l: number }> {
+  const table: Record<string, { w: number; l: number }> = { [OUR_ID]: { w: 0, l: 0 } };
+  for (const o of OPPONENTS[tier]) table[o.id] = { w: 0, l: 0 };
+  return table;
+}
+
+export function emptySeason(tier: Tier = 'netcafe', calendarSeason = 1): SeasonState {
+  return { tier, round: 0, table: emptyTable(tier), calendarSeason, growth: {}, settled: false };
+}
+
 export interface GameState {
   version: number;
   seed: number;
   createdAt: number;
   savedAt: number;
   clock: ClockState;
-  season: { tier: Tier; round: number; table: Record<string, { w: number; l: number }> };
+  season: SeasonState;
+  /** 已经学会的战术 */
+  tactics: TacticId[];
+  /** 最近一次确认的首发。day 对得上才用 */
+  lineup: LineupSave | null;
+  /** BO3 打到一半的系列赛。网吧 BO1 通常一场就结 */
+  series: SeriesSave | null;
+  /** 直播放到第几条。读档接着放 */
+  broadcast: BroadcastSave | null;
   cash: number;
   insight: number;
   privateStash: number;
@@ -191,7 +250,11 @@ export function createNewGame(seed = Math.floor(Math.random() * 2 ** 31)): GameS
     createdAt: now,
     savedAt: now,
     clock: { day: 1, minute: DAY_START, speed: 'x1', paused: false },
-    season: { tier: 'netcafe', round: 0, table: {} },
+    season: emptySeason(),
+    tactics: [...STARTER_TACTICS],
+    lineup: null,
+    series: null,
+    broadcast: null,
     cash: START_CASH,
     insight: 0,
     privateStash: START_STASH,
@@ -220,4 +283,15 @@ export function createNewGame(seed = Math.floor(Math.random() * 2 ** 31)): GameS
 // 比赛日 18:30–19:00 之间、本场首发还没确认：要（重新）弹出赛前确认。读档后也按这个判断
 export function needsPrematch(s: GameState, day: number, minute: number): boolean {
   return dayInfo(day).round != null && minute >= PREMATCH_MINUTE && minute < MATCH_MINUTE && s.prematchConfirmedDay !== day;
+}
+
+// 18:30 的确认窗，或者已经到 19:00 但首发还没确认（调试跳过了赛前）。读档落在窗口里会重新弹
+export function needsLineupConfirm(s: GameState, day: number, minute: number): boolean {
+  if (needsPrematch(s, day, minute)) return true;
+  const info = dayInfo(day);
+  if (info.round == null || minute < MATCH_MINUTE) return false;
+  if (s.prematchConfirmedDay === day) return false;
+  if (s.season.settled) return false;
+  if (s.season.calendarSeason === info.season && s.season.round >= info.round) return false;
+  return true;
 }

@@ -17,6 +17,21 @@ export const RENT = [2000, 6000, 18000, 50000];
 
 export const WIN_BONUS: Record<Tier, number> = { netcafe: 500, city: 2000, national: 8000 };
 export const MATCH_INSIGHT = { win: 60, loss: 30 };
+// 赛季排名奖。5 名及以后没有排名奖；网吧垫底也不降级，只是拿不到这笔
+export const SEASON_PRIZE: Record<Tier, { champ: number; runner: number; top4: number }> = {
+  netcafe: { champ: 5000, runner: 3000, top4: 1000 },
+  city: { champ: 20000, runner: 12000, top4: 5000 },
+  national: { champ: 80000, runner: 50000, top4: 20000 },
+};
+
+export function placementPrize(tier: Tier, rank: number): number {
+  const p = SEASON_PRIZE[tier];
+  if (!p) return 0;
+  if (rank === 1) return p.champ;
+  if (rank === 2) return p.runner;
+  if (rank === 3 || rank === 4) return p.top4;
+  return 0;
+}
 
 // 全队全勤约 30 / 天：每人 5。加班 ×1.5
 export const DAILY_INSIGHT_EACH = 5;
