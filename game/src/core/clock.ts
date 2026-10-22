@@ -36,6 +36,8 @@ export class GameClock {
   minute: number;
   speed: SpeedId;
   manualPause: boolean;
+  // 调试面板的自由倍速（1–60）。不进存档；切回底部 1/2/3 档位时清掉。夜间快进不看这个数。
+  debugRate: number | null = null;
   private holds = new Map<string, string>(); // 自动暂停：原因 id → 说明
 
   constructor(s: ClockState) {
@@ -65,12 +67,24 @@ export class GameClock {
     this.holds.delete(id);
   }
 
+  // 跳时间时丢掉「match-第几天」这类自动暂停，避免停在已经过去的比赛日
+  releasePrefixed(prefix: string): void {
+    for (const id of [...this.holds.keys()]) if (id.startsWith(prefix)) this.holds.delete(id);
+  }
+
   isHeld(id: string): boolean {
     return this.holds.has(id);
   }
 
   setSpeed(s: SpeedId): void {
     this.speed = s;
+    this.debugRate = null;
+    this.manualPause = false;
+  }
+
+  setDebugRate(mult: number): void {
+    const n = Math.round(Number.isFinite(mult) ? mult : 1);
+    this.debugRate = Math.max(1, Math.min(60, n));
     this.manualPause = false;
   }
 
@@ -94,7 +108,8 @@ export class GameClock {
     let newDay = false;
     for (let guard = 0; guard < 4 && remaining > 1e-9; guard++) {
       const night = this.night;
-      const rate = night ? NIGHT_RATE : BASE_RATE * SPEEDS[this.speed].mult;
+      const mult = this.debugRate ?? SPEEDS[this.speed].mult;
+      const rate = night ? NIGHT_RATE : BASE_RATE * mult;
       let boundary = !night ? DAY_END : this.minute >= DAY_END ? 24 * 60 : DAY_START;
       let isStop = false;
       for (const s of stopAt) {

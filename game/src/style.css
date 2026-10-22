@@ -361,3 +361,34 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 }
 @media (min-width: 761px) { #nightHint { left: calc(50% - 200px); } }
 @media (max-width: 760px) { .res { width: 100%; } .res-item { font-size: 11px; padding: 4px 9px; } }
+
+/* 调试面板：只有 ?debug=1 才会创建 #god，平时这些规则不作用在任何元素上 */
+#god {
+  position: absolute; left: 16px; top: 78px; z-index: 46; width: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35); backdrop-filter: blur(14px); font-size: 12px;
+}
+#god .god-toggle {
+  background: transparent; color: var(--muted); border: 0; padding: 6px 10px; cursor: pointer; font-size: 12px;
+}
+#god:not(.collapsed) { width: 292px; }
+#god.collapsed .god-body { display: none; }
+#god .god-body { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+#god .god-row { display: flex; gap: 6px; align-items: center; }
+#god .god-wrap { flex-wrap: wrap; }
+#god .god-grow { flex: 1; }
+#god label { display: flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
+#god input, #god select {
+  background: rgba(255, 255, 255, 0.06); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 6px; font: inherit; min-width: 0;
+}
+#god input[type="number"] { width: 72px; }
+#god input[type="text"] { width: 64px; }
+#god input[type="range"] { width: 100%; padding: 0; }
+#god select { flex: 1; max-width: 100%; }
+#god button {
+  background: rgba(255, 255, 255, 0.07); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 4px 8px; font: inherit; cursor: pointer; white-space: nowrap;
+}
+#god button:hover { background: rgba(255, 255, 255, 0.13); }
+#god .god-note { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.4; }

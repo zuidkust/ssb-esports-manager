@@ -206,6 +206,61 @@ function line(rand: Rand, id: string, map: Record<string, string>): string {
   return pick(rand, LINES[id] ?? ['发生了一件和外卖有关的事。']).replace(/\{(\w+)\}/g, (_, k) => map[k] ?? '');
 }
 
+// 把一次连锁写进效果和动态。调用方负责冷却；这里不掷骰。
+function attachChain(
+  rand: Rand,
+  state: GameState,
+  order: MealOrder,
+  chain: ChainPick,
+  people: TakeoutPerson[],
+  place: string,
+  mealEnd: number,
+  effects: MealEffect[],
+  logs: ResolvedMeal['logs'],
+): void {
+  const dish = DISH_BY_ID[order.dishId];
+  const other = chain.otherId;
+  const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? id;
+  const social: SocialDelta[] = [];
+  const extra: StatusDelta[] = [];
+  if (chain.id === 'luosifen' && other) {
+    if (rand() < 0.5) social.push({ type: 'knot', a: order.memberId, b: other, cause: '螺蛳粉' });
+    else social.push({ type: 'bond', a: order.memberId, b: other, n: 1 });
+  } else if (chain.id === 'mooch' && other) {
+    if (rand() < 0.5) social.push({ type: 'bond', a: order.memberId, b: other, n: 2 });
+    else social.push({ type: 'knot', a: order.memberId, b: other, cause: '蹭外卖' });
+  } else if (chain.id === 'spill') {
+    extra.push(statusOf(order.memberId, { 心情: -5 }));
+    if (other && rand() < 0.5) social.push({ type: 'bond', a: order.memberId, b: other, n: 1 });
+  } else if (chain.id === 'late') {
+    extra.push(statusOf(order.memberId, { 心情: -4, 专注: -4 }));
+    order.deliveredAt = Math.min(mealEnd - 4, order.deliveredAt + 8);
+    order.eatUntil = Math.min(mealEnd, order.deliveredAt + 16);
+  } else if (chain.id === 'wrong' && other) {
+    extra.push(statusOf(order.memberId, { 心情: -3 }));
+  } else if (chain.id === 'share' && other) {
+    social.push({ type: 'bond', a: order.memberId, b: other, n: 1 });
+  } else if (chain.id === 'famous') {
+    for (const p of people) extra.push(statusOf(p.id, { 心情: 3 }));
+    state.record.fame += 1;
+  } else if (chain.id === 'spicybill') {
+    order.price = 60;
+    extra.push(statusOf(order.memberId, { 心情: -2 }));
+  }
+  effects.push({ at: order.deliveredAt, status: extra, social, applied: false });
+  logs.push({
+    level: '有趣',
+    minute: order.deliveredAt,
+    text: line(rand, chain.id, {
+      a: nameOf(order.memberId),
+      b: other ? nameOf(other) : '旁边的人',
+      dish: dish.name,
+      place,
+    }),
+    ids: other ? [order.memberId, other] : [order.memberId],
+  });
+}
+
 export interface ResolveInput {
   state: GameState;
   people: TakeoutPerson[];
@@ -296,47 +351,7 @@ export function resolveMeal(input: ResolveInput): ResolvedMeal {
     if (!cooldownOk(state, chain.id, day)) continue;
     markCooldown(state, chain.id, day);
     chains.push(chain.id);
-    const dish = DISH_BY_ID[o.dishId];
-    const other = chain.otherId;
-    const social: SocialDelta[] = [];
-    const extra: StatusDelta[] = [];
-    if (chain.id === 'luosifen' && other) {
-      if (rand() < 0.5) social.push({ type: 'knot', a: o.memberId, b: other, cause: '螺蛳粉' });
-      else social.push({ type: 'bond', a: o.memberId, b: other, n: 1 });
-    } else if (chain.id === 'mooch' && other) {
-      if (rand() < 0.5) social.push({ type: 'bond', a: o.memberId, b: other, n: 2 });
-      else social.push({ type: 'knot', a: o.memberId, b: other, cause: '蹭外卖' });
-    } else if (chain.id === 'spill') {
-      extra.push(statusOf(o.memberId, { 心情: -5 }));
-      if (other && rand() < 0.5) social.push({ type: 'bond', a: o.memberId, b: other, n: 1 });
-    } else if (chain.id === 'late') {
-      extra.push(statusOf(o.memberId, { 心情: -4, 专注: -4 }));
-      o.deliveredAt = Math.min(mealEnd - 4, o.deliveredAt + 8);
-      o.eatUntil = Math.min(mealEnd, o.deliveredAt + 16);
-    } else if (chain.id === 'wrong' && other) {
-      extra.push(statusOf(o.memberId, { 心情: -3 }));
-    } else if (chain.id === 'share' && other) {
-      social.push({ type: 'bond', a: o.memberId, b: other, n: 1 });
-    } else if (chain.id === 'famous') {
-      for (const p of people) extra.push(statusOf(p.id, { 心情: 3 }));
-      state.record.fame += 1;
-    } else if (chain.id === 'spicybill') {
-      o.price = 60;
-      extra.push(statusOf(o.memberId, { 心情: -2 }));
-    }
-    effects.push({ at: o.deliveredAt, status: extra, social, applied: false });
-    const text = line(rand, chain.id, {
-      a: nameOf(o.memberId),
-      b: other ? nameOf(other) : '旁边的人',
-      dish: dish.name,
-      place,
-    });
-    logs.push({
-      level: '有趣',
-      minute: o.deliveredAt,
-      text,
-      ids: other ? [o.memberId, other] : [o.memberId],
-    });
+    attachChain(rand, state, o, chain, people, place, mealEnd, effects, logs);
   }
 
   let short = false;
@@ -440,6 +455,105 @@ export interface CourierTrack {
   enter: number;
   leave: number;
   stops: { memberId: string; at: number }[];
+}
+
+const FORCE_CHAINS = new Set<string>([...CHAINS.map((c) => c.id), 'luosifen']);
+
+export interface ForceDeliveryInput {
+  state: GameState;
+  people: TakeoutPerson[];
+  day: number;
+  meal: 'lunch' | 'dinner';
+  memberId: string;
+  dishId: string;
+  chainId?: string | null;
+  place: string;
+}
+
+export interface ForcedDelivery {
+  minute: number;
+  chainId: string | null;
+  logs: ResolvedMeal['logs'];
+}
+
+// 调试：不掷概率、不看冷却，直接加一单（需要搭档的连锁再加一单），并套用同一套连锁效果。
+export function forceDelivery(input: ForceDeliveryInput): ForcedDelivery {
+  const { state, people, day, meal, place } = input;
+  const chainId = input.chainId && FORCE_CHAINS.has(input.chainId) ? input.chainId : null;
+  let dishId = input.dishId;
+  if (chainId === 'luosifen') dishId = 'luosifen';
+  else if (chainId === 'spicybill') dishId = 'malatang';
+  if (!DISH_BY_ID[dishId] || dishId === 'instant' || dishId === 'jianbing') dishId = 'huangmen';
+  const dish = DISH_BY_ID[dishId];
+
+  const info = dayInfo(day);
+  const matchEve = meal === 'dinner' && info.round != null;
+  const mealStart = meal === 'lunch' ? H(12) : H(18);
+  const mealEnd = meal === 'lunch' ? H(13, 30) : matchEve ? PREMATCH_MINUTE - 2 : H(19);
+
+  if (state.meals.day !== day) state.meals = { day, morning: [] };
+  let rec = meal === 'lunch' ? state.meals.lunch : state.meals.dinner;
+  if (!rec) {
+    rec = { meal, orders: [], effects: [], chains: [] };
+    if (meal === 'lunch') state.meals.lunch = rec;
+    else state.meals.dinner = rec;
+  }
+
+  const order: MealOrder = {
+    memberId: input.memberId,
+    dishId,
+    price: dish.price,
+    payer: 'self',
+    deliveredAt: Math.min(mealEnd - 6, mealStart + 8),
+    eatUntil: 0,
+    delivery: true,
+  };
+  order.eatUntil = Math.min(mealEnd, order.deliveredAt + 18);
+  rec.orders = rec.orders.filter((o) => o.memberId !== input.memberId);
+  rec.orders.push(order);
+
+  const others = people.filter((p) => p.id !== input.memberId);
+  const partner = others[0];
+  const needsPartner = chainId === 'same' || chainId === 'share';
+  let partnerOrder: MealOrder | null = null;
+  if (needsPartner && partner) {
+    const partnerDish = chainId === 'same' ? dish : dishId === 'shaxian' ? DISH_BY_ID.huangmen : DISH_BY_ID.shaxian;
+    partnerOrder = {
+      memberId: partner.id,
+      dishId: partnerDish.id,
+      price: partnerDish.price,
+      payer: 'self',
+      deliveredAt: order.deliveredAt,
+      eatUntil: order.eatUntil,
+      delivery: true,
+    };
+    rec.orders = rec.orders.filter((o) => o.memberId !== partner.id);
+    rec.orders.push(partnerOrder);
+  }
+
+  const logs: ResolvedMeal['logs'] = [];
+  for (const o of [order, partnerOrder].filter((o): o is MealOrder => !!o)) {
+    const d = DISH_BY_ID[o.dishId];
+    const status: StatusDelta[] = [statusOf(o.memberId, { ...d.self, 饥饿: -SATIETY_HUNGER[d.satiety] })];
+    if (d.others) for (const p of people) if (p.id !== o.memberId) status.push(statusOf(p.id, d.others));
+    rec.effects.push({ at: o.deliveredAt, status, social: [], applied: false });
+  }
+
+  const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? id;
+  if (chainId) {
+    markCooldown(state, chainId, day);
+    rec.chains.push(chainId);
+    const rand = seeded(state.seed, 'takeout-force', day, meal, input.memberId, chainId);
+    attachChain(rand, state, order, { id: chainId, otherId: partner?.id }, people, place, mealEnd, rec.effects, logs);
+  }
+  logs.unshift({
+    level: '日常',
+    minute: Math.max(mealStart, order.deliveredAt - 4),
+    text: `${meal === 'lunch' ? '午饭' : '晚饭'}：${nameOf(order.memberId)}点了${DISH_BY_ID[order.dishId].name}。`,
+    ids: partnerOrder ? [order.memberId, partnerOrder.memberId] : [order.memberId],
+  });
+  if (order.dishId === 'huangmen') state.record.huangmenji += 1;
+  return { minute: order.deliveredAt, chainId, logs };
 }
 
 export function courierTrack(meals: MealsState, minute: number): CourierTrack | null {

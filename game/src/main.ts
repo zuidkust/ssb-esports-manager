@@ -21,6 +21,7 @@ import { Board } from './ui/board';
 import { Card } from './ui/card';
 import { bindManage, manageHtml } from './ui/manage';
 import { buyFacility } from './sim/economy';
+import { mountGodPanel } from './debug/panel';
 
 const params = new URLSearchParams(location.search);
 const $ = (id: string) => document.getElementById(id)!;
@@ -172,6 +173,7 @@ function checkPrematch() {
 
 // ───────── 顶部信息与时间控制 ─────────
 let hudTick = 0;
+let syncGod: (() => void) | null = null;
 function updateHud() {
   $('clockTime').textContent = fmtHM(clock.minute);
   const now = performance.now();
@@ -196,7 +198,10 @@ function updateHud() {
     : nm && nm.inDays === 0 && opp
       ? `今晚 19:00 第 ${nm.round} 轮 · vs ${opp.name}`
       : nm ? `下一场：${nm.inDays} 天后 · 第 ${nm.round} 轮` : '—';
-  document.querySelectorAll<HTMLElement>('#speeds button').forEach((b) => b.classList.toggle('on', b.dataset.s === clock.speed && !clock.paused));
+  document.querySelectorAll<HTMLElement>('#speeds button').forEach((b) => {
+    b.classList.toggle('on', clock.debugRate == null && b.dataset.s === clock.speed && !clock.paused);
+  });
+  syncGod?.();
   $('pauseBtn').textContent = clock.paused ? '▶' : '⏸';
   $('pauseBtn').classList.toggle('on', clock.manualPause);
   const holds = clock.holdReasons;
@@ -221,7 +226,8 @@ $('pauseBtn').addEventListener('click', () => clock.togglePause());
 $('menuBtn').addEventListener('click', () => showMenu());
 $('manageBtn').addEventListener('click', () => showManage());
 addEventListener('keydown', (e) => {
-  if ((e.target as HTMLElement).tagName === 'INPUT') return;
+  const tag = (e.target as HTMLElement).tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (e.key === 'Escape') return modalOpen ? closeModal() : showMenu();
   if (modalOpen) return;
   if (e.key === ' ') {
@@ -490,6 +496,38 @@ function setVenue(level: number, facilities: string[]) {
   syncVenue();
   world.update(clock.minute, 0, true);
   director.snapAll();
+}
+
+// 测试面板只在 ?debug=1 时挂上。没有这个参数就不会创建节点。
+if (params.get('debug') === '1') {
+  const god = mountGodPanel({
+    getClock: () => clock,
+    world,
+    snap: () => director.snapAll(),
+    refreshBoard: () => board.set(state.eventLog),
+    checkPrematch,
+    checkBankrupt,
+    setVenueLevel(level) {
+      state.venueLevel = level;
+      world.refreshVenue();
+      syncVenue();
+      world.update(clock.minute, 0, true);
+      director.snapAll();
+    },
+    dismissBlocking() {
+      if (!modalOpen) return;
+      modalClosable = true;
+      closeModal();
+    },
+    ensureLive() {
+      if (live) return;
+      live = true;
+      modalClosable = true;
+      closeModal();
+    },
+    toast,
+  });
+  syncGod = () => god.sync();
 }
 
 (window as unknown as { __ssb: unknown }).__ssb = {

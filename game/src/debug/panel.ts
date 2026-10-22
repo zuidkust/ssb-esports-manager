@@ -1,0 +1,223 @@
+// 只有 ?debug=1 才会挂上这块面板。平时不要调用。
+import { fmtHM, SPEEDS, type GameClock } from '../core/clock';
+import { VENUE_CN } from '../data/facilities';
+import { CHAINS, DISHES } from '../data/takeout';
+import type { World } from '../sim/world';
+import {
+  applyJump,
+  clampVenue,
+  clearCooldowns,
+  forceTakeout,
+  jumpToNextEvent,
+  jumpToNextMatch,
+  jumpToNextPayday,
+  jumpToNextTakeout,
+  parseHM,
+  setActionPoints,
+  setCash,
+} from './god';
+
+export interface GodHooks {
+  getClock: () => GameClock;
+  world: World;
+  snap: () => void;
+  refreshBoard: () => void;
+  checkPrematch: () => void;
+  checkBankrupt: () => void;
+  setVenueLevel: (level: number) => void;
+  dismissBlocking: () => void;
+  ensureLive: () => void;
+  toast: (msg: string) => void;
+}
+
+export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
+  const root = document.createElement('div');
+  root.id = 'god';
+  root.className = 'collapsed';
+  const delivery = DISHES.filter((d) => d.id !== 'jianbing' && d.id !== 'instant' && d.slots.some((s) => s === 'lunch' || s === 'dinner'));
+  const chains = [...CHAINS.map((c) => ({ id: c.id, name: c.name })), { id: 'luosifen', name: '螺蛳粉抗议' }];
+  const members = hooks.world.members;
+
+  root.innerHTML = `
+    <button type="button" class="god-toggle" id="godToggle">调试</button>
+    <div class="god-body">
+      <div class="god-row">
+        <label>第 <input id="godDay" type="number" min="1" step="1" /> 天</label>
+        <input id="godTime" type="text" inputmode="numeric" placeholder="12:00" maxlength="5" />
+        <button type="button" id="godJump">跳到</button>
+      </div>
+      <div class="god-row god-wrap">
+        <button type="button" data-jump="takeout">下一顿外卖</button>
+        <button type="button" data-jump="match">下一场比赛</button>
+        <button type="button" data-jump="payday">下一次发薪</button>
+        <button type="button" data-jump="event">下一事件</button>
+      </div>
+      <div class="god-row">
+        <label class="god-grow">倍速 <b id="godRate">×1</b>
+          <input id="godSlider" type="range" min="1" max="60" step="1" value="1" />
+        </label>
+        <button type="button" id="godPause">暂停</button>
+      </div>
+      <p class="god-note">夜间快进大约 6 秒，不吃这个倍率。底部的正常 / ×3 / ×10 会把它清掉。</p>
+      <div class="god-row">
+        <label>现金 <input id="godCash" type="number" min="0" step="1" /></label>
+        <button type="button" id="godCashSet">设置</button>
+      </div>
+      <div class="god-row">
+        <label>行动点 <input id="godAp" type="number" min="0" max="99" step="1" /></label>
+        <button type="button" id="godApSet">设置</button>
+      </div>
+      <div class="god-row">
+        <label class="god-grow">场地
+          <select id="godVenue">${VENUE_CN.map((name, i) => `<option value="${i}">${name}</option>`).join('')}</select>
+        </label>
+        <button type="button" id="godVenueSet">设置</button>
+      </div>
+      <div class="god-row">
+        <label class="god-grow">队员
+          <select id="godMember">${members.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select>
+        </label>
+      </div>
+      <div class="god-row">
+        <label class="god-grow">外卖
+          <select id="godDish">${delivery.map((d) => `<option value="${d.id}">${d.name}</option>`).join('')}</select>
+        </label>
+        <button type="button" id="godOrder">点这单</button>
+      </div>
+      <div class="god-row">
+        <label class="god-grow">连锁
+          <select id="godChain">${chains.map((c) => `<option value="${c.id}">${c.name}</option>`).join('')}</select>
+        </label>
+        <button type="button" id="godChainGo">触发</button>
+      </div>
+      <div class="god-row">
+        <button type="button" id="godClear">清空冷却</button>
+      </div>
+    </div>`;
+  document.getElementById('app')!.appendChild(root);
+
+  const $ = (id: string) => root.querySelector<HTMLElement>(`#${id}`)!;
+  const dayInput = $('godDay') as HTMLInputElement;
+  const timeInput = $('godTime') as HTMLInputElement;
+  const slider = $('godSlider') as HTMLInputElement;
+  const rateLabel = $('godRate');
+  const pauseBtn = $('godPause');
+
+  function fillClock() {
+    const clock = hooks.getClock();
+    dayInput.value = String(clock.day);
+    timeInput.value = fmtHM(clock.minute);
+  }
+  function sync() {
+    const clock = hooks.getClock();
+    const mult = clock.debugRate ?? SPEEDS[clock.speed].mult;
+    rateLabel.textContent = clock.manualPause ? `暂停 · ×${mult}` : `×${mult}`;
+    pauseBtn.textContent = clock.manualPause ? '继续' : '暂停';
+    if (document.activeElement !== slider) slider.value = String(mult);
+  }
+  function afterTime(note: string) {
+    hooks.ensureLive();
+    hooks.dismissBlocking();
+    hooks.snap();
+    hooks.refreshBoard();
+    hooks.checkPrematch();
+    hooks.checkBankrupt();
+    fillClock();
+    sync();
+    hooks.toast(note);
+  }
+
+  $('godToggle').addEventListener('click', () => {
+    const open = root.classList.toggle('collapsed');
+    $('godToggle').setAttribute('aria-expanded', open ? 'false' : 'true');
+    if (!root.classList.contains('collapsed')) {
+      fillClock();
+      ( $('godCash') as HTMLInputElement).value = String(hooks.world.state.cash);
+      ( $('godAp') as HTMLInputElement).value = String(hooks.world.state.actionPoints);
+      ( $('godVenue') as HTMLSelectElement).value = String(hooks.world.state.venueLevel);
+      sync();
+    }
+  });
+  $('godToggle').setAttribute('aria-expanded', 'false');
+
+  $('godJump').addEventListener('click', () => {
+    const minute = parseHM(timeInput.value);
+    if (minute == null) {
+      hooks.toast('时间写成 12:00 这样');
+      return;
+    }
+    const at = applyJump(hooks.world, hooks.getClock(), Number(dayInput.value), minute);
+    afterTime(`已跳到第 ${at.day} 天 ${fmtHM(at.minute)}`);
+  });
+
+  root.querySelectorAll<HTMLButtonElement>('[data-jump]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const clock = hooks.getClock();
+      const kind = btn.dataset.jump;
+      if (kind === 'takeout') {
+        const at = jumpToNextTakeout(hooks.world, clock);
+        afterTime(at ? `下一顿外卖 · 第 ${at.day} 天 ${fmtHM(at.minute)}` : '这几天没有外卖');
+      } else if (kind === 'match') {
+        const at = jumpToNextMatch(hooks.world, clock);
+        afterTime(at ? `下一场比赛 · 第 ${at.day} 天 ${fmtHM(at.minute)}` : '没有下一场比赛');
+      } else if (kind === 'payday') {
+        const at = jumpToNextPayday(hooks.world, clock);
+        afterTime(`发薪日 · 第 ${at.day} 天 ${fmtHM(at.minute)}`);
+      } else if (kind === 'event') {
+        const beat = jumpToNextEvent(hooks.world, clock);
+        afterTime(`下一事件 · ${beat.label} · 第 ${beat.day} 天 ${fmtHM(beat.minute)}`);
+      }
+    });
+  });
+
+  slider.addEventListener('input', () => {
+    hooks.ensureLive();
+    hooks.getClock().setDebugRate(Number(slider.value));
+    sync();
+  });
+  pauseBtn.addEventListener('click', () => {
+    hooks.ensureLive();
+    hooks.getClock().togglePause();
+    sync();
+  });
+
+  $('godCashSet').addEventListener('click', () => {
+    hooks.ensureLive();
+    const n = setCash(hooks.world.state, Number(($('godCash') as HTMLInputElement).value));
+    ($('godCash') as HTMLInputElement).value = String(n);
+    hooks.toast(`现金改为 ${n.toLocaleString('zh-CN')}`);
+  });
+  $('godApSet').addEventListener('click', () => {
+    hooks.ensureLive();
+    const n = setActionPoints(hooks.world.state, Number(($('godAp') as HTMLInputElement).value));
+    ($('godAp') as HTMLInputElement).value = String(n);
+    hooks.toast(`行动点改为 ${n}`);
+  });
+  $('godVenueSet').addEventListener('click', () => {
+    hooks.ensureLive();
+    hooks.dismissBlocking();
+    const level = clampVenue(Number(($('godVenue') as HTMLSelectElement).value));
+    hooks.setVenueLevel(level);
+    hooks.refreshBoard();
+    hooks.checkPrematch();
+    hooks.checkBankrupt();
+    hooks.toast(`场地改为${VENUE_CN[level]}`);
+  });
+
+  function order(chain: string | null) {
+    const memberId = ($('godMember') as HTMLSelectElement).value;
+    const dishId = ($('godDish') as HTMLSelectElement).value;
+    const at = forceTakeout(hooks.world, hooks.getClock(), memberId, dishId, chain);
+    const who = members.find((m) => m.id === memberId)?.name ?? memberId;
+    afterTime(chain ? `已触发连锁 · ${who} · 第 ${at.day} 天 ${fmtHM(at.minute)}` : `已点外卖 · ${who} · 第 ${at.day} 天 ${fmtHM(at.minute)}`);
+  }
+  $('godOrder').addEventListener('click', () => order(null));
+  $('godChainGo').addEventListener('click', () => order(($('godChain') as HTMLSelectElement).value));
+  $('godClear').addEventListener('click', () => {
+    hooks.ensureLive();
+    clearCooldowns(hooks.world.state);
+    hooks.toast('冷却已清空');
+  });
+
+  return { sync };
+}
