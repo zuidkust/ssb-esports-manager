@@ -60,7 +60,7 @@ CHROME="/usr/bin/chromium" npm run shots                                        
 $env:CHROME="C:\Program Files\Google\Chrome\Application\chrome.exe"; npm run shots  # Windows PowerShell
 ```
 
-调试链接参数：`?day=2&t=18:20&speed=x10` 跳到某天某时刻（跳过标题，不写存档）；`&paused=1` 暂停；`&card=shidian` 打开人物卡；`&q=low` 低画质；`&venue=1` 换成小办公室（默认买齐该场地能买的设施），`&fac=snack,fridge` 指定已买设施，`&fac=none` 一件不买。测试面板见下方「调试模式」，只有 `?debug=1` 才会出现。
+调试链接参数：`?day=2&t=18:20&speed=x10` 跳到某天某时刻（跳过标题，不写存档）；`&paused=1` 暂停；`&card=aji` 打开人物卡；`&q=low` 低画质；`&venue=1` 换成小办公室（默认买齐该场地能买的设施），`&fac=snack,fridge` 指定已买设施，`&fac=none` 一件不买。测试面板见下方「调试模式」，只有 `?debug=1` 才会出现。
 
 ## 调试模式（仅测试）
 

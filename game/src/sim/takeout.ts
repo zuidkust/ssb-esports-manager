@@ -3,6 +3,7 @@ import { dayInfo, PREMATCH_MINUTE } from '../core/calendar';
 import { pick, seeded, weightedPick, type Rand } from '../core/rng';
 import { availableFacilities } from '../data/facilities';
 import { ROSTER } from '../data/roster';
+import { preferenceMul, takeoutQuip } from '../data/voice';
 import {
   CHAIN_CHANCE,
   CHAIN_COOLDOWN_DAYS,
@@ -51,7 +52,7 @@ function deliveryPool(slot: MealSlot, ctx: { lastMatchWon: boolean; lowMood: boo
   });
 }
 
-function dishWeight(d: DishDef, ctx: { lowMood: boolean; monthEnd: boolean; unpaid: boolean; matchEve: boolean; thursday: boolean }): number {
+function dishWeight(d: DishDef, ctx: { lowMood: boolean; monthEnd: boolean; unpaid: boolean; matchEve: boolean; thursday: boolean }, memberId: string): number {
   let w = 1;
   if (ctx.monthEnd || ctx.unpaid) {
     if (d.tags.includes('便宜')) w += 2;
@@ -59,10 +60,10 @@ function dishWeight(d: DishDef, ctx: { lowMood: boolean; monthEnd: boolean; unpa
   }
   if (ctx.lowMood && (d.id === 'milktea' || d.id === 'friedchicken')) w += 2;
   if (ctx.matchEve && d.tags.includes('稳')) w += 2;
-  // 赛前晚饭避开螺蛳粉。谁例外等人设，这里一视同仁【待定】
+  // 赛前晚饭都少点螺蛳粉。阿鸡不挑、也不讨厌它，不再单开例外。
   if (ctx.matchEve && d.id === 'luosifen') w = 0.05;
   if (ctx.thursday && d.id === 'mcd') w *= 2;
-  return w;
+  return w * preferenceMul(memberId, d);
 }
 
 function cooldownOk(state: GameState, chainId: string, day: number): boolean {
@@ -291,7 +292,7 @@ export function resolveMeal(input: ResolveInput): ResolvedMeal {
     const prob = orderProbability(p, { unpaid, monthEnd });
     if (rand() < prob) {
       const pool = deliveryPool(meal, { lastMatchWon: !!state.record.lastMatchWon, lowMood: p.status.心情 < 45, monthEnd, unpaid, matchEve, thursday });
-      const dish = weightedPick(rand, pool, (d) => dishWeight(d, { lowMood: p.status.心情 < 45, monthEnd, unpaid, matchEve, thursday })) ?? pool[0];
+      const dish = weightedPick(rand, pool, (d) => dishWeight(d, { lowMood: p.status.心情 < 45, monthEnd, unpaid, matchEve, thursday }, p.id)) ?? pool[0];
       orders.push({
         memberId: p.id,
         dishId: dish.id,
@@ -386,6 +387,10 @@ export function resolveMeal(input: ResolveInput): ResolvedMeal {
       text: short ? line(rand, 'short', {}) : line(rand, 'subsidy', {}),
       ids: [],
     });
+  }
+  for (const o of drops) {
+    const q = takeoutQuip(o.memberId, o.dishId, rand);
+    if (q) logs.push({ level: '日常', minute: o.deliveredAt, text: q, ids: [o.memberId] });
   }
   const noodles = orders.filter((o) => o.dishId === 'instant');
   if (noodles.length) {

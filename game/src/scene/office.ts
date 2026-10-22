@@ -16,8 +16,8 @@ import {
 export const ROOM = { x0: -7, x1: 7, z0: -5, z1: 5, h: 3.0 };
 export const DESK_X = [-3.6, -1.5, 0.6];
 export const ROW_Z = [-4.45, -1.75];
-// 工位：后排（靠窗）吊龙、地鼠、弟必；前排 施颠、当邓、批菊
-export const DESK_OWNERS = ['diaolong', 'dishu', 'dibi', 'shidian', 'dangdeng', 'piju'];
+// 工位：后排（靠窗）吊隆、狗粮、弟必；前排 阿鸡、当邓、撇干
+export const DESK_OWNERS = ['diaolong', 'gouliang', 'dibi', 'aji', 'dangdeng', 'piegan'];
 
 type MatOpts = THREE.MeshStandardMaterialParameters;
 const matCache = new Map<string, THREE.MeshStandardMaterial>();

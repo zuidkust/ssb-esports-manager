@@ -10,6 +10,8 @@ import { PHONE_APPS } from '../data/phoneApps';
 import { DISH_BY_ID } from '../data/takeout';
 import { pick, range, seeded, shuffle, weightedPick, type Rand } from '../core/rng';
 import { POSITIONS, ROSTER, positionFit, type MemberDef, type Position } from '../data/roster';
+import { habitLine, phoneLabel, phoneWeight, snackWeightMul, soloLabel } from '../data/voice';
+import { tryPersonaEvent } from './personaEvents';
 import type { GameState, LogEntry, MemberState, StatusKey } from '../save/state';
 import { performAction } from './actions';
 import { grantDailyInsight, runPayday } from './economy';
@@ -70,6 +72,7 @@ export class World {
   starters: string[] = [];
   facilities: Set<FacilityId>;
   private lastLine: Record<string, number> = {};
+  private lastPersonaBlock = -1;
   private benchCache = new Map<number, Set<string>>(); // 日常动态节流：成员:类别 → 上次写动态的时刻
   private listeners = new Set<(e: LogEntry) => void>();
 
@@ -125,7 +128,7 @@ export class World {
     return r == null ? null : opponentForRound(this.state.season.tier, r);
   }
 
-  // 首发：每个位置选“能力 × 位置适性 + 心情”最高的人；上单在施颠和批菊之间竞争
+  // 首发：每个位置选“能力 × 位置适性 + 心情”最高的人。上单主要在阿鸡和撇干之间，心情能翻盘
   // M3 改成老板在赛前手动选
   computeStarters(): string[] {
     const used = new Set<string>();
@@ -171,6 +174,7 @@ export class World {
     this.starters = this.computeStarters();
     for (const m of this.members) m.slackMin = 0;
     this.lastLine = {};
+    this.lastPersonaBlock = -1;
     this.benchCache.clear();
   }
 
@@ -216,7 +220,10 @@ export class World {
         if (m.slacking && !m.activity.bench) m.slackMin += advanced; // 轮空不算摸鱼
       }
     }
-    if (!jumped) this.segmentLines(minute, advanced);
+    if (!jumped) {
+      this.segmentLines(minute, advanced);
+      this.personaTick(minute);
+    } else this.lastPersonaBlock = Math.floor(minute / 20);
   }
 
   private activityAt(m: Member, t: number): Activity {
@@ -296,8 +303,8 @@ export class World {
     }
     if (k === 'eat') return { kind: 'eat', label: '这把轮空，趁空吃点东西', bench: true };
     if (k === 'stream') return { kind: 'slack_stream', label: '这把轮空，在电脑上看比赛直播', bench: true };
-    const app = weightedPick(r, PHONE_APPS, (a) => a.weight)!;
-    return { kind: 'slack_phone', label: `${app.label}（这把轮空）`, app: app.id, bench: true };
+    const app = weightedPick(r, PHONE_APPS, (a) => phoneWeight(m.def, a))!;
+    return { kind: 'slack_phone', label: `${phoneLabel(m.def, app)}（这把轮空）`, app: app.id, bench: true };
   }
 
   // 点了外卖的人等外卖员；没点的人继续待在工位上干别的。煎饼、泡面不叫外卖
@@ -373,17 +380,17 @@ export class World {
       const kinds: [ActivityKind, number, string][] = [
         ['slack_phone', 2 + p.摸鱼倾向 / 30, '耍手机'],
         ['slack_stream', 1 + p.话痨 / 50, '在电脑上看直播“复盘”'],
-        ['snack', !this.has('snack') ? 0 : s.饥饿 > 55 ? 3 : 0.8, '去零食柜觅食'],
+        ['snack', (!this.has('snack') ? 0 : s.饥饿 > 55 ? 3 : 0.8) * snackWeightMul(m.id), '去零食柜觅食'],
         ['fridge', this.has('fridge') ? 0.8 : 0, '开冰箱拿饮料'],
         ['drink', this.has('cooler') ? 1.2 : 0, '去饮水机接水'],
         ['toilet', 0.8, '带薪如厕'],
       ];
       const k = weightedPick(r, kinds, (x) => x[1])!;
       // 去茶水区、厕所只占半个时间块，其余时间回去单排
-      if ((k[0] === 'snack' || k[0] === 'fridge' || k[0] === 'drink' || k[0] === 'toilet') && sub >= 5) return { kind: 'solo', label: '单排冲分' };
+      if ((k[0] === 'snack' || k[0] === 'fridge' || k[0] === 'drink' || k[0] === 'toilet') && sub >= 5) return { kind: 'solo', label: soloLabel(m.id, breakTime, r) };
       if (k[0] === 'slack_phone') {
-        const app = weightedPick(r, PHONE_APPS, (a) => a.weight)!;
-        return { kind: 'slack_phone', label: `${app.label}（摸鱼）`, app: app.id };
+        const app = weightedPick(r, PHONE_APPS, (a) => phoneWeight(m.def, a))!;
+        return { kind: 'slack_phone', label: `${phoneLabel(m.def, app)}（摸鱼）`, app: app.id };
       }
       return { kind: k[0], label: k[2] };
     }
@@ -391,7 +398,7 @@ export class World {
       const buddy = this.members.find((o) => o !== m && this.bond(m.id, o.id) >= 45 && this.presentAt(o, t));
       if (buddy) return { kind: 'duo', label: `和${buddy.name}双排`, partner: buddy.id };
     }
-    return { kind: 'solo', label: breakTime ? '饭后单排一把' : '单排冲分' };
+    return { kind: 'solo', label: soloLabel(m.id, breakTime, r) };
   }
 
   // 每 10 分钟块最多一对人闲聊，话痨的人更容易被抽中
@@ -442,9 +449,10 @@ export class World {
         : pick(r, [`${n}加练到很晚，打完最后一把才走。`, `${n}打完最后一把，伸了个懒腰下班。`]);
     } else if (next.kind === 'nap_sofa') text = `${n}占领了沙发，说是去“想战术”。`;
     else if (next.kind === 'nap_desk') {
-      text = m.state.persona.爱睡觉 >= 60
+      const habit = habitLine(m.id, 'nap_desk', '', undefined, r);
+      text = habit ?? (m.state.persona.爱睡觉 >= 60
         ? pick(r, [`${n}又趴在键盘上睡着了，屏幕上全是 jjjjjj。`, `${n}：“我就眯五分钟。”然后呼噜声响起。`, `${n}头一点一点，最后整个人趴下了。`])
-        : pick(r, [`${n}趴在桌上午睡。`, `${n}把外套往头上一盖，趴下了。`]);
+        : pick(r, [`${n}趴在桌上午睡。`, `${n}把外套往头上一盖，趴下了。`]));
     } else if (next.bench) {
       // 轮空：只在刚下场时写一条
       if (!prev.bench) text = `${n}这把轮空，${this.benchLine(next)}。`;
@@ -481,24 +489,26 @@ export class World {
     const other = a.partner ? this.byId[a.partner].name : '';
     switch (a.kind) {
       case 'slack_phone': {
-        const app = a.label.replace('（摸鱼）', '');
+        const voiced = habitLine(m.id, 'slack_phone', '', a.app, r);
+        if (voiced) return voiced;
+        const app = a.label.replace('（摸鱼）', '').replace('（这把轮空）', '');
         if (a.app === 'douyin') return pick(r, [`${n}摸出手机${app}，外放声音有点大。`, `${n}${app}，一刷就停不下来。`, `${n}${app}，嘴角疯狂上扬。`]);
         if (a.app === 'generic') return pick(r, [`${n}低头耍手机，不知道在看什么。`, `${n}把手机藏在键盘后面耍。`]);
         return pick(r, [`${n}摸出手机${app}。`, `${n}趁没人注意，${app}。`]);
       }
       case 'slack_stream':
-        return pick(r, [`${n}在电脑上开了个直播，说是在“复盘”。`, `${n}看起了主播的直播，声称在学思路。`]);
+        return habitLine(m.id, 'slack_stream', '', undefined, r) ?? pick(r, [`${n}在电脑上开了个直播，说是在“复盘”。`, `${n}看起了主播的直播，声称在学思路。`]);
       case 'duo':
         return a.partner && a.partner < m.id ? null : `${n}拉上${other}双排。`;
       case 'chat':
         if (!a.host) return null;
-        return m.id === 'dishu' ? `地鼠凑到${other}旁边：“如何评价……”` : pick(r, [`${n}溜到${other}旁边闲聊。`, `${n}和${other}聊起了昨晚那把。`]);
+        return habitLine(m.id, 'chat', other, undefined, r) ?? pick(r, [`${n}溜到${other}旁边闲聊。`, `${n}和${other}聊起了昨晚那把。`]);
       case 'snack':
-        return pick(r, [`${n}去零食柜翻了翻，拿走一包薯片。`, `${n}在零食柜前犹豫了很久。`]);
+        return habitLine(m.id, 'snack', '', undefined, r) ?? pick(r, [`${n}去零食柜翻了翻，拿走一包薯片。`, `${n}在零食柜前犹豫了很久。`]);
       case 'fridge':
-        return pick(r, [`${n}打开冰箱拿了瓶饮料。`, `${n}在冰箱前站了半天，不知道在找什么。`]);
+        return habitLine(m.id, 'fridge', '', undefined, r) ?? pick(r, [`${n}打开冰箱拿了瓶饮料。`, `${n}在冰箱前站了半天，不知道在找什么。`]);
       case 'drink':
-        return `${n}起身去饮水机接水。`;
+        return habitLine(m.id, 'drink', '', undefined, r) ?? `${n}起身去饮水机接水。`;
       case 'toilet':
         return pick(r, [`${n}起身去了趟厕所，带薪的那种。`, `${n}：“我去趟厕所。”手机也一起带走了。`]);
       default:
@@ -529,6 +539,15 @@ export class World {
     };
     const text = lines[seg.id];
     if (text) this.log(seg.id === 'match' || (seg.id === 'morning' && this.today.round != null) ? '有趣' : '日常', text, []);
+  }
+
+  private personaTick(minute: number) {
+    const block = Math.floor(minute / 20);
+    if (block === this.lastPersonaBlock) return;
+    this.lastPersonaBlock = block;
+    const present = this.members.filter((m) => m.present).map((m) => m.id);
+    const fired = tryPersonaEvent(this.state, present, this.segment(minute).id, this.state.clock.day, minute);
+    if (fired) this.log(fired.level, fired.text, fired.ids);
   }
 
   log(level: LogEntry['level'], text: string, ids: string[]) {
