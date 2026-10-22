@@ -6,6 +6,7 @@ import { actionPointMax, tierCashMult } from '../data/economy';
 import { availableFacilities, VENUE_CN } from '../data/facilities';
 import { ABILITY_KEYS, pairKey, ROSTER_BY_ID } from '../data/roster';
 import type { GameState, LogEntry, StatusKey } from '../save/state';
+import { REST_LINES, bossLine } from '../data/voice';
 import { addBond, addKnot, clearOneKnot, hasKnot } from './relations';
 
 export function effectScale(nth: number): { mult: number; backfire: boolean } {
@@ -132,9 +133,10 @@ export function performAction(
     case 'talk': {
       bump(state, targets[0], '心情', sc(8));
       bump(state, targets[0], '压力', sc(-6));
-      text = preview.backfire
+      const custom = preview.backfire ? null : bossLine('talk', targets[0], rand);
+      text = custom ?? (preview.backfire
         ? `${name(targets[0])}听老板说了两句，反而更烦了。`
-        : pick(rand, [`老板把${name(targets[0])}叫到一边说了会儿话。`, `${name(targets[0])}点点头，回到座位上。`, `单独谈完，${name(targets[0])}的肩膀松了一点。`, `老板没当着大家的面说，${name(targets[0])}听完没接话。`]);
+        : pick(rand, [`老板把${name(targets[0])}叫到一边说了会儿话。`, `${name(targets[0])}点点头，回到座位上。`, `单独谈完，${name(targets[0])}的肩膀松了一点。`, `老板没当着大家的面说，${name(targets[0])}听完没接话。`]));
       break;
     }
     case 'milktea': {
@@ -147,7 +149,8 @@ export function performAction(
         `老板请奶茶。${name(quiet.id)}的那杯被挡在袋子最里面。`,
       ];
       const used = state.actionHistory.filter((h) => h.action === 'milktea').length;
-      text = preview.backfire ? '奶茶又来了。有人连杯子都没拿。' : lines[(used - 1) % lines.length];
+      const aji = preview.backfire ? '' : bossLine('milktea', 'aji', rand) ?? '';
+      text = preview.backfire ? '奶茶又来了。有人连杯子都没拿。' : `${lines[(used - 1) % lines.length]}${aji}`;
       break;
     }
     case 'host': {
@@ -174,26 +177,29 @@ export function performAction(
     case 'praise': {
       bump(state, targets[0], '心情', sc(10));
       for (const m of state.roster) if (m.id !== targets[0]) bump(state, m.id, '心情', sc(-2));
-      text = preview.backfire
+      const custom = preview.backfire ? null : bossLine('praise', targets[0], rand);
+      text = custom ?? (preview.backfire
         ? `老板又当众夸${name(targets[0])}。旁边的人没什么反应。`
         : pick(rand, [
             `老板当众表扬了${name(targets[0])}。`,
             `${name(targets[0])}被点名夸了。有人鼓掌，有人在看自己的屏幕。`,
             `表扬完，${name(targets[0])}耳根有点红。`,
             `老板说${name(targets[0])}最近打得好。其余的人没接话。`,
-          ]);
+          ]));
       break;
     }
     case 'scold': {
       const m = state.roster.find((r) => r.id === targets[0])!;
-      const fired = m.persona.胜负心 >= 75 && preview.mult > 0;
-      bump(state, targets[0], '心情', fired ? sc(4) : sc(-8));
-      bump(state, targets[0], '压力', sc(6));
-      text = preview.backfire
+      const fired = m.persona.胜负心 >= 75 && m.persona.逆风意志 >= 50 && preview.mult > 0;
+      const thin = m.id === 'aji' ? 0.35 : m.id === 'dibi' ? 0.55 : m.id === 'gouliang' ? 0.75 : m.id === 'dangdeng' || m.id === 'piegan' ? 1.2 : 1;
+      bump(state, targets[0], '心情', fired ? sc(4) : sc(-8 * thin));
+      bump(state, targets[0], '压力', sc(m.id === 'aji' ? 2 : 6));
+      const custom = preview.backfire ? null : bossLine('scold', targets[0], rand);
+      text = custom ?? (preview.backfire
         ? `老板点名说了${name(targets[0])}。对方回了句“知道了”，语气很硬。`
         : fired
           ? `${name(targets[0])}被点名之后反而坐直了，说下一把打回来。`
-          : `老板点名批评了${name(targets[0])}。座位那边安静了一会儿。`;
+          : `老板点名批评了${name(targets[0])}。座位那边安静了一会儿。`);
       break;
     }
     case 'mediate': {
@@ -243,7 +249,7 @@ export function performAction(
           m.status.心情 = 100;
           m.status.疲劳 = 0;
         }
-        text = '老板放假一天。训练心得没有了，人是松下来了。';
+        text = pick(rand, REST_LINES);
       } else {
         bumpAll(state, '心情', -8);
         bumpAll(state, '疲劳', 8);

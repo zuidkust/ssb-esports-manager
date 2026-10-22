@@ -19,7 +19,7 @@ const cases = process.argv[2]
       { name: '03-team-1520', q: 't=15:20&day=3&paused=1' },
       { name: '04-lunch-1325', q: 't=13:40&day=3&paused=1' },
       { name: '05-night-2140', q: 't=21:40&day=3&paused=1' },
-      { name: '06-card', q: 't=10:30&day=3&paused=1&card=shidian' },
+      { name: '06-card', q: 't=10:30&day=3&paused=1&card=aji' },
       { name: '07-match-1910', q: 't=19:10&day=2&paused=1' },
       { name: '08-netcafe-nap-1350', q: 't=13:50&day=3&paused=1' },
       { name: '09-night-2230', q: 't=22:30&day=3&paused=1' },

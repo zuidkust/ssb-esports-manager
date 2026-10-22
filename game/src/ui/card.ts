@@ -1,5 +1,5 @@
 // 人物卡片：此刻在干嘛、状态、能力（7 属性）、性格、交情
-import { ABILITY_CN, ABILITY_KEYS, PERSONA_KEYS, POSITION_CN } from '../data/roster';
+import { ABILITY_CN, ABILITY_KEYS, PERSONA_KEYS, POSITION_CN, ROSTER_BY_ID, comboOf } from '../data/roster';
 import { fmtHM } from '../core/clock';
 import { visibleLogText } from './board';
 import { STATUS_KEYS } from '../save/state';
@@ -44,6 +44,11 @@ export class Card {
     const bonds = world.members.filter((o) => o !== m).map((o) => ({ o, v: world.bond(m.id, o.id) })).sort((a, b) => b.v - a.v);
     const tier = (v: number) => BOND_TIERS.find(([t]) => v >= t)![1];
     const mine = world.state.eventLog.filter((e) => e.ids.includes(m.id)).slice(0, 4);
+    const food = d.taste.favorites.length ? '汉堡炸鸡' : '不挑';
+    const tea = d.taste.milkTea ? '奶茶随便' : '奶茶换成可乐';
+    const offal = d.taste.avoidTags.length ? `，不吃${d.taste.avoidTags.join('、')}` : '';
+    const combo = comboOf(d.id);
+    const partner = combo ? ROSTER_BY_ID[combo.a === d.id ? combo.b : combo.a]?.name : '';
     const html = `
       <div class="card-head">
         <div class="avatar" style="background:linear-gradient(135deg, ${hex(d.look.shirt)}, #1d2333)">${d.name[0]}</div>
@@ -57,7 +62,15 @@ export class Card {
       <div class="card-now"><small>此刻在干嘛</small>${m.activity.label}</div>
       <div class="card-sec"><h4>状态 <span>今天摸鱼 ${Math.round(m.slackMin)} 分钟</span></h4>
         ${STATUS_KEYS.map((k) => this.bar(k, st.status[k], STATUS_COLOR[k])).join('')}</div>
-      <div class="card-sec"><h4>能力 <span>【占位数值】</span></h4>
+      <div class="card-sec"><h4>人设</h4>
+        <div>招牌 ${d.heroes.join('、')}${d.heroNote ? `。${d.heroNote}` : ''}</div>
+        ${d.draft?.neverPicks.length ? `<div>不选 ${d.draft.neverPicks.join('、')}。队伍想要开团上单，尤其${d.draft.teamWants.join('、')}，他不拿。</div>` : ''}
+        <div>口头禅「${d.catchphrases[0] ?? ''}」</div>
+        <div>外卖 ${food}（${d.taste.drinks}；${tea}${offal}）</div>
+        <div>怎么哄 ${d.cheer}</div>
+        ${combo ? `<div>和${partner}的${combo.lane}连招 ${combo.name}</div>` : ''}
+      </div>
+      <div class="card-sec"><h4>能力 <span>人设初值</span></h4>
         ${ABILITY_KEYS.map((k) => this.bar(ABILITY_CN[k], st.ability[k], 'linear-gradient(90deg,#5a8dee,#8fb3ff)')).join('')}</div>
       <div class="card-sec"><h4>性格</h4>
         <div class="persona">${PERSONA_KEYS.map((k) => `<span>${k}<em>${Math.round(st.persona[k])}</em></span>`).join('')}</div></div>
