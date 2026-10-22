@@ -44,12 +44,12 @@ export class Courier {
   constructor(parent: THREE.Object3D) {
     this.char = new Character(COURIER_DEF);
     const bag = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.34, 0.22), mat(0xf5c400, { roughness: 0.55 }));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.12), mat(0xf5c400, { roughness: 0.55 }));
     body.castShadow = true;
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.24), mat(0x1a1a1a, { roughness: 0.4 }));
-    lid.position.y = 0.18;
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.03, 0.13), mat(0x1a1a1a, { roughness: 0.4 }));
+    lid.position.y = 0.11;
     bag.add(body, lid);
-    bag.position.set(0, 1.05, -0.16);
+    bag.position.set(0, 0.52, -0.16);
     this.char.root.add(bag);
     this.char.setHidden(true);
     parent.add(this.char.root);
