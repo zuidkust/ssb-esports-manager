@@ -7,8 +7,8 @@
 
 ## 项目状态
 
-- 平台：Windows 优先（后续 macOS）
-- 技术方向：Electron + Three.js + TypeScript，本地存档
+- 平台：前期 HTML 网页版（macOS 上开发试玩），后期 Electron 打包，正式发行 Windows 优先（后续 macOS）
+- 技术方向：Vite + Three.js + TypeScript，本地存档（网页版支持导出 / 导入），后期 Electron 打包
 - 视觉：3D 等距办公室（沿用 Claude Code 样板）
 - 最新设计文档：[`docs/SSB电竞经理-设计文档-v0.3.md`](docs/SSB电竞经理-设计文档-v0.3.md)
 
