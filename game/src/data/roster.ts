@@ -32,7 +32,7 @@ export interface MemberDef {
   id: string;
   name: string;
   position: Position;
-  secondary?: Position; // 次位：适性约 85%；【待人设】除施颠外暂未确定
+  secondary?: Position; // 次位：适性约 85%；【待人设】除阿鸡外暂未确定
   tagline: string;
   arrive: 'early' | 'normal'; // 到岗习惯
   ability: Record<AbilityKey, number>;
@@ -43,31 +43,31 @@ export interface MemberDef {
 
 export const ROSTER: MemberDef[] = [
   {
-    id: 'shidian', name: '施颠', position: 'top', secondary: 'jungle',
+    id: 'shidian', name: '阿鸡', position: 'top', secondary: 'jungle',
     tagline: '无厘头发明流，全队甩锅对象，心态极好',
     arrive: 'early',
     ability: { lane: 36, roam: 40, fight: 42, sense: 35, mech: 38, pool: 60, mental: 85 },
     persona: { 嘴硬: 20, 心态倾向: 90, 胜负心: 40, 逆风意志: 70, 创新欲: 95, 话痨: 70, 摸鱼倾向: 65, 甩锅倾向: 10, 爱睡觉: 70 },
     heroes: ['石头人', '诺手', '加里奥', '蒙多'],
-    look: { height: 1.0, girth: 1.32, glasses: true, flipflops: true, shirt: 0xe8833a, pants: 0x4a5a6e, hair: 0x2b2420, skin: 0xf0c8a0, hairStyle: 'messy' },
+    look: { height: 1.0, girth: 1.10, glasses: true, flipflops: true, shirt: 0xff8a2b, pants: 0x3d4f66, hair: 0x2b2420, skin: 0xf0c8a0, shoes: 0xe8833a, hairStyle: 'messy' },
   },
   {
     id: 'dangdeng', name: '当邓', position: 'jungle',
-    tagline: '嘴硬求胜，逆风爱提投降，爱批评施颠',
+    tagline: '嘴硬求胜，逆风爱提投降，爱批评阿鸡',
     arrive: 'normal',
     ability: { lane: 40, roam: 48, fight: 42, sense: 42, mech: 45, pool: 35, mental: 40 },
     persona: { 嘴硬: 85, 心态倾向: 45, 胜负心: 85, 逆风意志: 30, 创新欲: 25, 话痨: 60, 摸鱼倾向: 45, 甩锅倾向: 80, 爱睡觉: 35 },
     heroes: ['盲僧', '赵信', '男枪', '皇子'],
-    look: { height: 0.86, girth: 0.92, glasses: true, shirt: 0x3f6b4f, pants: 0x2f3440, hair: 0x1d1a18, skin: 0xeec39c, shoes: 0x2b2b30, hairStyle: 'short' },
+    look: { height: 0.84, girth: 0.86, glasses: true, shirt: 0x2f8a4a, pants: 0x1e2430, hair: 0x1d1a18, skin: 0xeec39c, shoes: 0x1a1a1e, hairStyle: 'short' },
   },
   {
-    id: 'dishu', name: '地鼠', position: 'adc',
+    id: 'dishu', name: '狗粮', position: 'adc',
     tagline: '发挥稳定；休息时嘴碎，口头禅“如何评价”',
     arrive: 'normal',
     ability: { lane: 54, roam: 42, fight: 52, sense: 50, mech: 55, pool: 40, mental: 68 },
     persona: { 嘴硬: 40, 心态倾向: 70, 胜负心: 55, 逆风意志: 60, 创新欲: 30, 话痨: 85, 摸鱼倾向: 50, 甩锅倾向: 30, 爱睡觉: 55 },
     heroes: ['卡莎', '艾希', '女警', '霞'],
-    look: { height: 0.88, girth: 1.3, glasses: true, shirt: 0x5b7fb5, pants: 0x3b3b44, hair: 0x2a2420, skin: 0xf2caa6, hairStyle: 'short' },
+    look: { height: 0.9, girth: 0.90, glasses: true, shirt: 0x4a8ad4, pants: 0x2a2e3a, hair: 0x2a2420, skin: 0xf2caa6, shoes: 0xf0f0ee, hairStyle: 'short' },
   },
   {
     id: 'dibi', name: '弟必', position: 'mid',
@@ -76,25 +76,25 @@ export const ROSTER: MemberDef[] = [
     ability: { lane: 45, roam: 40, fight: 50, sense: 50, mech: 48, pool: 40, mental: 70 },
     persona: { 嘴硬: 35, 心态倾向: 65, 胜负心: 60, 逆风意志: 75, 创新欲: 30, 话痨: 25, 摸鱼倾向: 35, 甩锅倾向: 25, 爱睡觉: 40 },
     heroes: ['沙皇', '维克托', '卡萨丁', '妖姬'],
-    look: { height: 1.13, girth: 0.92, glasses: true, shirt: 0xe9e6df, pants: 0x384a66, hair: 0x231e1c, skin: 0xefc7a2, shoes: 0x3a3a40, hairStyle: 'side' },
+    look: { height: 1.15, girth: 0.88, glasses: true, shirt: 0xf2efe8, pants: 0x2c3f5c, hair: 0x231e1c, skin: 0xefc7a2, shoes: 0x2e2e34, hairStyle: 'side' },
   },
   {
-    id: 'diaolong', name: '吊龙', position: 'support',
+    id: 'diaolong', name: '吊隆', position: 'support',
     tagline: '大局观强会指挥；轻松时段子手，紧张时话少',
     arrive: 'early',
     ability: { lane: 44, roam: 52, fight: 58, sense: 64, mech: 44, pool: 45, mental: 60 },
     persona: { 嘴硬: 45, 心态倾向: 60, 胜负心: 70, 逆风意志: 55, 创新欲: 30, 话痨: 65, 摸鱼倾向: 35, 甩锅倾向: 60, 爱睡觉: 30 },
     heroes: ['锤石', '洛', '泰坦', '娜美'],
-    look: { height: 1.0, girth: 1.14, glasses: false, shirt: 0x2f3e66, pants: 0x55504a, hair: 0x151312, skin: 0xe8bd95, hairStyle: 'buzz' },
+    look: { height: 1.02, girth: 0.98, glasses: false, shirt: 0x1e3a6e, pants: 0x4a453f, hair: 0x0e0c0b, skin: 0xe8bd95, shoes: 0xd4d4d0, hairStyle: 'buzz' },
   },
   {
-    id: 'piju', name: '批菊', position: 'top',
-    tagline: '对线常被打爆但嘴硬，挨骂后转头指点施颠',
+    id: 'piju', name: '撇干', position: 'top',
+    tagline: '对线常被打爆但嘴硬，挨骂后转头指点阿鸡',
     arrive: 'normal',
     ability: { lane: 36, roam: 36, fight: 40, sense: 38, mech: 40, pool: 35, mental: 52 },
     persona: { 嘴硬: 85, 心态倾向: 55, 胜负心: 65, 逆风意志: 50, 创新欲: 30, 话痨: 55, 摸鱼倾向: 55, 甩锅倾向: 70, 爱睡觉: 60 },
     heroes: ['剑魔', '鳄鱼', '奥恩', '慎'],
-    look: { height: 0.98, girth: 1.28, glasses: false, shirt: 0x9b3b3b, pants: 0x2d2f36, hair: 0x2a211c, skin: 0xedc29b, hairStyle: 'short' },
+    look: { height: 0.98, girth: 1.18, glasses: false, shirt: 0xc43a3a, pants: 0x22252c, hair: 0x2a211c, skin: 0xedc29b, shoes: 0xe9e9e9, hairStyle: 'short' },
   },
 ];
 
@@ -107,7 +107,7 @@ export function positionFit(def: MemberDef, pos: Position): number {
   return 0.6;
 }
 
-// 开局交情（0–100，只升不降）。开局大多在 30–55；施颠被甩锅多，和大家偏熟【占位】
+// 开局交情（0–100，只升不降）。开局大多在 30–55；阿鸡被甩锅多，和大家偏熟【占位】
 export const INITIAL_BOND: Record<string, number> = {
   'dangdeng|shidian': 48, 'piju|shidian': 50, 'diaolong|shidian': 46, 'dishu|shidian': 44, 'dibi|shidian': 42,
   'dangdeng|diaolong': 40, 'dangdeng|piju': 52, 'dangdeng|dishu': 36, 'dangdeng|dibi': 34,
