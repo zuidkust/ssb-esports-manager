@@ -15,6 +15,17 @@ const COURIER_DEF: MemberDef = {
   ability: { lane: 1, roam: 1, fight: 1, sense: 1, mech: 1, pool: 1, mental: 1 },
   persona: { 嘴硬: 0, 心态倾向: 50, 胜负心: 0, 逆风意志: 0, 创新欲: 0, 话痨: 0, 摸鱼倾向: 0, 甩锅倾向: 0, 爱睡觉: 0 },
   heroes: [],
+  traits: [],
+  catchphrases: [],
+  winLines: [],
+  loseLines: [],
+  pressureLines: [],
+  cheer: '',
+  softSpots: [],
+  habits: [],
+  taste: { favorites: [], favoriteMul: 1, avoid: [], avoidTags: [], drinks: '', milkTea: true },
+  phoneBias: {},
+  roles: [],
   look: { height: 1.04, girth: 0.96, glasses: false, shirt: 0xf5c400, pants: 0x1a1a1a, hair: 0x241c18, skin: 0xf0c8a0, shoes: 0x111111, hairStyle: 'short' },
 };
 

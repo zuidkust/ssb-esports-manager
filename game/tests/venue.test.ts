@@ -65,7 +65,7 @@ describe('站位', () => {
     for (const s of withBoard) for (const b of boxes) expect(gap(s, b)).toBeGreaterThanOrEqual(0.4);
   });
 
-  it('外卖员站在地鼠的椅背外面', () => {
+  it('外卖员站在狗粮的椅背外面', () => {
     const deskZ = -4.45;
     const chairZ = 0.95;
     const z = deliveryStandZ(deskZ, chairZ);

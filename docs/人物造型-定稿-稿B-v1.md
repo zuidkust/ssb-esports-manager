@@ -13,7 +13,7 @@
 1. **不换管线**：不引入 glTF / 贴图 atlas；保持现有关节 Group 与姿态系统。
 2. **消米其林**：细肢、收腰、压厚度；胖靠 `girth` 拉开，不是全身等比例膨胀。
 3. **远看能认人**：六人靠 **高矮 + girth + 发型 + 眼镜/人字拖 + 队服撞色**。
-4. **正式名**：阿鸡、当邓、狗粮、弟必、吊隆、撇干（旧 id 可保留：`shidian/dangdeng/dishu/dibi/diaolong/piju`）。
+4. **正式名**：阿鸡、当邓、狗粮、弟必、吊隆、撇干。id 跟人设改名后的现网一致：`aji/dangdeng/gouliang/dibi/diaolong/piegan`（旧 id `shidian/dishu/piju` 由存档迁移处理）。
 
 视觉气质（锁定）：大头低多边形「手办感」、块状四肢、深灰短裤、衫色撞开；耳机打比赛时显示且罩色=shirt。
 
@@ -66,14 +66,14 @@ if (g > 1.15) {
 
 ## 3. 六人 look（定稿）
 
-| 正式名 | id（旧） | height | girth | hairStyle | glasses | flipflops | shirt | pants | hair | skin | shoes |
+| 正式名 | id | height | girth | hairStyle | glasses | flipflops | shirt | pants | hair | skin | shoes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 阿鸡 | shidian | 1.00 | 1.10 | messy | true | true | `#ff8a2b` | `#3d4f66` | `#2b2420` | `#f0c8a0` | `#e8833a`（拖色） |
+| 阿鸡 | aji | 1.00 | 1.10 | messy | true | true | `#ff8a2b` | `#3d4f66` | `#2b2420` | `#f0c8a0` | `#e8833a`（拖色） |
 | 当邓 | dangdeng | 0.84 | 0.86 | short | true | false | `#2f8a4a` | `#1e2430` | `#1d1a18` | `#eec39c` | `#1a1a1e` |
-| 狗粮 | dishu | 0.90 | **0.90** | short | true | false | `#4a8ad4` | `#2a2e3a` | `#2a2420` | `#f2caa6` | `#f0f0ee` |
+| 狗粮 | gouliang | 0.90 | **0.90** | short | true | false | `#4a8ad4` | `#2a2e3a` | `#2a2420` | `#f2caa6` | `#f0f0ee` |
 | 弟必 | dibi | 1.15 | 0.88 | side | true | false | `#f2efe8` | `#2c3f5c` | `#231e1c` | `#efc7a2` | `#2e2e34` |
 | 吊隆 | diaolong | 1.02 | 0.98 | buzz | false | false | `#1e3a6e` | `#4a453f` | `#0e0c0b` | `#e8bd95` | `#d4d4d0` |
-| 撇干 | piju | 0.98 | **1.18** | short | false | false | `#c43a3a` | `#22252c` | `#2a211c` | `#edc29b` | `#e9e9e9` |
+| 撇干 | piegan | 0.98 | **1.18** | short | false | false | `#c43a3a` | `#22252c` | `#2a211c` | `#edc29b` | `#e9e9e9` |
 
 要点：**撇干最胖（1.18，触发微肚皮）**；**狗粮偏瘦（0.90）**；当邓最矮；弟必最高。
 
@@ -104,12 +104,12 @@ look: { height: 0.98, girth: 1.18, glasses: false, shirt: 0xc43a3a, pants: 0x222
 
 ```json
 [
-  {"id":"shidian","name":"阿鸡","look":{"height":1.0,"girth":1.10,"glasses":true,"flipflops":true,"shirt":16747051,"pants":4018022,"hair":2827296,"skin":15780000,"shoes":15237946,"hairStyle":"messy"}},
+  {"id":"aji","name":"阿鸡","look":{"height":1.0,"girth":1.10,"glasses":true,"flipflops":true,"shirt":16747051,"pants":4018022,"hair":2827296,"skin":15780000,"shoes":15237946,"hairStyle":"messy"}},
   {"id":"dangdeng","name":"当邓","look":{"height":0.84,"girth":0.86,"glasses":true,"shirt":3115594,"pants":1975344,"hair":1907224,"skin":15647644,"shoes":1710622,"hairStyle":"short"}},
-  {"id":"dishu","name":"狗粮","look":{"height":0.9,"girth":0.90,"glasses":true,"shirt":4885204,"pants":2764346,"hair":2761760,"skin":15911590,"shoes":15790318,"hairStyle":"short"}},
+  {"id":"gouliang","name":"狗粮","look":{"height":0.9,"girth":0.90,"glasses":true,"shirt":4885204,"pants":2764346,"hair":2761760,"skin":15911590,"shoes":15790318,"hairStyle":"short"}},
   {"id":"dibi","name":"弟必","look":{"height":1.15,"girth":0.88,"glasses":true,"shirt":15921128,"pants":2899804,"hair":2301468,"skin":15714210,"shoes":3026484,"hairStyle":"side"}},
   {"id":"diaolong","name":"吊隆","look":{"height":1.02,"girth":0.98,"glasses":false,"shirt":1981038,"pants":4867391,"hair":920587,"skin":15252885,"shoes":13948112,"hairStyle":"buzz"}},
-  {"id":"piju","name":"撇干","look":{"height":0.98,"girth":1.18,"glasses":false,"shirt":12859962,"pants":2237740,"hair":2760988,"skin":15581851,"shoes":15329769,"hairStyle":"short"}}
+  {"id":"piegan","name":"撇干","look":{"height":0.98,"girth":1.18,"glasses":false,"shirt":12859962,"pants":2237740,"hair":2760988,"skin":15581851,"shoes":15329769,"hairStyle":"short"}}
 ]
 ```
 

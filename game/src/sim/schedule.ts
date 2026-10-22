@@ -68,11 +68,11 @@ export function buildPlans(
   for (const { def, state } of members) {
     const r = seeded(seed, 'plan', day, def.id);
     const p = state.persona;
-    let arrive = def.arrive === 'early' ? range(r, H(9), H(9, 6)) : range(r, H(9, 3), H(9, 16));
+    let arrive = def.arrive === 'early' ? range(r, H(9), H(9, 6)) : def.arrive === 'late' ? range(r, H(9, 10), H(9, 25)) : range(r, H(9, 3), H(9, 16));
     let late = false;
-    const lateP = def.arrive === 'early' ? 0.03 : 0.08 + (p.摸鱼倾向 - 50) / 400;
+    const lateP = def.arrive === 'early' ? 0.03 : def.arrive === 'late' ? 0.22 : 0.08 + (p.摸鱼倾向 - 50) / 400;
     if (r() < lateP) {
-      arrive = range(r, H(9, 24), H(9, 55));
+      arrive = def.arrive === 'late' ? range(r, H(9, 30), H(9, 58)) : range(r, H(9, 24), H(9, 55));
       late = true;
     }
     const lunch = meal(r, H(12), H(12, 12), 28, 40);
@@ -88,6 +88,7 @@ export function buildPlans(
     const dinner = meal(r, H(18), H(18, 10), 24, 36);
     let leave: number;
     if (matchDay) leave = range(r, H(21, 30), H(22, 15));
+    else if (def.arrive === 'late') leave = range(r, H(21, 10), H(22, 20));
     else if (p.胜负心 >= 70) leave = range(r, H(20, 50), H(22, 10));
     else if (p.摸鱼倾向 >= 60) leave = range(r, H(19, 20), H(20, 40));
     else leave = range(r, H(19, 40), H(21, 30));

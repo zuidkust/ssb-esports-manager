@@ -24,11 +24,11 @@ interface Body {
 
 const SEATS: { id: string; approach: string; x: number; z: number }[] = [
   { id: 'diaolong', approach: 'A0', x: -3.6, z: -3.55 },
-  { id: 'dishu', approach: 'A1', x: -1.5, z: -3.55 },
+  { id: 'gouliang', approach: 'A1', x: -1.5, z: -3.55 },
   { id: 'dibi', approach: 'A2', x: 0.6, z: -3.55 },
-  { id: 'shidian', approach: 'B0', x: -3.6, z: -0.85 },
+  { id: 'aji', approach: 'B0', x: -3.6, z: -0.85 },
   { id: 'dangdeng', approach: 'B1', x: -1.5, z: -0.85 },
-  { id: 'piju', approach: 'B2', x: 0.6, z: -0.85 },
+  { id: 'piegan', approach: 'B2', x: 0.6, z: -0.85 },
 ];
 
 function goal(seat: (typeof SEATS)[number], pose: string): EntryGoal {
