@@ -3,7 +3,7 @@
 // 事件引擎（M2）会在这一层之上挑选和结算事件
 import { dayInfo, MATCH_MINUTE, opponentForRound, PREMATCH_MINUTE } from '../core/calendar';
 import { DAY_START, fmtHM } from '../core/clock';
-import { availableFacilities, type FacilityId } from '../data/facilities';
+import { availableFacilities, VENUE_CN, type FacilityId } from '../data/facilities';
 import { actionPointMax, isPayday } from '../data/economy';
 import { TIER_CN } from '../data/leagues';
 import { PHONE_APPS } from '../data/phoneApps';
@@ -100,7 +100,7 @@ export class World {
 
   // 动态文案里对场地的称呼
   get placeName() {
-    return this.state.venueLevel === 0 ? '网吧角落' : '办公室';
+    return VENUE_CN[this.state.venueLevel] ?? '网吧角落';
   }
 
   onLog(fn: (e: LogEntry) => void) {
@@ -155,8 +155,11 @@ export class World {
       }
       this.overnight(day);
     }
-    if (this.state.apDay !== day) {
-      this.state.actionPoints = actionPointMax(this.state.venueLevel, dayInfo(day).round != null);
+    const apMax = actionPointMax(this.state.venueLevel, dayInfo(day).round != null);
+    const spentToday = this.state.actionHistory.some((h) => h.day === day);
+    // 比赛日多出来的 1 点写进当天的池子。旧档没记 apDay、或记了当天但池子还是平日的 3，且今天还没花过，就补齐。
+    if (this.state.apDay !== day || (!spentToday && this.state.actionPoints !== apMax)) {
+      this.state.actionPoints = apMax;
       this.state.apDay = day;
     }
     this.planDay = day;
@@ -509,10 +512,14 @@ export class World {
     const lines: Partial<Record<typeof seg.id, string>> = {
       morning: this.today.round != null && opp ? `今天比赛日：晚上 19:00 ${TIER_CN[this.state.season.tier]}第 ${this.today.round} 轮，对手「${opp.name}」。` : '09:00，上班。有人在单排，有人在刷手机。',
       lunch: `饭点到了，${this.placeName}里开始讨论吃什么。`,
-      team: '下午组排开始，耳机都戴上了，办公室安静下来。',
+      team: `下午组排开始，耳机都戴上了，${this.placeName}安静下来。`,
       dinner: '组排结束，晚饭时间。',
       free: this.today.round != null ? '比赛结束，大家还没散。' : '自由时间：想加练的加练，想摸鱼的摸鱼。',
-      prematch: '赛前会：所有人围到白板前。',
+      prematch: this.state.venueLevel === 0
+        ? '赛前会：大家站到自己机位后面。'
+        : this.has('whiteboard')
+          ? '赛前会：大家在白板前分开站好。'
+          : '赛前会：大家在空地上分开站好。',
       match: opp ? `比赛开始！vs「${opp.name}」。（比赛引擎 M3 实装）` : '比赛开始！',
     };
     const text = lines[seg.id];

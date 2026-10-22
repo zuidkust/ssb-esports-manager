@@ -3,13 +3,13 @@ import './style.css';
 import { dayInfo, MATCH_MINUTE, nextMatch, PREMATCH_MINUTE } from './core/calendar';
 import { fmtHM, GameClock, SPEEDS, sunPosition, type SpeedId } from './core/clock';
 import { drainRealtime, simBudget } from './core/realtime';
-import { actionPointMax } from './data/economy';
+import { actionPointLabel } from './sim/actions';
 import { allFacilitiesUpTo, VENUE_CN } from './data/facilities';
 import { TIER_CN } from './data/leagues';
 import { POSITIONS, POSITION_CN } from './data/roster';
 import { SaveError } from './save/migrate';
 import { createWebPlatform } from './save/platform';
-import { SaveManager, SLOTS, type SlotId } from './save/saves';
+import { formatWallTime, SaveManager, SLOTS, type SlotId } from './save/saves';
 import { createNewGame, needsPrematch, type GameState } from './save/state';
 import { World } from './sim/world';
 import { Director } from './scene/director';
@@ -81,6 +81,8 @@ function startGame(s: GameState, note?: string) {
   state = s;
   clock = new GameClock(s.clock);
   world.reset(s);
+  $('brandSub').textContent = `${VENUE_CN[s.venueLevel] ?? '网吧角落'} · ${TIER_CN[s.season.tier]}`;
+  $('boot').textContent = `正在布置${VENUE_CN[s.venueLevel] ?? '场地'}……`;
   syncVenue();
   world.update(clock.minute, 0, true);
   director.snapAll();
@@ -179,10 +181,9 @@ function updateHud() {
   $('clockDate').textContent = `第 ${info.season} 赛季 · 第 ${info.dayInSeason} 天 · ${info.weekdayCn}`;
   $('brandSub').textContent = `${VENUE_CN[state.venueLevel]} · ${TIER_CN[state.season.tier]}`;
   // 资源栏：M1 先显示存档里的初始值，M2 接老板动作和训练产出
-  const apMax = actionPointMax(state.venueLevel, info.round != null);
   $('resCash').textContent = state.cash.toLocaleString('zh-CN');
   $('resCash').parentElement!.title = state.unpaidMonths > 0 ? `连续 ${state.unpaidMonths} 个月没发出工资` : '公司现金';
-  $('resAp').textContent = `${Math.min(state.actionPoints, apMax)}/${apMax}`;
+  $('resAp').textContent = actionPointLabel(state, clock.day);
   $('resInsight').textContent = String(state.insight);
   $('phaseChip').textContent = clock.night ? '夜里 · 快进中' : `${world.segment(clock.minute).name} · 在岗 ${world.presentCount()}/6`;
   const nm = nextMatch(clock.day, clock.minute);
@@ -261,10 +262,13 @@ function slotRows(mode: 'menu' | 'title') {
     .list()
     .map((i) => {
       const name = i.slot === 'auto' ? '自动存档' : `存档 ${i.slot}`;
-      const when = i.savedAt ? new Date(i.savedAt).toLocaleString('zh-CN', { hour12: false }) : '';
+      const when = i.savedAt ? formatWallTime(i.savedAt) : '';
       const canSave = mode === 'menu' && i.slot !== 'auto';
+      const saveBtn = canSave
+        ? `<button class="btn" data-save="${i.slot}">保存</button>`
+        : '<button class="btn slot-ghost" tabindex="-1" aria-hidden="true">保存</button>';
       return `<div class="slot"><b>${name}</b><div>${i.label}<small>${i.broken ?? when}</small></div>
-        ${canSave ? `<button class="btn" data-save="${i.slot}">保存</button>` : '<span></span>'}
+        ${saveBtn}
         <button class="btn" data-load="${i.slot}" ${i.empty || i.broken ? 'disabled' : ''}>读取</button></div>`;
     })
     .join('');
@@ -458,6 +462,10 @@ if (params.get('day') || params.get('t') || params.get('venue')) {
     s.venueLevel = Math.max(0, Math.min(3, +params.get('venue')!));
     const fac = params.get('fac');
     s.facilities = fac == null ? allFacilitiesUpTo(s.venueLevel) : fac === 'none' ? [] : fac.split(',');
+    if (s.venueLevel > 0) {
+      const intro = s.eventLog.find((e) => e.text.includes('战队今天正式成立'));
+      if (intro) intro.text = `战队在${VENUE_CN[s.venueLevel]}训练。买下来的设施才会摆出来。`;
+    }
   }
   startGame(s);
 }

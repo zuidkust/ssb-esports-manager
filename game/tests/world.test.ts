@@ -146,6 +146,36 @@ describe('性格：爱睡觉', () => {
   });
 });
 
+describe('场地文案', () => {
+  it('称呼跟着场地等级走', () => {
+    const s = createNewGame(1);
+    const w = new World(s);
+    expect(w.placeName).toBe('网吧角落');
+    s.venueLevel = 1;
+    expect(w.placeName).toBe('小办公室');
+    s.venueLevel = 2;
+    expect(w.placeName).toBe('电竞基地');
+  });
+
+  it('赛前会文案跟着场地和白板走', () => {
+    const text = (setup?: (s: GameState) => void) => simulateDay(4, 2, setup).s.eventLog.map((e) => e.text).join('\n');
+    const cafe = text();
+    expect(cafe).toMatch(/站到自己机位后面/);
+    expect(cafe).not.toMatch(/白板/);
+    expect(text((s) => {
+      s.venueLevel = 1;
+      s.facilities = ['whiteboard'];
+    })).toMatch(/白板前分开站好/);
+    const bare = text((s) => {
+      s.venueLevel = 1;
+      s.facilities = [];
+    });
+    expect(bare).toMatch(/空地上分开站好/);
+    expect(bare).toMatch(/小办公室安静下来/);
+    expect(bare).not.toMatch(/白板/);
+  });
+});
+
 describe('事件看板日常', () => {
   it('会写摸鱼、午睡、刷手机、看直播这类日常', () => {
     const texts: string[] = [];

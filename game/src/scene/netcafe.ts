@@ -10,6 +10,7 @@ import {
   box, buildDoor, buildPlinth, cyl, DESK_OWNERS, facingTo, lathe, mat, plant, rbox, ROOM, shadow, wallClock, waterCooler, type Desk,
 } from './office';
 import { neonTexture, plasterTexture, screenTexture, signTexture, SkyTexture, tileTexture, type ScreenKind } from './textures';
+import { netcafeMeetingSpots } from './spots';
 import type { Spot, Venue } from './venue';
 
 const TEAM_X = [-4.3, -2.9, -1.5, -0.1, 1.3, 2.7]; // 战队包下的一排机位（靠后墙）
@@ -392,10 +393,10 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
   // ── 走位用的关键位置 ──
   const drinkAt = [new THREE.Vector3(4.4, 0, -4.05), new THREE.Vector3(4.95, 0, -3.75), new THREE.Vector3(3.85, 0, -3.75)];
   const meeting = (i: number): Spot => {
-    // 赛前会：围在战队机位后面的过道里
-    const a = -Math.PI / 2 + (i / 6) * Math.PI * 2;
-    const at = new THREE.Vector3(-1.5 + Math.cos(a) * 0.95, 0, -1.6 + Math.sin(a) * 0.95);
-    return { at, approach: 'MT', facing: facingTo(at, -1.5, -1.6), lead: i === 0 };
+    // 赛前会：每人站在自己机位后面的过道上，不要围成一小圈
+    const spots = netcafeMeetingSpots();
+    const s = spots[Math.max(0, Math.min(spots.length - 1, i))];
+    return { at: new THREE.Vector3(s.x, 0, s.z), approach: s.approach, facing: s.facing, lead: s.lead };
   };
   const spots: Venue['spots'] = {
     snack: fac.has('snack') ? [5.45, 5.9, 6.35].map((x) => ({ at: new THREE.Vector3(x, 0, -4.05), approach: 'SN', facing: Math.PI })) : undefined,

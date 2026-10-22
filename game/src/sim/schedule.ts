@@ -93,5 +93,17 @@ export function buildPlans(
     else leave = range(r, H(19, 40), H(21, 30));
     plans[def.id] = { arrive, late, leave: Math.min(leave, DAY_END - 10), lunch, nap, sofa, dinner };
   }
+  spreadArrivals(plans);
   return plans;
+}
+
+// 早上到岗至少隔开 4 分钟，避免 09:05–09:12 几个人挤在门口。只往后推，不把人提前。
+const ARRIVE_GAP = 4;
+function spreadArrivals(plans: Record<string, DayPlan>) {
+  const ids = Object.keys(plans).sort((a, b) => plans[a].arrive - plans[b].arrive || (a < b ? -1 : a > b ? 1 : 0));
+  let prev = -1e9;
+  for (const id of ids) {
+    if (plans[id].arrive < prev + ARRIVE_GAP) plans[id].arrive = prev + ARRIVE_GAP;
+    prev = plans[id].arrive;
+  }
 }

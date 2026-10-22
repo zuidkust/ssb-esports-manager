@@ -37,6 +37,26 @@ describe('老板动作', () => {
     expect(s.actionPoints).toBe(4);
   });
 
+  it('比赛日池子停在 3、当天还没花过时，会补成 4/4', () => {
+    const s = createNewGame(2);
+    s.clock.day = 2;
+    s.clock.minute = DAY_START;
+    s.apDay = 2;
+    s.actionPoints = 3;
+    new World(s).update(DAY_START, 0, true);
+    expect(s.actionPoints).toBe(4);
+  });
+
+  it('当天已经花过行动点，不会再把比赛日上限补回去', () => {
+    const s = createNewGame(2);
+    s.clock.day = 2;
+    s.apDay = 2;
+    s.actionPoints = 2;
+    s.actionHistory.push({ action: 'talk', day: 2 });
+    new World(s).update(DAY_START, 0, true);
+    expect(s.actionPoints).toBe(2);
+  });
+
   it('单独谈话对同一个人有冷却', () => {
     const s = createNewGame(3);
     s.actionPoints = 5;

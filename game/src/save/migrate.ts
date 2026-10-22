@@ -35,7 +35,8 @@ const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
       ...s,
       eventLog: log,
       bankrupt: typeof s.bankrupt === 'boolean' ? s.bankrupt : false,
-      apDay: typeof s.apDay === 'number' ? s.apDay : day,
+      // 旧档没有“行动点是哪一天填的”。记 0，下一次进入当天会按上限补齐（含比赛日 +1），而不是把今天标成已经填过。
+      apDay: typeof s.apDay === 'number' ? s.apDay : 0,
       meals: s.meals ?? emptyMeals(day),
       record: s.record ?? emptyRecord(),
       flags: s.flags ?? emptyFlags(),

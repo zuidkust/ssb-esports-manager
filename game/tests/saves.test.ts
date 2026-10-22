@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryStore } from '../src/save/platform';
-import { SaveManager } from '../src/save/saves';
+import { formatWallStamp, formatWallTime, SaveManager } from '../src/save/saves';
 import { createNewGame, needsPrematch, SAVE_VERSION } from '../src/save/state';
 import { PREMATCH_MINUTE } from '../src/core/calendar';
 import { migrate, SaveError } from '../src/save/migrate';
@@ -118,7 +118,7 @@ describe('存档迁移 v2 → v3', () => {
     expect(s.cash).toBe(4321);
     expect(s.record.wins).toBe(0);
     expect(s.bankrupt).toBe(false);
-    expect(s.apDay).toBe(1);
+    expect(s.apDay).toBe(0);
     expect(s.meals.day).toBe(1);
     expect(s.flags.restDay).toBe(0);
     const back = s.eventLog.find((e) => e.text.includes('战队今天正式成立'))!;
@@ -133,6 +133,11 @@ describe('存档迁移 v1 → v2', () => {
     delete v1.facilities;
     delete v1.prematchConfirmedDay;
     v1.version = 1;
+    delete v1.apDay;
+    delete v1.meals;
+    delete v1.record;
+    delete v1.flags;
+    delete v1.bankrupt;
     v1.roster = (v1.roster as { persona: Record<string, number> }[]).map((m) => {
       const { 爱睡觉: _, ...persona } = m.persona;
       return { ...m, persona };
@@ -142,5 +147,25 @@ describe('存档迁移 v1 → v2', () => {
     expect(s.facilities).toEqual([]);
     expect(s.prematchConfirmedDay).toBe(0);
     expect(s.roster.find((m) => m.id === 'shidian')!.persona.爱睡觉).toBeGreaterThan(0);
+    expect(s.apDay).toBe(0);
+    expect(s.actionPoints).toBe(3);
+    expect(s.meals.day).toBe(1);
+  });
+});
+
+describe('存档时间', () => {
+  it('列表和导出文件名用本地墙钟，不用 UTC 的 Z', () => {
+    const ms = Date.UTC(2026, 5, 15, 16, 45);
+    const d = new Date(ms);
+    const p = (n: number) => String(n).padStart(2, '0');
+    const local = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    expect(formatWallTime(ms)).toBe(local);
+    expect(formatWallStamp(ms)).toBe(local.replace(/[-: ]/g, ''));
+    const name = SaveManager.exportFilename(createNewGame(1), ms);
+    expect(name).toContain(formatWallStamp(ms));
+    expect(name.endsWith('.json')).toBe(true);
+    expect(name.includes('Z')).toBe(false);
+    const utc = new Date(ms).toISOString().slice(0, 16).replace(/[-:T]/g, '');
+    if (d.getTimezoneOffset() !== 0) expect(name.includes(utc)).toBe(false);
   });
 });
