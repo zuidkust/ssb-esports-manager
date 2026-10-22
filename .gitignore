@@ -27,3 +27,6 @@ Thumbs.db
 # local scratch
 .tmp/
 .cache/
+
+# game 截图与临时文件
+game/shots/

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b0f18" />
+    <title>SSB电竞经理</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="stage"></div>
+
+      <header id="topbar">
+        <div class="brand">
+          <div class="logo">S</div>
+          <div>
+            <div class="brand-title">SSB电竞经理</div>
+            <div class="brand-sub" id="brandSub">网吧角落 · 网吧联赛</div>
+          </div>
+        </div>
+        <div class="clock">
+          <div class="clock-time" id="clockTime">--:--</div>
+          <div class="clock-date" id="clockDate">--</div>
+        </div>
+        <div class="chips">
+          <div class="chip" id="phaseChip">--</div>
+          <div class="chip accent" id="matchChip">--</div>
+        </div>
+      </header>
+
+      <div id="timebar" class="panel">
+        <button class="tb-btn" id="pauseBtn" title="暂停 / 继续（空格）">⏸</button>
+        <div class="speeds" id="speeds"></div>
+        <div class="tb-sep"></div>
+        <button class="tb-btn wide" id="menuBtn" title="存档 / 读档（Esc）">☰ 存档</button>
+      </div>
+      <div id="holdBanner" class="hidden"></div>
+
+      <aside id="board" class="panel">
+        <div class="board-head">
+          <div class="board-title">事件看板 <small id="boardCount"></small></div>
+          <label class="toggle"><input type="checkbox" id="foldDaily" checked /> 折叠日常</label>
+        </div>
+        <div id="feed"></div>
+      </aside>
+
+      <section id="card" class="panel hidden"></section>
+
+      <div id="modal" class="modal-back hidden"><div class="modal panel" id="modalBody"></div></div>
+
+      <div id="toast"></div>
+      <div id="boot">正在搭建办公室……</div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
