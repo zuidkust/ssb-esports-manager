@@ -6,6 +6,7 @@ import { Character, type PoseName } from './character';
 import type { Desk } from './office';
 import { screenTexture, type ScreenKind } from './textures';
 import type { Stage } from './stage';
+import { Courier } from './courier';
 import type { Spot, Venue } from './venue';
 
 const STATUS_ICON: Partial<Record<ActivityKind, string>> = {
@@ -34,6 +35,7 @@ export class Director {
   private deskOf: Record<string, Desk> = {};
   private screenTex: Record<'game' | 'game2' | 'stream' | 'idle', THREE.Texture>[];
   private shake = 0;
+  private courier: Courier;
 
   constructor(private stage: Stage, private office: Venue, private world: World) {
     this.screenTex = office.desks.map((_, i) => ({
@@ -52,6 +54,7 @@ export class Director {
         this.shake = Math.max(this.shake, 0.6);
       };
     }
+    this.courier = new Courier(stage.scene);
     this.setVenue(office);
   }
 
@@ -222,6 +225,8 @@ export class Director {
     const tnow = performance.now();
     for (const m of this.world.members) this.apply(m);
     for (const m of this.world.members) this.chars[m.id].update(dt, tnow);
+    this.courier.sync(this.office, this.world.courierJob(minute), minute);
+    this.courier.char.update(dt, tnow);
     this.office.update?.(dt, tnow);
 
     const q = this.stage.quality;
@@ -240,9 +245,9 @@ export class Director {
       }
     }
     // 有人经过时开门；有人在冰箱前时开冰箱门
-    const chars = Object.values(this.chars);
+    const chars = [...Object.values(this.chars), this.courier.char];
     const [dx, dz] = this.office.nav.nodes[this.office.door];
-    const nearDoor = chars.some((c) => !c.hidden && Math.hypot(c.pos.x - dx, c.pos.z - (dz - 0.6)) < 1.25);
+    const nearDoor = chars.some((c) => !c.hidden && Math.hypot(c.pos.x - dx, c.pos.z - (dz - 0.6)) < 1.35);
     const dp = this.office.doorPivot;
     dp.rotation.y += ((nearDoor ? -1.35 : 0) - dp.rotation.y) * Math.min(1, dt * 4);
     const fd = this.office.fridgeDoor, fs = this.office.spots.fridge;

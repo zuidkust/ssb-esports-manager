@@ -2,14 +2,20 @@
 // 自主行为只用当前场地里有的物件（data/facilities.ts）：网吧角落没有冰箱，就不会有人去开冰箱
 // 事件引擎（M2）会在这一层之上挑选和结算事件
 import { dayInfo, MATCH_MINUTE, opponentForRound, PREMATCH_MINUTE } from '../core/calendar';
+import { DAY_START, fmtHM } from '../core/clock';
 import { availableFacilities, type FacilityId } from '../data/facilities';
+import { actionPointMax, isPayday } from '../data/economy';
 import { TIER_CN } from '../data/leagues';
 import { PHONE_APPS } from '../data/phoneApps';
-import { fmtHM } from '../core/clock';
+import { DISH_BY_ID } from '../data/takeout';
 import { pick, range, seeded, shuffle, weightedPick, type Rand } from '../core/rng';
 import { POSITIONS, ROSTER, positionFit, type MemberDef, type Position } from '../data/roster';
 import type { GameState, LogEntry, MemberState, StatusKey } from '../save/state';
-import { buildPlans, MATCH_END, segmentAt, type DayPlan, type Meal } from './schedule';
+import { performAction } from './actions';
+import { grantDailyInsight, runPayday } from './economy';
+import { expireKnots } from './relations';
+import { buildPlans, MATCH_END, segmentAt, type DayPlan } from './schedule';
+import { courierTrack, orderFor, planMorning, resolveMeal, settleMeals, type CourierTrack, type TakeoutPerson } from './takeout';
 
 export type ActivityKind =
   | 'absent' | 'toilet'
@@ -139,14 +145,40 @@ export class World {
 
   // ───── 推进 ─────
   startDay(day: number, fresh: boolean) {
+    if (fresh && day > 1) {
+      const gained = grantDailyInsight(this.state, this.members.map((m) => m.slackMin), day - 1);
+      expireKnots(this.state, day);
+      if (gained > 0) this.logAt('日常', `昨天的训练记进心得：+${gained}。`, [], DAY_START);
+      if (isPayday(day)) {
+        const pay = runPayday(this.state, day);
+        this.logAt(pay.bankrupt ? '重大' : '剧情', pay.text, [], DAY_START);
+      }
+      this.overnight(day);
+    }
+    if (this.state.apDay !== day) {
+      this.state.actionPoints = actionPointMax(this.state.venueLevel, dayInfo(day).round != null);
+      this.state.apDay = day;
+    }
     this.planDay = day;
     const info = dayInfo(day);
-    if (fresh) this.overnight(day);
     this.plans = buildPlans(this.state.seed, day, this.members, info.round != null, { sofa: this.has('sofa') });
+    if (this.state.meals.day !== day) {
+      this.state.meals = { day, morning: planMorning(this.state, this.takeoutPeople(), day) };
+    }
     this.starters = this.computeStarters();
     for (const m of this.members) m.slackMin = 0;
     this.lastLine = {};
     this.benchCache.clear();
+  }
+
+  private takeoutPeople(): TakeoutPerson[] {
+    return this.members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      persona: { 摸鱼倾向: m.state.persona.摸鱼倾向, 话痨: m.state.persona.话痨 },
+      status: { 饥饿: m.state.status.饥饿, 心情: m.state.status.心情 },
+      late: this.plans[m.id]?.late ?? false,
+    }));
   }
 
   // 过夜恢复：体力、饥饿、专注部分重置，手感每天随机
@@ -168,6 +200,7 @@ export class World {
   update(minute: number, advanced: number, jumped: boolean) {
     const day = this.state.clock.day;
     if (day !== this.planDay) this.startDay(day, !jumped);
+    this.ensureMeals(minute);
     for (const m of this.members) {
       const prev = m.activity;
       const next = this.activityAt(m, minute);
@@ -193,9 +226,12 @@ export class World {
       return this.starters.includes(m.id) ? { kind: 'match', label: '比赛中' } : { kind: 'sub', label: '台下 · 第二解说' };
     }
     if (matchDay && t >= PREMATCH_MINUTE && t < MATCH_MINUTE) return { kind: 'meeting', label: this.meetingLabel() };
-    if (t < 9 * 60 + 15) return { kind: 'training', label: '到岗热身（训练模式）' };
-    const meal = this.mealAt(plan.lunch, t, '午饭') ?? this.mealAt(plan.dinner, t, '晚饭');
+    const meal = this.mealActivity(m, t);
     if (meal) return meal;
+    if (t < 9 * 60 + 15) return { kind: 'training', label: '到岗热身（训练模式）' };
+    const partner = this.assignedPartner(m, t);
+    const segId = this.segment(t).id;
+    if (partner && (segId === 'morning' || segId === 'free')) return { kind: 'duo', label: `和${partner.name}双排（老板安排）`, partner: partner.id };
     if (plan.nap && t >= plan.nap[0] && t < plan.nap[1]) return plan.sofa ? { kind: 'nap_sofa', label: '沙发午睡“想战术”' } : { kind: 'nap_desk', label: '趴桌午睡' };
 
     const block = Math.floor(t / 10);
@@ -256,10 +292,55 @@ export class World {
     return { kind: 'slack_phone', label: `${app.label}（这把轮空）`, app: app.id, bench: true };
   }
 
-  // 饭点都在工位：M1 先坐着等饭再吃；M2 换成外卖（每饭点平均 2–3 人点，见外卖表草案）
-  private mealAt(m: Meal, t: number, name: string): Activity | null {
-    if (t < m.start || t >= m.end) return null;
-    return t < m.eat ? { kind: 'wait_food', label: `坐在工位等${name}` } : { kind: 'eat', label: `在工位吃${name}` };
+  // 点了外卖的人等外卖员；没点的人继续待在工位上干别的。煎饼、泡面不叫外卖
+  private mealActivity(m: Member, t: number): Activity | null {
+    const plan = this.plans[m.id];
+    const morning = this.state.meals.morning.find((s) => s.memberId === m.id);
+    if (morning && t >= plan.arrive && t < plan.arrive + 12) return { kind: 'eat', label: '边走边吃煎饼果子' };
+    const o = orderFor(this.state.meals, m.id, t);
+    if (!o) return null;
+    const dish = DISH_BY_ID[o.dishId]?.name ?? '外卖';
+    if (!o.delivery || t >= o.deliveredAt) return { kind: 'eat', label: o.dishId === 'instant' ? '在工位吃泡面' : `在工位吃${dish}` };
+    return { kind: 'wait_food', label: `等外卖 · ${dish}` };
+  }
+
+  private assignedPartner(m: Member, t: number): Member | null {
+    const f = this.state.flags;
+    if (f.duoDay !== this.state.clock.day) return null;
+    const otherId = f.duoA === m.id ? f.duoB : f.duoB === m.id ? f.duoA : '';
+    if (!otherId) return null;
+    const other = this.byId[otherId];
+    if (!other || !this.presentAt(m, t) || !this.presentAt(other, t)) return null;
+    return other;
+  }
+
+  private ensureMeals(minute: number) {
+    const day = this.state.clock.day;
+    if (this.state.meals.day !== day) return;
+    const people = this.takeoutPeople();
+    if (minute >= 12 * 60 && !this.state.meals.lunch) {
+      const r = resolveMeal({ state: this.state, people, day, meal: 'lunch', place: this.placeName });
+      this.state.meals.lunch = r.record;
+      for (const l of r.logs) this.logAt(l.level, l.text, l.ids, l.minute);
+    }
+    if (minute >= 18 * 60 && !this.state.meals.dinner) {
+      const r = resolveMeal({ state: this.state, people, day, meal: 'dinner', place: this.placeName });
+      this.state.meals.dinner = r.record;
+      for (const l of r.logs) this.logAt(l.level, l.text, l.ids, l.minute);
+    }
+    settleMeals(this.state, minute);
+  }
+
+  courierJob(minute: number): CourierTrack | null {
+    return courierTrack(this.state.meals, minute);
+  }
+
+  act(actionId: string, targets: string[]) {
+    return performAction(this.state, actionId, targets, {
+      day: this.state.clock.day,
+      minute: this.state.clock.minute,
+      log: (level, text, ids) => this.log(level, text, ids),
+    });
   }
 
   private meetingLabel() {
@@ -439,7 +520,11 @@ export class World {
   }
 
   log(level: LogEntry['level'], text: string, ids: string[]) {
-    const e: LogEntry = { id: this.state.nextLogId++, day: this.state.clock.day, minute: Math.floor(this.state.clock.minute), level, text, ids };
+    this.logAt(level, text, ids, this.state.clock.minute);
+  }
+
+  logAt(level: LogEntry['level'], text: string, ids: string[], minute: number) {
+    const e: LogEntry = { id: this.state.nextLogId++, day: this.state.clock.day, minute: Math.floor(minute), level, text, ids };
     this.state.eventLog.unshift(e);
     if (this.state.eventLog.length > 300) this.state.eventLog.length = 300;
     for (const fn of this.listeners) fn(e);

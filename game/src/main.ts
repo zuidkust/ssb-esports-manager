@@ -2,6 +2,8 @@
 import './style.css';
 import { dayInfo, MATCH_MINUTE, nextMatch, PREMATCH_MINUTE } from './core/calendar';
 import { fmtHM, GameClock, SPEEDS, sunPosition, type SpeedId } from './core/clock';
+import { drainRealtime, simBudget } from './core/realtime';
+import { actionPointMax } from './data/economy';
 import { allFacilitiesUpTo, VENUE_CN } from './data/facilities';
 import { TIER_CN } from './data/leagues';
 import { POSITIONS, POSITION_CN } from './data/roster';
@@ -17,11 +19,12 @@ import { buildVenue, venueKey, type Venue } from './scene/venue';
 import { ROSTER } from './data/roster';
 import { Board } from './ui/board';
 import { Card } from './ui/card';
+import { bindManage, manageHtml } from './ui/manage';
+import { buyFacility } from './sim/economy';
 
 const params = new URLSearchParams(location.search);
 const $ = (id: string) => document.getElementById(id)!;
 const AUTOSAVE_SECONDS = 60;
-const ACTION_POINTS = [3, 4, 5, 6]; // 每日行动点上限随场地（设计文档 6.3），比赛日 +1
 
 // ───────── 平台与存档 ─────────
 const platform = createWebPlatform();
@@ -57,6 +60,7 @@ world.onLog(() => board.set(state.eventLog));
 
 let selected: string | null = null;
 function select(id: string | null, focus = false) {
+  if (id && !world.byId[id]) return;
   selected = id;
   for (const m of world.members) director.chars[m.id].tagEl.classList.toggle('selected', m.id === id);
   if (!id) return card.el.classList.add('hidden');
@@ -83,7 +87,7 @@ function startGame(s: GameState, note?: string) {
   board.set(s.eventLog);
   select(null);
   if (note) toast(note);
-  if (!s.eventLog.length) world.log('剧情', '老板在网吧包下了角落的 6 台机器，SSB 战队今天正式成立。目标：打出网吧联赛。', []);
+  checkBankrupt();
 }
 
 // 标题画面背后跑的是一局占位世界，玩家选好“继续 / 新游戏”之前不写存档
@@ -104,36 +108,47 @@ function persist(slot: SlotId) {
 // ───────── 主循环 ─────────
 let last = performance.now();
 let sinceAutosave = 0;
+let simDebt = 0;
 let fpsFrames = 0, fpsTime = 0, degraded = false;
 
 function frame(t: number) {
-  const dt = Math.min(0.1, (t - last) / 1000);
+  let raw = (t - last) / 1000;
   last = t;
-  const info = dayInfo(clock.day);
-  const stops = info.round != null ? [PREMATCH_MINUTE] : [];
-  checkPrematch(); // 读档读到 18:30–19:00 之间：先停住，不让时间多走一帧
-  const r = clock.tick(modalOpen ? 0 : dt, stops);
-  state.clock = clock.snapshot();
-  world.update(clock.minute, r.advanced, false);
+  if (!Number.isFinite(raw) || raw < 0) raw = 0;
+  // 画面用短步长，避免一帧卡很久时人物飞出去；时钟按真实经过的时间走，低帧率不会把一天拉长
+  const visualDt = Math.min(0.05, raw);
   checkPrematch();
-  if (r.newDay) {
-    persist('auto');
-    sinceAutosave = 0;
+  const running = live && !modalOpen && !clock.paused;
+  if (running) simDebt += raw;
+  else simDebt = 0;
+  if (simDebt > 0) {
+    simDebt = drainRealtime(clock, simDebt, simBudget(simDebt), (day) => (dayInfo(day).round != null ? [PREMATCH_MINUTE] : []), (r) => {
+      state.clock = clock.snapshot();
+      world.update(clock.minute, r.advanced, false);
+      if (r.newDay) {
+        persist('auto');
+        sinceAutosave = 0;
+      }
+      checkPrematch();
+      checkBankrupt();
+    });
+  } else {
+    state.clock = clock.snapshot();
   }
-  sinceAutosave += dt;
-  if (sinceAutosave > AUTOSAVE_SECONDS && !clock.paused) {
+  sinceAutosave += raw;
+  if (sinceAutosave > AUTOSAVE_SECONDS && live && !clock.paused) {
     persist('auto');
     sinceAutosave = 0;
   }
 
   lighting.update({ sun: sunPosition(clock.minute), present: world.presentCount() });
   $('nightHint').classList.toggle('hidden', !clock.night || !live);
-  director.update(dt, clock.minute, lighting.night);
-  stage.render(dt, lighting.night);
+  director.update(visualDt, clock.minute, lighting.night);
+  stage.render(visualDt, lighting.night);
   updateHud();
 
   fpsFrames++;
-  fpsTime += dt;
+  fpsTime += Math.min(raw, 0.5);
   if (fpsTime > 4) {
     if (fpsFrames / fpsTime < 28 && !degraded) {
       degraded = true;
@@ -164,8 +179,9 @@ function updateHud() {
   $('clockDate').textContent = `第 ${info.season} 赛季 · 第 ${info.dayInSeason} 天 · ${info.weekdayCn}`;
   $('brandSub').textContent = `${VENUE_CN[state.venueLevel]} · ${TIER_CN[state.season.tier]}`;
   // 资源栏：M1 先显示存档里的初始值，M2 接老板动作和训练产出
-  const apMax = ACTION_POINTS[state.venueLevel] + (info.round != null ? 1 : 0);
+  const apMax = actionPointMax(state.venueLevel, info.round != null);
   $('resCash').textContent = state.cash.toLocaleString('zh-CN');
+  $('resCash').parentElement!.title = state.unpaidMonths > 0 ? `连续 ${state.unpaidMonths} 个月没发出工资` : '公司现金';
   $('resAp').textContent = `${Math.min(state.actionPoints, apMax)}/${apMax}`;
   $('resInsight').textContent = String(state.insight);
   $('phaseChip').textContent = clock.night ? '夜里 · 快进中' : `${world.segment(clock.minute).name} · 在岗 ${world.presentCount()}/6`;
@@ -202,6 +218,7 @@ $('speeds').addEventListener('click', (e) => {
 });
 $('pauseBtn').addEventListener('click', () => clock.togglePause());
 $('menuBtn').addEventListener('click', () => showMenu());
+$('manageBtn').addEventListener('click', () => showManage());
 addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).tagName === 'INPUT') return;
   if (e.key === 'Escape') return modalOpen ? closeModal() : showMenu();
@@ -227,6 +244,7 @@ function openModal(html: string, closable = true) {
 function closeModal() {
   if (!modalClosable) return;
   modalOpen = false;
+  $('modalBody').classList.remove('manage');
   $('modal').classList.add('hidden');
 }
 $('modal').addEventListener('click', (e) => {
@@ -323,7 +341,7 @@ function showTitle() {
     `
     <div class="logo title-logo">S</div>
     <h2>SSB电竞经理</h2>
-    <p class="sub">网页试玩版 · M1（日常与时间系统）</p>
+    <p class="sub">网页试玩版 · M2（外卖、经营、经济）</p>
     <p>你是 SSB 战队的老板兼经理。六个朋友在网吧角落开始打联赛：白天训练、摸鱼、吃外卖，比赛日晚上 19:00 开打。</p>
     ${storageWarning()}
     <div class="row">
@@ -350,6 +368,46 @@ function showTitle() {
     persist('auto');
   });
   $('tImport').addEventListener('click', importSave);
+}
+
+function showManage(pick?: [string, string]) {
+  if (!live || state.bankrupt) return;
+  const ids = world.members.map((m) => m.id);
+  const sel: [string, string] = pick ?? [selected && ids.includes(selected) ? selected : ids[0], ids[1]];
+  $('modalBody').classList.add('manage');
+  openModal(manageHtml(world, sel), true);
+  bindManage(world, {
+    toast,
+    onFacilities: () => {
+      syncVenue();
+      world.update(clock.minute, 0, true);
+      director.snapAll();
+    },
+    onClose: () => {
+      modalClosable = true;
+      closeModal();
+    },
+    rerender: (next) => showManage(next),
+  });
+}
+
+function checkBankrupt() {
+  if (!live || !state.bankrupt || clock.isHeld('bankrupt')) return;
+  clock.hold('bankrupt', '连续三个月发不出工资');
+  openModal(
+    `<h2>战队破产</h2>
+    <p>连续三个月发不出工资。公司现金和私房钱都垫不上了。</p>
+    <p class="sub">这一局停在这里。可以读更早的存档，或者重新开始。</p>
+    <div class="row"><button class="btn accent" id="bkTitle">回到标题</button></div>`,
+    false,
+  );
+  $('bkTitle').addEventListener('click', () => {
+    clock.release('bankrupt');
+    modalClosable = true;
+    closeModal();
+    live = false;
+    showTitle();
+  });
 }
 
 // 赛前（18:30）：M1 只展示自动首发；M3 改成老板手动选首发和战术
@@ -428,4 +486,16 @@ function setVenue(level: number, facilities: string[]) {
 
 (window as unknown as { __ssb: unknown }).__ssb = {
   world, get clock() { return clock; }, get state() { return state; }, get venue() { return venue; }, saves, director, stage, select, setVenue, SLOTS,
+  act: (id: string, targets: string[] = []) => world.act(id, targets),
+  buy(id: string) {
+    const r = buyFacility(state, id);
+    if (r.ok) {
+      world.refreshVenue();
+      syncVenue();
+      world.update(clock.minute, 0, true);
+      director.snapAll();
+    }
+    return r;
+  },
+  showManage: () => showManage(),
 };

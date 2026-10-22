@@ -87,6 +87,46 @@ describe('读档与赛前确认', () => {
   });
 });
 
+describe('战队成立的时间', () => {
+  it('写在第 1 天 09:00，不跟玩家进游戏的时刻走', () => {
+    const s = createNewGame(4);
+    s.clock.day = 6;
+    s.clock.minute = 14 * 60 + 5;
+    const founding = s.eventLog.find((e) => e.text.includes('战队今天正式成立'));
+    expect(founding?.day).toBe(1);
+    expect(founding?.minute).toBe(9 * 60);
+  });
+});
+
+describe('存档迁移 v2 → v3', () => {
+  it('补上经济字段，并把成立动态改回第 1 天早上，现金不动', () => {
+    const raw = createNewGame(9) as unknown as Record<string, unknown>;
+    raw.version = 2;
+    raw.cash = 4321;
+    delete raw.bankrupt;
+    delete raw.apDay;
+    delete raw.meals;
+    delete raw.record;
+    delete raw.flags;
+    const log = raw.eventLog as { text: string; day: number; minute: number }[];
+    const founding = log.find((e) => e.text.includes('战队今天正式成立'))!;
+    founding.day = 3;
+    founding.minute = 14 * 60 + 5;
+    const s = migrate(JSON.parse(JSON.stringify(raw)));
+    expect(s.version).toBe(SAVE_VERSION);
+    expect(s.version).toBe(3);
+    expect(s.cash).toBe(4321);
+    expect(s.record.wins).toBe(0);
+    expect(s.bankrupt).toBe(false);
+    expect(s.apDay).toBe(1);
+    expect(s.meals.day).toBe(1);
+    expect(s.flags.restDay).toBe(0);
+    const back = s.eventLog.find((e) => e.text.includes('战队今天正式成立'))!;
+    expect(back.day).toBe(1);
+    expect(back.minute).toBe(9 * 60);
+  });
+});
+
 describe('存档迁移 v1 → v2', () => {
   it('补上设施、赛前确认标记和“爱睡觉”', () => {
     const v1 = createNewGame(5) as unknown as Record<string, unknown>;

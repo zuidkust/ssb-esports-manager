@@ -311,7 +311,16 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .day-divider::before, .day-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
 .modal-back { position: absolute; inset: 0; z-index: 40; background: rgba(5,8,14,0.55); display: grid; place-items: center; backdrop-filter: blur(3px); }
-.modal { position: relative; width: min(520px, 92vw); padding: 20px 22px; }
+.modal { position: relative; width: min(520px, 92vw); padding: 20px 22px; max-height: min(86vh, 820px); overflow: auto; }
+.modal.manage { width: min(720px, 94vw); }
+.ledger { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.ledger span { padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 12px; color: var(--muted); }
+.ledger b { color: var(--text); font-weight: 600; }
+.act-list { display: flex; flex-direction: column; gap: 6px; }
+.act { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); }
+.act small { display: block; color: var(--muted); font-size: 11px; line-height: 1.45; margin-top: 2px; }
+.act .btn { flex: none; }
+.modal select { background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .modal h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: 1px; }
 .modal h3 { margin: 18px 0 8px; font-size: 12px; color: var(--muted); letter-spacing: 1px; font-weight: 600; }
 .modal p { color: #cfd6e4; font-size: 13px; line-height: 1.6; margin: 6px 0; }

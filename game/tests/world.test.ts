@@ -70,12 +70,22 @@ describe('刷手机细分', () => {
 });
 
 describe('饭点', () => {
-  it('不再外出吃饭：12:20 所有人都在工位等饭或吃饭', () => {
-    for (const seed of [1, 2, 3, 4, 5]) {
-      const { trace } = simulateDay(seed, 3);
+  it('饭点有人等外卖或在吃，没有人外出吃饭', () => {
+    let eating = 0;
+    let delivered = 0;
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
+    for (const seed of seeds) {
+      const { trace, w } = simulateDay(seed, 3);
       const kinds = trace[12 * 60 + 20 - DAY_START].split(',');
-      expect(kinds.every((k) => k === 'eat' || k === 'wait_food')).toBe(true);
+      expect(kinds.some((k) => k === 'out')).toBe(false);
+      expect(w.state.eventLog.some((e) => e.text.includes('出去吃'))).toBe(false);
+      eating += kinds.filter((k) => k === 'eat' || k === 'wait_food').length;
+      delivered += w.state.meals.lunch?.orders.filter((o) => o.delivery).length ?? 0;
     }
+    const avg = eating / seeds.length;
+    expect(avg).toBeGreaterThan(1);
+    expect(avg).toBeLessThan(5);
+    expect(delivered / seeds.length).toBeGreaterThan(1.5);
   });
 });
 

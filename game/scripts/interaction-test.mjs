@@ -20,11 +20,27 @@ const g = (fn) => page.evaluate(fn);
 
 // 1. 比赛日 18:20 极快档开跑，应在 18:30 自动停下并弹出赛前窗口
 await page.goto(`${html}?t=18:20&day=2&speed=x10`);
-await sleep(4000);
+await page.waitForFunction(
+  () => {
+    const modal = document.getElementById('modal');
+    return __ssb.clock.paused && Math.abs(__ssb.clock.minute - 1110) < 0.01 && !!modal && !modal.classList.contains('hidden');
+  },
+  { timeout: 20000 },
+);
 let s = await g(() => ({ min: __ssb.clock.minute, paused: __ssb.clock.paused, modal: !document.getElementById('modal').classList.contains('hidden') }));
 check('18:30 自动暂停并弹出赛前窗口', s.paused && Math.abs(s.min - 1110) < 0.01 && s.modal, JSON.stringify(s));
 
-// 1b. 暂停中直接关页（不确认），回来读自动存档：应重新弹出首发确认
+// 1b. 必须在 18:30 暂停已经发生之后、确认之前，把时钟写进自动存档再关页
+await page.evaluate(() => {
+  __ssb.state.clock = __ssb.clock.snapshot();
+  __ssb.saves.save('auto', __ssb.state);
+});
+const savedWhilePaused = await g(() => {
+  const raw = localStorage.getItem('ssb-esports-manager/save/auto');
+  const parsed = raw ? JSON.parse(raw) : null;
+  return { minute: parsed?.clock?.minute, paused: parsed?.clock?.paused, confirmed: parsed?.prematchConfirmedDay };
+});
+check('暂停当下已经把 18:30 写入自动存档', Math.abs(savedWhilePaused.minute - 1110) < 0.01 && savedWhilePaused.confirmed !== 2, JSON.stringify(savedWhilePaused));
 await page.goto(html);
 await sleep(1500);
 await page.click('#tContinue');
@@ -47,9 +63,11 @@ await sleep(800);
 const m2 = await g(() => __ssb.clock.minute);
 check('空格暂停', m1 === m2);
 await page.keyboard.press('1');
+const speedSample = await page.evaluate(() => ({ t: performance.now(), m: __ssb.clock.minute }));
 await sleep(1000);
-const m3 = await g(() => __ssb.clock.minute);
-check('按 1 恢复正常速度', m3 > m2 && m3 - m2 < 3, `${(m3 - m2).toFixed(2)} 分钟/秒`);
+const speedSample2 = await page.evaluate(() => ({ t: performance.now(), m: __ssb.clock.minute }));
+const rate = (speedSample2.m - speedSample.m) / ((speedSample2.t - speedSample.t) / 1000);
+check('按 1 恢复正常速度', rate > 0.9 && rate < 2.6, `${rate.toFixed(2)} 游戏分钟/秒`);
 
 // 3. 存进槽位 1，刷新后标题能继续
 await page.keyboard.press('Escape');

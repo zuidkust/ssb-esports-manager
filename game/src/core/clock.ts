@@ -28,6 +28,7 @@ export interface ClockState {
 export interface TickResult {
   advanced: number; // 本帧推进的游戏分钟
   newDay: boolean;
+  used: number; // 实际消化掉的现实秒（停靠点或单次推进上限会提前停）
 }
 
 export class GameClock {
@@ -84,9 +85,10 @@ export class GameClock {
   }
 
   // realDt：现实秒。按“白天 → 22:00 → 午夜 → 09:00”分段推进，夜间固定快进
-  // stopAt：当天的这些分钟是停靠点，走到就停在那里（本帧剩余时间作废），由调用方决定是否暂停
+  // stopAt：当天的这些分钟是停靠点，走到就停在那里（本次调用的剩余时间作废），由调用方决定是否暂停
+  // 单次调用最多跨过几个边界，避免一帧把好几天跳完；主循环用 drainRealtime 把积压的现实时间分批喂进来
   tick(realDt: number, stopAt: number[] = []): TickResult {
-    if (this.paused) return { advanced: 0, newDay: false };
+    if (this.paused || !(realDt > 0)) return { advanced: 0, newDay: false, used: 0 };
     let remaining = realDt;
     let advanced = 0;
     let newDay = false;
@@ -105,6 +107,7 @@ export class GameClock {
       if (need > remaining) {
         this.minute += remaining * rate;
         advanced += remaining * rate;
+        remaining = 0;
         break;
       }
       advanced += boundary - this.minute;
@@ -117,7 +120,7 @@ export class GameClock {
         newDay = true;
       }
     }
-    return { advanced, newDay };
+    return { advanced, newDay, used: realDt - remaining };
   }
 
   snapshot(): ClockState {
