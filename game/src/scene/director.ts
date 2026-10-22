@@ -3,17 +3,15 @@ import * as THREE from 'three';
 import { PHONE_APP_BY_ID } from '../data/phoneApps';
 import type { Member, World, ActivityKind } from '../sim/world';
 import { Character, type PoseName } from './character';
-import { NODES, route } from './nav';
-import type { Desk, Office } from './office';
+import type { Desk } from './office';
 import { screenTexture, type ScreenKind } from './textures';
 import type { Stage } from './stage';
-
-const OUTSIDE = new THREE.Vector3(-5.85, 0, -5.7);
+import type { Spot, Venue } from './venue';
 
 const STATUS_ICON: Partial<Record<ActivityKind, string>> = {
   solo: '🎮', team: '🎧', duo: '🎮', training: '🎯', match: '🏆', sub: '🎙️', meeting: '📋',
   slack_phone: '📱', slack_stream: '📺', snack: '🍪', drink: '🥤', fridge: '🧃', chat: '💬', toilet: '🚽',
-  eat: '🍱', nap_desk: '💤', nap_sofa: '💤',
+  spectate: '👀', wait_food: '⏳', eat: '🍱', nap_desk: '💤', nap_sofa: '💤',
 };
 
 interface Placement {
@@ -33,28 +31,35 @@ interface Placement {
 export class Director {
   chars: Record<string, Character> = {};
   private place: Record<string, string | null> = {};
-  private deskOf: Record<string, Desk>;
+  private deskOf: Record<string, Desk> = {};
   private screenTex: Record<'game' | 'game2' | 'stream' | 'idle', THREE.Texture>[];
   private shake = 0;
 
-  constructor(private stage: Stage, private office: Office, private world: World) {
-    this.deskOf = Object.fromEntries(office.desks.map((d) => [d.owner, d]));
+  constructor(private stage: Stage, private office: Venue, private world: World) {
     this.screenTex = office.desks.map((_, i) => ({
       game: screenTexture('game', i * 3 + 1), game2: screenTexture('game', i * 3 + 2), stream: screenTexture('stream', i), idle: screenTexture('idle', i),
     }));
     for (const m of world.members) {
       const c = new Character(m.def);
       c.setHidden(true);
-      c.pos.copy(OUTSIDE);
+      c.pos.copy(office.exit);
       stage.scene.add(c.root);
       stage.pickables.push(c.hit);
       this.chars[m.id] = c;
-      const desk = this.deskOf[m.id];
       c.onSlam = () => {
-        desk.jiggle = 1;
+        const desk = this.deskOf[m.id];
+        if (desk) desk.jiggle = 1;
         this.shake = Math.max(this.shake, 0.6);
       };
     }
+    this.setVenue(office);
+  }
+
+  // 换场地（读档、搬家、买设施后重建场景）：人物保留，之后调用 snapAll 瞬移到新位置
+  setVenue(v: Venue) {
+    this.office = v;
+    this.deskOf = Object.fromEntries(v.desks.map((d) => [d.owner, d]));
+    for (const id in this.place) this.place[id] = null;
   }
 
   // 读档、跳时间之后：所有人直接瞬移到应在的位置
@@ -72,10 +77,13 @@ export class Director {
       key: `desk:${pose}:${screen}:${extra.headset ?? false}`, at: desk.seat, approach: desk.approach, facing: Math.PI, pose, screen, ...extra,
     });
     const idx = this.world.members.indexOf(m);
+    const go = (key: string, s: Spot, pose: PoseName, extra: Partial<Placement> = {}): Placement => ({
+      key, at: s.at, approach: s.approach, facing: s.facing, pose, screen: 'idle', ...extra,
+    });
+    const sp = this.office.spots;
     switch (a.kind) {
       case 'absent':
         return { key: 'out', hidden: true, screen: a.label === '已下班' ? (idx % 3 === 0 ? 'standby' : 'off') : 'off' };
-      case 'out':
       case 'toilet':
         return { key: 'out', hidden: true, screen: 'idle' };
       case 'solo':
@@ -89,32 +97,39 @@ export class Director {
         return seat('sit_phone', 'idle', { phone: PHONE_APP_BY_ID[a.app ?? 'generic']?.screen ?? 0x6fa8ff, key: `desk:phone:${a.app}` });
       case 'slack_stream':
         return seat('sit_relax', 'stream');
+      case 'wait_food':
+        return seat('sit_phone', 'stream', { phone: 0x6fa8ff, key: 'desk:wait' });
       case 'eat':
         return seat('sit_eat', 'stream');
       case 'nap_desk':
         return seat('sleep_desk', 'idle');
+      // 模拟层已按场地设施过滤；万一设施刚被移除（读档换场地的那一帧），就留在座位上
       case 'nap_sofa':
-        return { key: 'sofa', at: this.office.spots.sofa, approach: 'SO', facing: Math.PI / 2, pose: 'lie', screen: 'idle' };
+        return sp.sofa ? go('sofa', sp.sofa, 'lie') : seat('sleep_desk', 'idle');
       case 'snack':
-        return { key: 'snack', at: this.office.spots.snack[idx % 3], approach: 'SN', facing: Math.PI, pose: 'reach', screen: 'idle' };
+        return sp.snack ? go('snack', sp.snack[idx % sp.snack.length], 'reach') : seat('sit_relax', 'idle');
       case 'fridge':
-        return { key: 'fridge', at: this.office.spots.fridge, approach: 'FR', facing: Math.PI, pose: 'reach', screen: 'idle' };
+        return sp.fridge ? go('fridge', sp.fridge, 'reach') : seat('sit_relax', 'idle');
       case 'drink': {
         // 同时接水的人排开站，第一个人站在饮水机正前方
         const order = this.world.members.filter((x) => x.activity.kind === 'drink').indexOf(m);
-        const at = this.office.spots.drink[Math.max(0, order) % 3];
-        return { key: `drink${order}`, at, approach: 'WC', facing: Math.atan2(2.05 - at.x, -4.6 - at.z), pose: 'drink', cup: true, screen: 'idle' };
+        return go(`drink${order}`, sp.drink[Math.max(0, order) % sp.drink.length], 'drink', { cup: true });
       }
       case 'meeting': {
         const order = this.world.members.filter((x) => x.activity.kind === 'meeting').indexOf(m);
-        const at = this.office.spots.whiteboard(Math.max(0, order));
-        return { key: `board${order}`, at, approach: 'WB', facing: Math.atan2(-7 - at.x, -1.6 - at.z), pose: order === 0 ? 'chat' : 'watch', screen: 'idle' };
+        const s = sp.meeting(Math.max(0, order));
+        return go(`board${order}`, s, s.lead ? 'chat' : 'watch');
       }
       case 'sub':
-        return { key: 'sub', at: this.office.spots.sub, approach: 'B1', facing: Math.PI, pose: 'watch', screen: 'off' };
-      case 'chat': {
-        const at = this.office.spots.chat[a.host ? 0 : 1];
-        return { key: `chat:${a.host}`, at, approach: 'CH', facing: a.host ? Math.PI / 2 : -Math.PI / 2, pose: 'chat', screen: 'idle' };
+        return go('sub', sp.sub, 'watch', { screen: 'off' });
+      case 'chat':
+        return go(`chat:${a.host}`, sp.chat[a.host ? 0 : 1], 'chat');
+      case 'spectate': {
+        // 站在打游戏的队友椅子斜后方，看他的屏幕
+        const d = this.deskOf[a.partner!];
+        if (!d) return seat('sit_relax', 'game');
+        const at = new THREE.Vector3(d.seat.x + 0.38, 0, d.seat.z + 0.62);
+        return { key: `spectate:${a.partner}`, at, approach: d.approach, facing: Math.atan2(d.seat.x - at.x, d.seat.z - 1.2 - at.z), pose: 'watch', screen: 'idle' };
       }
     }
   }
@@ -137,12 +152,13 @@ export class Director {
     this.place[m.id] = p.key;
 
     if (p.hidden) {
+      const out = this.office.exit;
       if (instant || c.hidden) {
         c.setHidden(true);
-        c.teleport(OUTSIDE, 0, 'stand');
+        c.teleport(out, 0, 'stand');
         return;
       }
-      const pts = route(c.pos.x, c.pos.z, 'D', OUTSIDE.x, OUTSIDE.z, this.exitNode(m.id, c));
+      const pts = this.office.nav.route(c.pos.x, c.pos.z, this.office.door, out.x, out.z, this.exitNode(m.id, c));
       c.walkTo(pts, 'stand', null, () => {
         if (this.place[m.id] === 'out') c.setHidden(true);
       });
@@ -156,9 +172,10 @@ export class Director {
     }
     if (c.hidden || prevKey === 'out') {
       // 从门外进来
+      const out = this.office.exit;
       c.setHidden(false);
-      c.teleport(OUTSIDE, Math.PI, 'walk');
-      c.walkTo(route(OUTSIDE.x, OUTSIDE.z, p.approach!, at.x, at.z, 'D'), pose, facing);
+      c.teleport(out, Math.PI, 'walk');
+      c.walkTo(this.office.nav.route(out.x, out.z, p.approach!, at.x, at.z, this.office.door), pose, facing);
       return;
     }
     if (c.pos.distanceTo(at) < 0.9) {
@@ -169,14 +186,15 @@ export class Director {
       else c.poseName = 'walk';
       return;
     }
-    c.walkTo(route(c.pos.x, c.pos.z, p.approach!, at.x, at.z, this.exitNode(m.id, c)), pose, facing);
+    c.walkTo(this.office.nav.route(c.pos.x, c.pos.z, p.approach!, at.x, at.z, this.exitNode(m.id, c)), pose, facing);
   }
 
   // 从座位 / 沙发起身时先回到过道节点，避免穿过桌子
   private exitNode(id: string, c: Character): string | undefined {
     const desk = this.deskOf[id];
     if (c.pos.distanceTo(desk.seat) < 0.6) return desk.approach;
-    if (c.pos.distanceTo(this.office.spots.sofa) < 0.8) return 'SO';
+    const sofa = this.office.spots.sofa;
+    if (sofa && c.pos.distanceTo(sofa.at) < 0.8) return sofa.approach;
     return undefined;
   }
 
@@ -204,6 +222,7 @@ export class Director {
     const tnow = performance.now();
     for (const m of this.world.members) this.apply(m);
     for (const m of this.world.members) this.chars[m.id].update(dt, tnow);
+    this.office.update?.(dt, tnow);
 
     const q = this.stage.quality;
     for (const d of this.office.desks) {
@@ -222,12 +241,15 @@ export class Director {
     }
     // 有人经过时开门；有人在冰箱前时开冰箱门
     const chars = Object.values(this.chars);
-    const nearDoor = chars.some((c) => !c.hidden && Math.hypot(c.pos.x - NODES.D[0], c.pos.z - (NODES.D[1] - 0.6)) < 1.25);
+    const [dx, dz] = this.office.nav.nodes[this.office.door];
+    const nearDoor = chars.some((c) => !c.hidden && Math.hypot(c.pos.x - dx, c.pos.z - (dz - 0.6)) < 1.25);
     const dp = this.office.doorPivot;
     dp.rotation.y += ((nearDoor ? -1.35 : 0) - dp.rotation.y) * Math.min(1, dt * 4);
-    const atFridge = chars.some((c) => !c.hidden && !c.path.length && c.pos.distanceTo(this.office.spots.fridge) < 0.2);
-    const fd = this.office.fridgeDoor;
-    fd.rotation.y += ((atFridge ? -1.6 : 0) - fd.rotation.y) * Math.min(1, dt * 4);
+    const fd = this.office.fridgeDoor, fs = this.office.spots.fridge;
+    if (fd && fs) {
+      const atFridge = chars.some((c) => !c.hidden && !c.path.length && c.pos.distanceTo(fs.at) < 0.2);
+      fd.rotation.y += ((atFridge ? -1.6 : 0) - fd.rotation.y) * Math.min(1, dt * 4);
+    }
     // 墙钟
     const h = (minute / 60) % 12;
     this.office.clock.hourHand.rotation.z = -(h / 12) * Math.PI * 2;

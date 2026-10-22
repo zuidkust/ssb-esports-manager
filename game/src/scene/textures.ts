@@ -373,3 +373,118 @@ export function posterTexture(): THREE.CanvasTexture {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+
+// 网吧地砖：60 cm 米灰色瓷砖，砖缝发黑，零星污渍（场地老旧）
+export function tileTexture() {
+  const c = canvas(1024, 1024);
+  const g = c.getContext('2d')!;
+  const r = mulberry32(17);
+  const n = 8, s = 1024 / n;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const b = 0.9 + r() * 0.1;
+      g.fillStyle = `rgb(${Math.round(196 * b)},${Math.round(190 * b)},${Math.round(178 * b)})`;
+      g.fillRect(i * s, j * s, s, s);
+      for (let k = 0; k < 40; k++) {
+        g.fillStyle = `rgba(90,80,70,${r() * 0.06})`;
+        g.fillRect(i * s + r() * s, j * s + r() * s, 2 + r() * 6, 2 + r() * 6);
+      }
+    }
+  }
+  for (let k = 0; k < 7; k++) {
+    const grd = g.createRadialGradient(0, 0, 0, 0, 0, 30 + r() * 50);
+    grd.addColorStop(0, 'rgba(70,55,40,0.18)');
+    grd.addColorStop(1, 'rgba(70,55,40,0)');
+    g.save();
+    g.translate(r() * 1024, r() * 1024);
+    g.fillStyle = grd;
+    g.fillRect(-90, -90, 180, 180);
+    g.restore();
+  }
+  g.fillStyle = 'rgba(60,52,44,0.75)';
+  for (let i = 0; i <= n; i++) {
+    g.fillRect(i * s - 2, 0, 4, 1024);
+    g.fillRect(0, i * s - 2, 1024, 4);
+  }
+  return toTexture(c, { repeat: [14 / 4.8, 10 / 4.8] });
+}
+
+export interface SignSpec {
+  w: number; // 画布像素
+  h: number;
+  bg: string;
+  fg: string;
+  border?: string;
+  title?: string;
+  titleSize?: number;
+  lines?: string[];
+  lineSize?: number;
+  align?: 'center' | 'left';
+}
+
+// 印刷标牌：价目表、提示牌、横幅、机号牌等
+export function signTexture(sp: SignSpec): THREE.CanvasTexture {
+  const c = canvas(sp.w, sp.h);
+  const g = c.getContext('2d')!;
+  g.fillStyle = sp.bg;
+  g.fillRect(0, 0, sp.w, sp.h);
+  if (sp.border) {
+    g.strokeStyle = sp.border;
+    g.lineWidth = Math.max(4, sp.w / 60);
+    g.strokeRect(g.lineWidth, g.lineWidth, sp.w - g.lineWidth * 2, sp.h - g.lineWidth * 2);
+  }
+  const font = '"PingFang SC","Microsoft YaHei",sans-serif';
+  g.fillStyle = sp.fg;
+  g.textBaseline = 'middle';
+  const lines = sp.lines ?? [];
+  const ts = sp.titleSize ?? Math.round(sp.h * 0.18);
+  const ls = sp.lineSize ?? Math.round(sp.h * 0.09);
+  const total = (sp.title ? ts * 1.5 : 0) + lines.length * ls * 1.55;
+  let y = (sp.h - total) / 2;
+  if (sp.title) {
+    g.font = `bold ${ts}px ${font}`;
+    g.textAlign = 'center';
+    g.fillText(sp.title, sp.w / 2, y + ts * 0.75);
+    y += ts * 1.5;
+  }
+  g.font = `${ls}px ${font}`;
+  g.textAlign = sp.align ?? 'center';
+  const x = sp.align === 'left' ? sp.w * 0.1 : sp.w / 2;
+  for (const l of lines) {
+    g.fillText(l, x, y + ls * 0.78);
+    y += ls * 1.55;
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+// 霓虹灯字：暗底 + 发光描边字，做发光贴图
+export function neonTexture(text: string, color: string, sub?: string): THREE.CanvasTexture {
+  const c = canvas(1024, 256);
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, 1024, 256);
+  const font = '"PingFang SC","Microsoft YaHei",sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.shadowColor = color;
+  g.shadowBlur = 28;
+  g.fillStyle = color;
+  g.font = `bold ${sub ? 128 : 150}px ${font}`;
+  g.fillText(text, 512, sub ? 104 : 128);
+  g.shadowBlur = 8;
+  g.fillStyle = '#fff6fb';
+  g.fillText(text, 512, sub ? 104 : 128);
+  if (sub) {
+    g.shadowBlur = 16;
+    g.shadowColor = '#5ff0ff';
+    g.fillStyle = '#9ff6ff';
+    g.font = `bold 46px ${font}`;
+    g.fillText(sub, 512, 210);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}

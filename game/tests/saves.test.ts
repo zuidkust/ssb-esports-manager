@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryStore } from '../src/save/platform';
 import { SaveManager } from '../src/save/saves';
-import { createNewGame, SAVE_VERSION } from '../src/save/state';
+import { createNewGame, needsPrematch, SAVE_VERSION } from '../src/save/state';
+import { PREMATCH_MINUTE } from '../src/core/calendar';
 import { migrate, SaveError } from '../src/save/migrate';
 
 describe('存档', () => {
@@ -24,7 +25,7 @@ describe('存档', () => {
     m.save('auto', createNewGame(2));
     expect(m.latest()).toBe('auto');
     expect(m.list().find((i) => i.slot === '3')!.empty).toBe(true);
-    expect(m.info('2').label).toMatch(/第 1 赛季 第 1 天 周一 08:30/);
+    expect(m.info('2').label).toMatch(/第 1 赛季 第 1 天 周一 09:00/);
   });
 
   it('导出再导入得到同一个存档', () => {
@@ -48,5 +49,58 @@ describe('存档', () => {
     const m = new SaveManager(store);
     expect(m.info('3').label).toBe('存档损坏');
     expect(m.latest()).toBeNull();
+  });
+});
+
+describe('读档与赛前确认', () => {
+  const at1830 = () => {
+    const s = createNewGame(3);
+    s.clock.day = 2; // 第 1 轮比赛日
+    s.clock.minute = PREMATCH_MINUTE;
+    return s;
+  };
+
+  it('18:30 暂停中没确认就存档：读档后仍要弹首发确认', () => {
+    const m = new SaveManager(new MemoryStore());
+    m.save('auto', at1830());
+    const back = m.load('auto')!;
+    expect(needsPrematch(back, back.clock.day, back.clock.minute)).toBe(true);
+  });
+
+  it('确认过的比赛日写进存档，读档后不再弹', () => {
+    const m = new SaveManager(new MemoryStore());
+    const s = at1830();
+    s.prematchConfirmedDay = 2;
+    m.save('auto', s);
+    const back = m.load('auto')!;
+    expect(needsPrematch(back, back.clock.day, back.clock.minute)).toBe(false);
+    // 下一个比赛日照常要确认
+    expect(needsPrematch(back, 4, PREMATCH_MINUTE)).toBe(true);
+  });
+
+  it('只在比赛日 18:30–19:00 之间弹', () => {
+    const s = createNewGame(3);
+    expect(needsPrematch(s, 1, PREMATCH_MINUTE)).toBe(false); // 第 1 天不是比赛日
+    expect(needsPrematch(s, 2, PREMATCH_MINUTE - 1)).toBe(false);
+    expect(needsPrematch(s, 2, 19 * 60)).toBe(false);
+    expect(needsPrematch(s, 2, 18 * 60 + 45)).toBe(true);
+  });
+});
+
+describe('存档迁移 v1 → v2', () => {
+  it('补上设施、赛前确认标记和“爱睡觉”', () => {
+    const v1 = createNewGame(5) as unknown as Record<string, unknown>;
+    delete v1.facilities;
+    delete v1.prematchConfirmedDay;
+    v1.version = 1;
+    v1.roster = (v1.roster as { persona: Record<string, number> }[]).map((m) => {
+      const { 爱睡觉: _, ...persona } = m.persona;
+      return { ...m, persona };
+    });
+    const s = migrate(JSON.parse(JSON.stringify(v1)));
+    expect(s.version).toBe(SAVE_VERSION);
+    expect(s.facilities).toEqual([]);
+    expect(s.prematchConfirmedDay).toBe(0);
+    expect(s.roster.find((m) => m.id === 'shidian')!.persona.爱睡觉).toBeGreaterThan(0);
   });
 });

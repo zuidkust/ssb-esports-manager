@@ -40,9 +40,23 @@ export function weightedPick<T>(rand: Rand, items: readonly T[], weightOf: (it: 
   for (const it of items) total += Math.max(0, weightOf(it));
   if (total <= 0) return null;
   let r = rand() * total;
+  let last: T | null = null;
   for (const it of items) {
-    r -= Math.max(0, weightOf(it));
+    const w = weightOf(it);
+    if (w <= 0) continue; // 权重为 0 的永远不会被抽中
+    last = it;
+    r -= w;
     if (r <= 0) return it;
   }
-  return items[items.length - 1];
+  return last;
+}
+
+// 洗牌（Fisher–Yates），返回新数组
+export function shuffle<T>(rand: Rand, arr: readonly T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }

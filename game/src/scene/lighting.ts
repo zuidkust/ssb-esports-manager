@@ -1,6 +1,6 @@
 // 日夜光照：太阳位置按游戏内时刻计算；室内灯、台灯随在场人数变化
 import * as THREE from 'three';
-import type { Office } from './office';
+import type { Venue } from './venue';
 import type { Quality } from './stage';
 
 const C = (hex: number | string) => new THREE.Color(hex);
@@ -30,8 +30,7 @@ export class Lighting {
   warm: THREE.PointLight;
   night = 0;
   day = 1;
-  constructor(private scene: THREE.Scene, private office: Office, quality: Quality) {
-
+  constructor(private scene: THREE.Scene, public office: Venue, quality: Quality) {
     this.hemi = new THREE.HemisphereLight(0xc3dcff, 0x7a6450, 0.6);
     scene.add(this.hemi);
 

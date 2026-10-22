@@ -16,7 +16,7 @@ export interface Segment {
 }
 
 export function segmentAt(minute: number, matchDay: boolean): Segment {
-  if (minute < H(9)) return { id: 'dawn', name: '清晨 · 陆续到岗' };
+  if (minute < H(9)) return { id: 'dawn', name: '清晨 · 还没开门' };
   if (minute < H(12)) return { id: 'morning', name: '上班 · 晨练' };
   if (minute < H(13, 30)) return { id: 'lunch', name: '饭点' };
   if (minute < H(14, 30)) return { id: 'nap', name: '午休 · 犯困时段' };
@@ -33,51 +33,65 @@ export function segmentAt(minute: number, matchDay: boolean): Segment {
   return { id: 'night', name: '下班 · 夜深了' };
 }
 
+// 饭点：M1 大家都留在工位，有人先坐着等饭（M2 换成等外卖小哥），然后吃
+export interface Meal {
+  start: number;
+  eat: number; // 开吃时刻；start..eat 之间在等饭
+  end: number;
+}
+
 export interface DayPlan {
   arrive: number;
   late: boolean;
   leave: number;
-  lunch: [number, number];
-  lunchOut: boolean;
+  lunch: Meal;
   nap: [number, number] | null;
   sofa: boolean;
-  dinner: [number, number];
-  dinnerOut: boolean;
+  dinner: Meal;
 }
 
-export function buildPlans(seed: number, day: number, members: { def: MemberDef; state: MemberState }[], matchDay: boolean): Record<string, DayPlan> {
+export interface PlanOptions {
+  sofa: boolean; // 场地里有沙发（没买就只能趴桌）
+}
+
+function meal(r: () => number, from: number, to: number, minLen: number, maxLen: number): Meal {
+  const start = range(r, from, to);
+  const eat = r() < 0.5 ? start + range(r, 8, 20) : start;
+  return { start, eat, end: eat + range(r, minLen, maxLen) };
+}
+
+export function buildPlans(
+  seed: number, day: number, members: { def: MemberDef; state: MemberState }[], matchDay: boolean, opts: PlanOptions,
+): Record<string, DayPlan> {
   const plans: Record<string, DayPlan> = {};
-  let sofaTaken = false;
+  let sofaTaken = !opts.sofa;
   for (const { def, state } of members) {
     const r = seeded(seed, 'plan', day, def.id);
     const p = state.persona;
-    let arrive = def.arrive === 'early' ? range(r, H(8, 34), H(8, 56)) : range(r, H(8, 46), H(9, 3));
+    let arrive = def.arrive === 'early' ? range(r, H(9), H(9, 6)) : range(r, H(9, 3), H(9, 16));
     let late = false;
     const lateP = def.arrive === 'early' ? 0.03 : 0.08 + (p.摸鱼倾向 - 50) / 400;
     if (r() < lateP) {
-      arrive = range(r, H(9, 8), H(9, 42));
+      arrive = range(r, H(9, 24), H(9, 55));
       late = true;
     }
-    const ls = range(r, H(12), H(12, 12));
-    const lunch: [number, number] = [ls, ls + range(r, 40, 56)];
-    const lunchOut = r() < 0.35;
-    const napP = 0.25 + p.摸鱼倾向 / 200 + (state.status.体力 < 55 ? 0.25 : 0);
+    const lunch = meal(r, H(12), H(12, 12), 28, 40);
+    // 午睡：爱睡觉的人更容易睡，体力低也会犯困（设计文档 6.1.1）
+    const napP = 0.1 + p.爱睡觉 / 120 + (state.status.体力 < 55 ? 0.25 : 0);
     let nap: [number, number] | null = null;
     let sofa = false;
     if (r() < napP) {
-      const ns = range(r, H(13, 30), H(13, 42));
-      nap = [ns, Math.min(H(14, 28), ns + range(r, 25, 50))];
+      const ns = range(r, Math.max(H(13, 30), lunch.end), H(13, 45));
+      nap = [ns, Math.min(H(14, 28), ns + range(r, 20, 30) + Math.round(p.爱睡觉 / 5))];
       if (!sofaTaken && r() < 0.55) sofa = sofaTaken = true;
     }
-    const ds = range(r, H(18), H(18, 10));
-    const dinner: [number, number] = [ds, ds + range(r, 32, 48)];
-    const dinnerOut = !matchDay && r() < 0.4;
+    const dinner = meal(r, H(18), H(18, 10), 24, 36);
     let leave: number;
     if (matchDay) leave = range(r, H(21, 30), H(22, 15));
     else if (p.胜负心 >= 70) leave = range(r, H(20, 50), H(22, 10));
     else if (p.摸鱼倾向 >= 60) leave = range(r, H(19, 20), H(20, 40));
     else leave = range(r, H(19, 40), H(21, 30));
-    plans[def.id] = { arrive, late, leave: Math.min(leave, DAY_END - 10), lunch, lunchOut, nap, sofa, dinner, dinnerOut };
+    plans[def.id] = { arrive, late, leave: Math.min(leave, DAY_END - 10), lunch, nap, sofa, dinner };
   }
   return plans;
 }

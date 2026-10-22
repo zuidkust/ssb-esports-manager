@@ -1,10 +1,25 @@
 // 存档版本迁移：每次改存档结构，SAVE_VERSION +1，并在 MIGRATIONS 里补一个 “旧版本 → 新版本” 函数
+import { ROSTER_BY_ID } from '../data/roster';
 import { SAVE_VERSION, type GameState } from './state';
 
 type AnySave = Record<string, unknown> & { version?: unknown };
 
 // 键是迁移前的版本号。例：2: (s) => ({ ...s, newField: 0, version: 3 })
-const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {};
+const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
+  // v2：设施、赛前确认标记、性格“爱睡觉”
+  1: (s) => ({
+    ...s,
+    facilities: [],
+    prematchConfirmedDay: 0,
+    roster: Array.isArray(s.roster)
+      ? (s.roster as { id: string; persona: Record<string, number> }[]).map((m) => ({
+          ...m,
+          persona: { 爱睡觉: ROSTER_BY_ID[m.id]?.persona.爱睡觉 ?? 50, ...m.persona },
+        }))
+      : s.roster,
+    version: 2,
+  }),
+};
 
 export class SaveError extends Error {}
 

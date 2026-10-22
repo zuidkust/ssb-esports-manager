@@ -26,6 +26,11 @@
           <div class="chip" id="phaseChip">--</div>
           <div class="chip accent" id="matchChip">--</div>
         </div>
+        <div class="res" title="现金、行动点、训练心得：M2 接入老板动作和训练产出">
+          <span class="res-item">💰 <b id="resCash">--</b></span>
+          <span class="res-item">⚡ 行动点 <b id="resAp">--</b></span>
+          <span class="res-item">📘 心得 <b id="resInsight">--</b></span>
+        </div>
       </header>
 
       <div id="timebar" class="panel">
@@ -35,11 +40,12 @@
         <button class="tb-btn wide" id="menuBtn" title="存档 / 读档（Esc）">☰ 存档</button>
       </div>
       <div id="holdBanner" class="hidden"></div>
+      <div id="nightHint" class="hidden">🌙 大家都下班了 · 夜里快进中，明早 09:00 见</div>
 
       <aside id="board" class="panel">
         <div class="board-head">
           <div class="board-title">事件看板 <small id="boardCount"></small></div>
-          <label class="toggle"><input type="checkbox" id="foldDaily" checked /> 折叠日常</label>
+          <label class="toggle"><input type="checkbox" id="foldDaily" /> 折叠日常</label>
         </div>
         <div id="feed"></div>
       </aside>
@@ -49,7 +55,7 @@
       <div id="modal" class="modal-back hidden"><div class="modal panel" id="modalBody"></div></div>
 
       <div id="toast"></div>
-      <div id="boot">正在搭建办公室……</div>
+      <div id="boot">正在布置网吧角落……</div>
     </div>
     <script type="module" src="./src/main.ts"></script>
   </body>

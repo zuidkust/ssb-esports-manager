@@ -2,13 +2,14 @@
 import puppeteer from 'puppeteer-core';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { findChrome } from './chrome.mjs';
 import fs from 'node:fs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const html = pathToFileURL(path.join(root, 'dist/index.html')).href;
 const out = path.join(root, 'shots');
 fs.mkdirSync(out, { recursive: true });
-const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = findChrome();
 
 const cases = process.argv[2]
   ? [{ name: 'custom', q: process.argv[2] }]
@@ -20,9 +21,14 @@ const cases = process.argv[2]
       { name: '05-night-2140', q: 't=21:40&day=3&paused=1' },
       { name: '06-card', q: 't=10:30&day=3&paused=1&card=shidian' },
       { name: '07-match-1910', q: 't=19:10&day=2&paused=1' },
+      { name: '08-netcafe-nap-1350', q: 't=13:50&day=3&paused=1' },
+      { name: '09-night-2230', q: 't=22:30&day=3&paused=1' },
+      { name: '10-office-1030', q: 'venue=1&t=10:30&day=3&paused=1' },
+      { name: '11-office-nap-1350', q: 'venue=1&t=13:50&day=3&paused=1' },
     ];
 
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const gpuArgs = process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--enable-gpu', '--ignore-gpu-blocklist'];
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: gpuArgs });
 const errors = [];
 for (const c of cases) {
   const page = await browser.newPage();

@@ -10,6 +10,11 @@ function run(c: GameClock, seconds: number, step = 1 / 60, stopAt: number[] = []
 }
 
 describe('GameClock', () => {
+  it('可见白天是 09:00–22:00', () => {
+    expect(DAY_START).toBe(9 * 60);
+    expect(DAY_END).toBe(22 * 60);
+  });
+
   it('正常速度下白天正好走现实 10 分钟', () => {
     const c = new GameClock({ day: 1, minute: DAY_START, speed: 'x1', paused: false });
     run(c, REAL_SECONDS_PER_DAY - 1);
@@ -27,7 +32,7 @@ describe('GameClock', () => {
     expect(b.minute).toBeCloseTo(DAY_END, 0);
   });
 
-  it('夜间快进约 6 秒后进入第二天 08:30', () => {
+  it('22:00 后夜间快进约 6 秒，进入第二天 09:00', () => {
     const c = new GameClock({ day: 1, minute: DAY_END, speed: 'x1', paused: false });
     run(c, NIGHT_SECONDS + 0.05);
     expect(c.day).toBe(2);

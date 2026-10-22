@@ -2,17 +2,18 @@
 import './style.css';
 import { dayInfo, MATCH_MINUTE, nextMatch, PREMATCH_MINUTE } from './core/calendar';
 import { fmtHM, GameClock, SPEEDS, sunPosition, type SpeedId } from './core/clock';
+import { allFacilitiesUpTo, VENUE_CN } from './data/facilities';
 import { TIER_CN } from './data/leagues';
 import { POSITIONS, POSITION_CN } from './data/roster';
 import { SaveError } from './save/migrate';
 import { createWebPlatform } from './save/platform';
 import { SaveManager, SLOTS, type SlotId } from './save/saves';
-import { createNewGame, type GameState } from './save/state';
+import { createNewGame, needsPrematch, type GameState } from './save/state';
 import { World } from './sim/world';
 import { Director } from './scene/director';
 import { Lighting } from './scene/lighting';
-import { buildOffice } from './scene/office';
 import { detectQuality, Stage } from './scene/stage';
+import { buildVenue, venueKey, type Venue } from './scene/venue';
 import { ROSTER } from './data/roster';
 import { Board } from './ui/board';
 import { Card } from './ui/card';
@@ -20,7 +21,7 @@ import { Card } from './ui/card';
 const params = new URLSearchParams(location.search);
 const $ = (id: string) => document.getElementById(id)!;
 const AUTOSAVE_SECONDS = 60;
-const VENUE_CN = ['网吧角落', '小办公室', '电竞基地', '豪华基地'];
+const ACTION_POINTS = [3, 4, 5, 6]; // 每日行动点上限随场地（设计文档 6.3），比赛日 +1
 
 // ───────── 平台与存档 ─────────
 const platform = createWebPlatform();
@@ -31,13 +32,25 @@ const quality = detectQuality(params.get('q'));
 const stage = new Stage($('stage'), quality);
 stage.sidePanel = innerWidth > 1180 ? 400 : 336;
 stage.resize();
-const office = buildOffice(stage.scene, ROSTER);
-const lighting = new Lighting(stage.scene, office, quality);
-
 let state: GameState = createNewGame();
 const world = new World(state);
 let clock = new GameClock(state.clock);
-const director = new Director(stage, office, world);
+let venue: Venue = buildVenue(stage.scene, state.venueLevel, ROSTER, world.facilities);
+let venueId = venueKey(state.venueLevel, world.facilities);
+const lighting = new Lighting(stage.scene, venue, quality);
+const director = new Director(stage, venue, world);
+
+// 场景按场地等级选，设施按已购买显示；场地或设施变了就重建场景（人物保留）
+function syncVenue() {
+  const id = venueKey(state.venueLevel, world.facilities);
+  if (id === venueId) return;
+  venue.root.removeFromParent();
+  venue = buildVenue(stage.scene, state.venueLevel, ROSTER, world.facilities);
+  venueId = id;
+  lighting.office = venue;
+  director.setVenue(venue);
+  director.snapAll();
+}
 const board = new Board((id) => select(id, true));
 const card = new Card(() => select(null));
 world.onLog(() => board.set(state.eventLog));
@@ -64,12 +77,13 @@ function startGame(s: GameState, note?: string) {
   state = s;
   clock = new GameClock(s.clock);
   world.reset(s);
+  syncVenue();
   world.update(clock.minute, 0, true);
   director.snapAll();
   board.set(s.eventLog);
   select(null);
   if (note) toast(note);
-  if (!s.eventLog.length) world.log('剧情', '老板盘下了网吧角落的几台机器，SSB 战队今天正式成立。目标：打出网吧联赛。', []);
+  if (!s.eventLog.length) world.log('剧情', '老板在网吧包下了角落的 6 台机器，SSB 战队今天正式成立。目标：打出网吧联赛。', []);
 }
 
 // 标题画面背后跑的是一局占位世界，玩家选好“继续 / 新游戏”之前不写存档
@@ -91,24 +105,17 @@ function persist(slot: SlotId) {
 let last = performance.now();
 let sinceAutosave = 0;
 let fpsFrames = 0, fpsTime = 0, degraded = false;
-const handledHolds = new Set<string>();
 
 function frame(t: number) {
   const dt = Math.min(0.1, (t - last) / 1000);
   last = t;
   const info = dayInfo(clock.day);
   const stops = info.round != null ? [PREMATCH_MINUTE] : [];
+  checkPrematch(); // 读档读到 18:30–19:00 之间：先停住，不让时间多走一帧
   const r = clock.tick(modalOpen ? 0 : dt, stops);
   state.clock = clock.snapshot();
   world.update(clock.minute, r.advanced, false);
-
-  // 比赛日 18:30 自动暂停：赛前选首发和战术
-  const holdId = `match-${clock.day}`;
-  if (info.round != null && Math.abs(clock.minute - PREMATCH_MINUTE) < 0.01 && !handledHolds.has(holdId)) {
-    handledHolds.add(holdId);
-    clock.hold(holdId, '比赛日：等老板确认首发');
-    showPrematch(holdId);
-  }
+  checkPrematch();
   if (r.newDay) {
     persist('auto');
     sinceAutosave = 0;
@@ -120,6 +127,7 @@ function frame(t: number) {
   }
 
   lighting.update({ sun: sunPosition(clock.minute), present: world.presentCount() });
+  $('nightHint').classList.toggle('hidden', !clock.night || !live);
   director.update(dt, clock.minute, lighting.night);
   stage.render(dt, lighting.night);
   updateHud();
@@ -137,6 +145,14 @@ function frame(t: number) {
   requestAnimationFrame(frame);
 }
 
+// 比赛日 18:30 自动暂停：赛前选首发和战术。“已确认”记在存档里，暂停中关页、读档会重新弹出
+function checkPrematch() {
+  const holdId = `match-${clock.day}`;
+  if (!live || clock.isHeld(holdId) || !needsPrematch(state, clock.day, clock.minute)) return;
+  clock.hold(holdId, '比赛日：等老板确认首发');
+  showPrematch(holdId);
+}
+
 // ───────── 顶部信息与时间控制 ─────────
 let hudTick = 0;
 function updateHud() {
@@ -147,6 +163,11 @@ function updateHud() {
   const info = dayInfo(clock.day);
   $('clockDate').textContent = `第 ${info.season} 赛季 · 第 ${info.dayInSeason} 天 · ${info.weekdayCn}`;
   $('brandSub').textContent = `${VENUE_CN[state.venueLevel]} · ${TIER_CN[state.season.tier]}`;
+  // 资源栏：M1 先显示存档里的初始值，M2 接老板动作和训练产出
+  const apMax = ACTION_POINTS[state.venueLevel] + (info.round != null ? 1 : 0);
+  $('resCash').textContent = state.cash.toLocaleString('zh-CN');
+  $('resAp').textContent = `${Math.min(state.actionPoints, apMax)}/${apMax}`;
+  $('resInsight').textContent = String(state.insight);
   $('phaseChip').textContent = clock.night ? '夜里 · 快进中' : `${world.segment(clock.minute).name} · 在岗 ${world.presentCount()}/6`;
   const nm = nextMatch(clock.day, clock.minute);
   const opp = nm ? world.opponentToday() : null;
@@ -166,7 +187,7 @@ function updateHud() {
   $('holdBanner').textContent = `⏸ 自动暂停：${holds.join('；')}`;
   if (selected) card.render(world);
   const rows = [...world.members].sort((a, b) => b.slackMin - a.slackMin).slice(0, 5).map((m) => ({ name: m.name, minutes: m.slackMin }));
-  office.wb.draw({
+  venue.wb?.draw({
     title: '摸鱼排行榜',
     rows,
     date: `第 ${info.dayInSeason} 天 ${info.weekdayCn}`,
@@ -349,7 +370,9 @@ function showPrematch(holdId: string) {
     false,
   );
   $('pmOk').addEventListener('click', () => {
+    state.prematchConfirmedDay = clock.day;
     clock.release(holdId);
+    persist('auto');
     modalClosable = true;
     closeModal();
   });
@@ -367,15 +390,21 @@ function toast(msg: string) {
 // ───────── 启动 ─────────
 startGame(state);
 // 调试 / 截图用：?day=2&t=14:50 直接跳到某个时刻；?skip=1 跳过标题
-if (params.get('day') || params.get('t')) {
+// ?venue=1 换场地（默认买齐该场地能买的设施），&fac=snack,fridge 指定已买设施，&fac=none 一件不买
+if (params.get('day') || params.get('t') || params.get('venue')) {
   const [h, m] = (params.get('t') ?? '10:00').split(':').map(Number);
   const s = createNewGame(+(params.get('seed') ?? 7));
   s.clock.day = +(params.get('day') ?? 1);
   s.clock.minute = h * 60 + (m || 0);
+  if (params.get('venue')) {
+    s.venueLevel = Math.max(0, Math.min(3, +params.get('venue')!));
+    const fac = params.get('fac');
+    s.facilities = fac == null ? allFacilitiesUpTo(s.venueLevel) : fac === 'none' ? [] : fac.split(',');
+  }
   startGame(s);
 }
 if (params.get('speed')) clock.setSpeed(params.get('speed') as SpeedId);
-if (!params.get('skip') && !params.get('t')) {
+if (!params.get('skip') && !params.get('t') && !params.get('venue')) {
   live = false;
   showTitle();
 }
@@ -387,4 +416,16 @@ requestAnimationFrame((t) => {
 if (params.get('card')) setTimeout(() => select(params.get('card')), 500);
 if (params.get('paused')) clock.togglePause();
 
-(window as unknown as { __ssb: unknown }).__ssb = { world, get clock() { return clock; }, get state() { return state; }, saves, director, stage, select, SLOTS };
+// 场地 / 设施变化（M4 的搬家、购买会走这里）
+function setVenue(level: number, facilities: string[]) {
+  state.venueLevel = level;
+  state.facilities = facilities;
+  world.refreshVenue();
+  syncVenue();
+  world.update(clock.minute, 0, true);
+  director.snapAll();
+}
+
+(window as unknown as { __ssb: unknown }).__ssb = {
+  world, get clock() { return clock; }, get state() { return state; }, get venue() { return venue; }, saves, director, stage, select, setVenue, SLOTS,
+};

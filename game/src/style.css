@@ -326,3 +326,18 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .lineup { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
 .lineup div { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 4px; text-align: center; font-size: 12.5px; }
 .lineup small { display: block; color: var(--muted); font-size: 10.5px; }
+
+/* ───────── M1 打磨 ───────── */
+.res { display: flex; gap: 6px; flex-wrap: wrap; }
+.res-item {
+  padding: 6px 11px; border-radius: 999px; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px dashed var(--line);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.res-item b { color: var(--text); font-weight: 600; margin-left: 2px; }
+#nightHint {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); z-index: 4; pointer-events: none;
+  padding: 12px 22px; border-radius: 14px; background: rgba(10, 14, 30, 0.78); border: 1px solid rgba(125, 147, 216, 0.4);
+  color: #cdd8ff; font-size: 15px; letter-spacing: 1px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+@media (min-width: 761px) { #nightHint { left: calc(50% - 200px); } }
+@media (max-width: 760px) { .res { width: 100%; } .res-item { font-size: 11px; padding: 4px 9px; } }

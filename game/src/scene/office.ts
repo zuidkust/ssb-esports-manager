@@ -1,8 +1,12 @@
-// 剖面式等距办公室：后墙与左墙完整，前墙与右墙只留矮墙，下面垫一个深色底座
+// 小办公室（场地等级 1）：剖面式等距办公室，后墙与左墙完整，前墙与右墙只留矮墙，下面垫一个深色底座
 // 全部用程序几何体拼装；家具用圆角盒子，比样板的直角盒子柔和一些
+// 零食柜、冰箱、沙发、白板是可买设施：没买就不渲染（data/facilities.ts）
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import type { FacilityId } from '../data/facilities';
 import type { MemberDef } from '../data/roster';
+import { OFFICE_NAV } from './nav';
+import type { Spot, Venue } from './venue';
 import {
   artTexture, floorTexture, plasterTexture, plinthLabel, posterTexture, rugTexture, screenTexture, slatTexture, SkyTexture, WhiteboardTexture,
   type ScreenKind,
@@ -32,7 +36,7 @@ export function shadow<T extends THREE.Object3D>(o: T, cast = true, receive = tr
   return o;
 }
 
-function addMesh(parent: THREE.Object3D, geo: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
+export function addMesh(parent: THREE.Object3D, geo: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
   const m = new THREE.Mesh(geo, material);
   m.position.set(x, y, z);
   m.castShadow = true;
@@ -42,7 +46,7 @@ function addMesh(parent: THREE.Object3D, geo: THREE.BufferGeometry, material: TH
 }
 
 // 以“底面高度”定位的直角盒子（墙、地台等大块面）
-function box(parent: THREE.Object3D, w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number, rotY = 0) {
+export function box(parent: THREE.Object3D, w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number, rotY = 0) {
   const m = addMesh(parent, new THREE.BoxGeometry(w, h, d), material, x, y + h / 2, z);
   m.rotation.y = rotY;
   return m;
@@ -59,18 +63,18 @@ export function rbox(parent: THREE.Object3D, w: number, h: number, d: number, ma
   return m;
 }
 
-function cyl(parent: THREE.Object3D, rTop: number, rBot: number, h: number, material: THREE.Material, x: number, y: number, z: number, seg = 20) {
+export function cyl(parent: THREE.Object3D, rTop: number, rBot: number, h: number, material: THREE.Material, x: number, y: number, z: number, seg = 20) {
   return addMesh(parent, new THREE.CylinderGeometry(rTop, rBot, h, seg), material, x, y + h / 2, z);
 }
 
 // 车削体：points 为 (半径, 高度) 轮廓
-function lathe(parent: THREE.Object3D, pts: [number, number][], material: THREE.Material, x: number, y: number, z: number, seg = 24) {
+export function lathe(parent: THREE.Object3D, pts: [number, number][], material: THREE.Material, x: number, y: number, z: number, seg = 24) {
   const geo = new THREE.LatheGeometry(pts.map(([r, h]) => new THREE.Vector2(r, h)), seg);
   return addMesh(parent, geo, material, x, y, z);
 }
 
 // 绿植：带沿的花盆 + 椭圆叶片，叶色深浅交错
-function plant(parent: THREE.Object3D, x: number, z: number, scale = 1, potColor = 0xe9e2d6, seed = 1) {
+export function plant(parent: THREE.Object3D, x: number, z: number, scale = 1, potColor = 0xe9e2d6, seed = 1) {
   const g = new THREE.Group();
   const pot = mat(potColor, { roughness: 0.6 });
   lathe(g, [[0, 0], [0.15, 0], [0.18, 0.05], [0.2, 0.38], [0.225, 0.4], [0.225, 0.44], [0.2, 0.44], [0.19, 0.42], [0, 0.42]], pot, 0, 0, 0, 28);
@@ -125,7 +129,7 @@ function floorLamp(parent: THREE.Object3D, x: number, z: number): Lamp {
 }
 
 // 有褶皱的落地窗帘
-function curtain(parent: THREE.Object3D, x: number, z: number, width: number, height: number, material: THREE.Material) {
+export function curtain(parent: THREE.Object3D, x: number, z: number, width: number, height: number, material: THREE.Material) {
   const geo = new THREE.PlaneGeometry(width, height, 24, 1);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
@@ -317,39 +321,54 @@ function buildDesk(parent: THREE.Object3D, x: number, z: number, accent: number,
   };
 }
 
-export interface Office {
-  root: THREE.Group;
-  desks: Desk[];
-  spots: {
-    door: THREE.Vector3;
-    snack: THREE.Vector3[];
-    drink: THREE.Vector3[];
-    fridge: THREE.Vector3;
-    sofa: THREE.Vector3;
-    whiteboard: (i: number) => THREE.Vector3;
-    chat: THREE.Vector3[];
-    sub: THREE.Vector3;
-  };
-  lamps: Lamp[];
-  sky: SkyTexture;
-  wb: WhiteboardTexture;
-  doorPivot: THREE.Group;
-  clock: { hourHand: THREE.Mesh; minHand: THREE.Mesh };
-  glowMat: THREE.MeshStandardMaterial;
-  fridgeDoor: THREE.Group;
+// 墙钟：返回时针、分针，导演层每帧转动
+export function wallClock(parent: THREE.Object3D, x: number, y: number, z: number, face = 0xf7f4ee) {
+  const clockFace = new THREE.Mesh(new THREE.CircleGeometry(0.24, 40), mat(face));
+  clockFace.position.set(x, y, z);
+  parent.add(clockFace);
+  const clockRing = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.022, 10, 40), mat(0x2b2b30, { metalness: 0.4 }));
+  clockRing.position.copy(clockFace.position);
+  parent.add(clockRing);
+  for (let i = 0; i < 12; i++) {
+    const tick = new THREE.Mesh(new THREE.BoxGeometry(0.012, i % 3 ? 0.025 : 0.045, 0.005), mat(0x2b2b30));
+    const a = (i / 12) * Math.PI * 2;
+    tick.position.set(x + Math.sin(a) * 0.2, y + Math.cos(a) * 0.2, z + 0.005);
+    tick.rotation.z = -a;
+    parent.add(tick);
+  }
+  const handMat = mat(0x1d1d1f);
+  const hourHand = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.13, 0.01), handMat);
+  hourHand.geometry.translate(0, 0.065, 0);
+  hourHand.position.set(x, y, z + 0.015);
+  const minHand = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.2, 0.01), handMat);
+  minHand.geometry.translate(0, 0.1, 0);
+  minHand.position.set(x, y, z + 0.022);
+  parent.add(hourHand, minHand);
+  return { hourHand, minHand };
 }
 
-export function buildOffice(scene: THREE.Scene, members: MemberDef[]): Office {
-  const root = new THREE.Group();
-  scene.add(root);
-  const { x0, x1, z0, z1, h } = ROOM;
-  const W = x1 - x0, D = z1 - z0;
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xead6b4, map: plasterTexture(), roughness: 0.92 });
-  const wallTop = mat(0xf2e7d6, { roughness: 0.9 });
-  const trim = mat(0x3a2a20, { roughness: 0.6 });
-  const frame = mat(0x2b2e34, { roughness: 0.45, metalness: 0.3 });
+// 饮水机：机身 + 倒扣水桶 + 出水口 + 接水杯（背靠 -z 墙，出水口朝 +z）
+export function waterCooler(parent: THREE.Object3D, x: number, z: number) {
+  const cooler = new THREE.Group();
+  cooler.position.set(x, 0, z);
+  parent.add(cooler);
+  rbox(cooler, 0.36, 0.95, 0.36, mat(0xf1f1f1, { roughness: 0.4 }), 0, 0, 0, 0.04);
+  rbox(cooler, 0.3, 0.16, 0.04, mat(0x2b2e34, { roughness: 0.3 }), 0, 0.55, 0.17, 0.02);
+  for (const [sx, c] of [[-0.06, 0x3a8bd1], [0.06, 0xd94f3d]] as const) cyl(cooler, 0.015, 0.015, 0.05, mat(c, { roughness: 0.3 }), sx, 0.6, 0.2, 8);
+  lathe(cooler, [[0, 0], [0.05, 0], [0.05, 0.05], [0.15, 0.12], [0.16, 0.42], [0.14, 0.46], [0, 0.46]], new THREE.MeshStandardMaterial({ color: 0x6fb7e8, transparent: true, opacity: 0.6, roughness: 0.05, metalness: 0.1 }), 0, 0.95, 0, 24);
+  cyl(cooler, 0.07, 0.07, 0.005, mat(0x9aa0a8, { metalness: 0.6 }), 0, 0.5, 0.2, 14);
+  return cooler;
+}
 
-  // ── 底座（深色）+ 发光描边 + 侧面字 ──
+// 一排排队位：第一个人站在 at[0]，都朝向 focus
+export function facingTo(at: THREE.Vector3, fx: number, fz: number) {
+  return Math.atan2(fx - at.x, fz - at.z);
+}
+
+// 底座（深色）+ 发光描边 + 侧面字；返回描边的发光材质（灯光层随昼夜调亮度）
+export function buildPlinth(root: THREE.Object3D): THREE.MeshStandardMaterial {
+  const { x1, z1 } = ROOM;
+  const W = ROOM.x1 - ROOM.x0, D = ROOM.z1 - ROOM.z0;
   const plinth = new THREE.Mesh(new RoundedBoxGeometry(W + 0.7, 0.7, D + 0.7, 3, 0.06), mat(0x171a21, { roughness: 0.6 }));
   plinth.position.set(0, -0.47, 0);
   plinth.receiveShadow = true;
@@ -368,6 +387,40 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[]): Office {
   lbl2.position.set(x1 + 0.352, -0.48, 1.5);
   lbl2.rotation.y = Math.PI / 2;
   root.add(lbl2);
+  return glowMat;
+}
+
+// 后墙左侧的门（向内开）；返回门轴，导演层按有没有人经过开关门
+export function buildDoor(root: THREE.Object3D, door: { x0: number; x1: number; h: number }, doorMat: THREE.Material, trim: THREE.Material): THREE.Group {
+  const z0 = ROOM.z0;
+  rbox(root, 0.07, door.h, 0.24, trim, door.x0 - 0.035, 0, z0 - 0.02, 0.012);
+  rbox(root, 0.07, door.h, 0.24, trim, door.x1 + 0.035, 0, z0 - 0.02, 0.012);
+  rbox(root, door.x1 - door.x0 + 0.14, 0.07, 0.24, trim, (door.x0 + door.x1) / 2, door.h, z0 - 0.02, 0.012);
+  const doorPivot = new THREE.Group();
+  doorPivot.position.set(door.x0, 0, z0 - 0.05);
+  root.add(doorPivot);
+  rbox(doorPivot, door.x1 - door.x0, door.h - 0.02, 0.05, doorMat, (door.x1 - door.x0) / 2, 0, 0, 0.012);
+  for (const py of [0.25, 1.2]) rbox(doorPivot, door.x1 - door.x0 - 0.24, py === 0.25 ? 0.8 : 0.75, 0.012, mat(0x6b4630, { roughness: 0.6 }), (door.x1 - door.x0) / 2, py, 0.027, 0.006);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 10), mat(0xc9a35a, { metalness: 0.85, roughness: 0.25 }));
+  knob.position.set(door.x1 - door.x0 - 0.12, 1.0, 0.06);
+  doorPivot.add(knob);
+  const doorDark = new THREE.Mesh(new THREE.PlaneGeometry(door.x1 - door.x0, door.h), new THREE.MeshBasicMaterial({ color: 0x0c0d10 }));
+  doorDark.position.set((door.x0 + door.x1) / 2, door.h / 2, z0 - 0.19);
+  root.add(doorDark);
+  return doorPivot;
+}
+
+export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: ReadonlySet<FacilityId>): Venue {
+  const root = new THREE.Group();
+  scene.add(root);
+  const { x0, x1, z0, z1, h } = ROOM;
+  const W = x1 - x0, D = z1 - z0;
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xead6b4, map: plasterTexture(), roughness: 0.92 });
+  const wallTop = mat(0xf2e7d6, { roughness: 0.9 });
+  const trim = mat(0x3a2a20, { roughness: 0.6 });
+  const frame = mat(0x2b2e34, { roughness: 0.45, metalness: 0.3 });
+
+  const glowMat = buildPlinth(root);
 
   // ── 地板 ──
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.55, color: 0xffffff }));
@@ -429,35 +482,30 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[]): Office {
     root.add(shadow(s));
   }
 
-  // 门（向内开）
-  rbox(root, 0.07, door.h, 0.24, trim, door.x0 - 0.035, 0, z0 - 0.02, 0.012);
-  rbox(root, 0.07, door.h, 0.24, trim, door.x1 + 0.035, 0, z0 - 0.02, 0.012);
-  rbox(root, door.x1 - door.x0 + 0.14, 0.07, 0.24, trim, (door.x0 + door.x1) / 2, door.h, z0 - 0.02, 0.012);
-  const doorPivot = new THREE.Group();
-  doorPivot.position.set(door.x0, 0, z0 - 0.05);
-  root.add(doorPivot);
-  const doorMat = mat(0x7a5236, { roughness: 0.55 });
-  rbox(doorPivot, door.x1 - door.x0, door.h - 0.02, 0.05, doorMat, (door.x1 - door.x0) / 2, 0, 0, 0.012);
-  for (const py of [0.25, 1.2]) rbox(doorPivot, door.x1 - door.x0 - 0.24, py === 0.25 ? 0.8 : 0.75, 0.012, mat(0x6b4630, { roughness: 0.6 }), (door.x1 - door.x0) / 2, py, 0.027, 0.006);
-  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 10), mat(0xc9a35a, { metalness: 0.85, roughness: 0.25 }));
-  knob.position.set(door.x1 - door.x0 - 0.12, 1.0, 0.06);
-  doorPivot.add(knob);
-  const doorDark = new THREE.Mesh(new THREE.PlaneGeometry(door.x1 - door.x0, door.h), new THREE.MeshBasicMaterial({ color: 0x0c0d10 }));
-  doorDark.position.set((door.x0 + door.x1) / 2, door.h / 2, z0 - 0.19);
-  root.add(doorDark);
+  const doorPivot = buildDoor(root, door, mat(0x7a5236, { roughness: 0.55 }), trim);
 
   // 左墙：胡桃木格栅、白板、挂画；门旁海报
   const slat = new THREE.Mesh(new THREE.BoxGeometry(0.04, h - 0.02, 2.0), new THREE.MeshStandardMaterial({ map: slatTexture(), roughness: 0.6 }));
   slat.position.set(x0 + 0.03, h / 2, -4.0);
   slat.receiveShadow = true;
   root.add(slat);
-  const wb = new WhiteboardTexture();
-  rbox(root, 0.05, 1.32, 2.12, mat(0xb8bcc2, { metalness: 0.6, roughness: 0.35 }), x0 + 0.03, 0.94, -1.6, 0.02);
-  const wbFace = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.22), new THREE.MeshStandardMaterial({ map: wb.texture, roughness: 0.35, emissive: 0xffffff, emissiveMap: wb.texture, emissiveIntensity: 0.08 }));
-  wbFace.position.set(x0 + 0.06, 1.6, -1.6);
-  wbFace.rotation.y = Math.PI / 2;
-  root.add(wbFace);
-  rbox(root, 0.12, 0.03, 1.2, frame, x0 + 0.08, 0.92, -1.6, 0.01);
+  // 白板（设施）：摸鱼排行榜、赛前会都在这儿
+  let wb: WhiteboardTexture | undefined;
+  if (fac.has('whiteboard')) {
+    wb = new WhiteboardTexture();
+    rbox(root, 0.05, 1.32, 2.12, mat(0xb8bcc2, { metalness: 0.6, roughness: 0.35 }), x0 + 0.03, 0.94, -1.6, 0.02);
+    const wbFace = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.22), new THREE.MeshStandardMaterial({ map: wb.texture, roughness: 0.35, emissive: 0xffffff, emissiveMap: wb.texture, emissiveIntensity: 0.08 }));
+    wbFace.position.set(x0 + 0.06, 1.6, -1.6);
+    wbFace.rotation.y = Math.PI / 2;
+    root.add(wbFace);
+    rbox(root, 0.12, 0.03, 1.2, frame, x0 + 0.08, 0.92, -1.6, 0.01);
+  } else {
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.78), new THREE.MeshStandardMaterial({ map: artTexture(5), roughness: 0.8 }));
+    art.position.set(x0 + 0.055, 1.75, -1.6);
+    art.rotation.y = Math.PI / 2;
+    root.add(art);
+    rbox(root, 0.03, 0.86, 0.7, trim, x0 + 0.025, 1.32, -1.6, 0.01);
+  }
   for (const [i, cz] of [[1, 1.7], [2, 2.75]] as const) {
     const art = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.78), new THREE.MeshStandardMaterial({ map: artTexture(i * 13), roughness: 0.8 }));
     art.position.set(x0 + 0.055, 1.85, cz);
@@ -502,22 +550,25 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[]): Office {
     rbox(root, 0.7, 0.72, 0.02, mat(0x9a6a48, { roughness: 0.5 }), cx, 0.1, z0 + 0.605, 0.01);
     rbox(root, 0.18, 0.018, 0.025, mat(0xc9ccd1, { metalness: 0.8, roughness: 0.25 }), cx, 0.74, z0 + 0.625, 0.008);
   }
-  // 冰箱（双开门，左门可开）
-  const fridgeMat = mat(0xc9ccd1, { metalness: 0.55, roughness: 0.28 });
-  rbox(root, 0.74, 1.86, 0.66, fridgeMat, 6.6, 0, z0 + 0.34, 0.05);
-  const fridgeDoor = new THREE.Group();
-  fridgeDoor.position.set(6.235, 0, z0 + 0.68);
-  root.add(fridgeDoor);
-  rbox(fridgeDoor, 0.36, 1.82, 0.04, fridgeMat, 0.18, 0.02, 0, 0.02);
-  rbox(fridgeDoor, 0.025, 0.55, 0.03, mat(0x777a80, { metalness: 0.85, roughness: 0.2 }), 0.32, 0.95, 0.03, 0.01);
-  rbox(root, 0.025, 0.55, 0.03, mat(0x777a80, { metalness: 0.85, roughness: 0.2 }), 6.65, 0.95, z0 + 0.71, 0.01);
-  // 冰箱上的贴纸便签
-  for (const [px, py, c] of [[6.8, 1.5, 0xf2c14e], [6.75, 1.25, 0x6fb7e8]] as const) {
-    const note = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.12), mat(c, { roughness: 0.9 }));
-    note.position.set(px, py, z0 + 0.676);
-    note.rotation.z = (px - 6.77) * 3;
-    root.add(note);
-  }
+  // 冰箱（设施，双开门，左门可开）；没买时角落放一盆绿植
+  let fridgeDoor: THREE.Group | undefined;
+  if (fac.has('fridge')) {
+    const fridgeMat = mat(0xc9ccd1, { metalness: 0.55, roughness: 0.28 });
+    rbox(root, 0.74, 1.86, 0.66, fridgeMat, 6.6, 0, z0 + 0.34, 0.05);
+    fridgeDoor = new THREE.Group();
+    fridgeDoor.position.set(6.235, 0, z0 + 0.68);
+    root.add(fridgeDoor);
+    rbox(fridgeDoor, 0.36, 1.82, 0.04, fridgeMat, 0.18, 0.02, 0, 0.02);
+    rbox(fridgeDoor, 0.025, 0.55, 0.03, mat(0x777a80, { metalness: 0.85, roughness: 0.2 }), 0.32, 0.95, 0.03, 0.01);
+    rbox(root, 0.025, 0.55, 0.03, mat(0x777a80, { metalness: 0.85, roughness: 0.2 }), 6.65, 0.95, z0 + 0.71, 0.01);
+    // 冰箱上的贴纸便签
+    for (const [px, py, c] of [[6.8, 1.5, 0xf2c14e], [6.75, 1.25, 0x6fb7e8]] as const) {
+      const note = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.12), mat(c, { roughness: 0.9 }));
+      note.position.set(px, py, z0 + 0.676);
+      note.rotation.z = (px - 6.77) * 3;
+      root.add(note);
+    }
+  } else plant(root, 6.55, z0 + 0.4, 1.05, 0x3a3d44, 6);
   // 咖啡机、微波炉、零食柜（开放式小格子）、奶茶杯
   rbox(root, 0.3, 0.4, 0.32, mat(0x1e1f22, { roughness: 0.35, metalness: 0.2 }), 2.75, 0.93, z0 + 0.25, 0.04);
   cyl(root, 0.045, 0.04, 0.08, mat(0xf2efe8), 2.75, 0.95, z0 + 0.36, 12);
@@ -525,20 +576,22 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[]): Office {
   const mwDoor = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.22), new THREE.MeshStandardMaterial({ color: 0x222428, roughness: 0.15, metalness: 0.3 }));
   mwDoor.position.set(5.48, 1.085, z0 + 0.471);
   root.add(mwDoor);
-  const snackCab = new THREE.Group();
-  snackCab.position.set(3.6, 0.93, z0 + 0.3);
-  root.add(snackCab);
-  const cabWood = mat(0xc8a26a, { roughness: 0.7 });
-  rbox(snackCab, 0.66, 0.03, 0.34, cabWood, 0, 0, 0, 0.01);
-  rbox(snackCab, 0.66, 0.03, 0.34, cabWood, 0, 0.2, 0, 0.01);
-  rbox(snackCab, 0.66, 0.03, 0.34, cabWood, 0, 0.4, 0, 0.01);
-  for (const sx of [-0.315, 0.315]) rbox(snackCab, 0.03, 0.43, 0.34, cabWood, sx, 0, 0, 0.01);
-  const snackColors = [0xd94f3d, 0xf2c14e, 0x3fa34d, 0x4a7fd1, 0xe8833a, 0xb05fd1];
-  for (let i = 0; i < 10; i++) {
-    const shelfY = i < 5 ? 0.03 : 0.23;
-    const sx = -0.24 + (i % 5) * 0.12;
-    const bag = rbox(snackCab, 0.09, 0.12 + (i % 3) * 0.025, 0.08, mat(snackColors[i % snackColors.length], { roughness: 0.6 }), sx, shelfY, 0.02, 0.02);
-    bag.rotation.y = (i % 3) * 0.2 - 0.2;
+  if (fac.has('snack')) {
+    const snackCab = new THREE.Group();
+    snackCab.position.set(3.6, 0.93, z0 + 0.3);
+    root.add(snackCab);
+    const cabWood = mat(0xc8a26a, { roughness: 0.7 });
+    rbox(snackCab, 0.66, 0.03, 0.34, cabWood, 0, 0, 0, 0.01);
+    rbox(snackCab, 0.66, 0.03, 0.34, cabWood, 0, 0.2, 0, 0.01);
+    rbox(snackCab, 0.66, 0.03, 0.34, cabWood, 0, 0.4, 0, 0.01);
+    for (const sx of [-0.315, 0.315]) rbox(snackCab, 0.03, 0.43, 0.34, cabWood, sx, 0, 0, 0.01);
+    const snackColors = [0xd94f3d, 0xf2c14e, 0x3fa34d, 0x4a7fd1, 0xe8833a, 0xb05fd1];
+    for (let i = 0; i < 10; i++) {
+      const shelfY = i < 5 ? 0.03 : 0.23;
+      const sx = -0.24 + (i % 5) * 0.12;
+      const bag = rbox(snackCab, 0.09, 0.12 + (i % 3) * 0.025, 0.08, mat(snackColors[i % snackColors.length], { roughness: 0.6 }), sx, shelfY, 0.02, 0.02);
+      bag.rotation.y = (i % 3) * 0.2 - 0.2;
+    }
   }
   for (let i = 0; i < 3; i++) {
     lathe(root, [[0, 0], [0.036, 0], [0.045, 0.15], [0, 0.15]], mat(0xf3e2c7, { roughness: 0.5 }), 4.35 + i * 0.15, 0.93, z0 + 0.42, 14);
@@ -556,36 +609,8 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[]): Office {
   lathe(trophy, [[0, 0], [0.08, 0], [0.08, 0.05], [0.02, 0.07], [0.02, 0.14], [0.1, 0.18], [0.11, 0.3], [0, 0.26]], mat(0xd4a83a, { metalness: 0.8, roughness: 0.25 }), 0, 0, 0, 20);
   trophy.position.set(5.0, 2.19, z0 + 0.15);
   root.add(shadow(trophy));
-  const clockFace = new THREE.Mesh(new THREE.CircleGeometry(0.24, 40), mat(0xf7f4ee));
-  clockFace.position.set(6.0, 2.45, z0 + 0.03);
-  root.add(clockFace);
-  const clockRing = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.022, 10, 40), mat(0x2b2b30, { metalness: 0.4 }));
-  clockRing.position.copy(clockFace.position);
-  root.add(clockRing);
-  for (let i = 0; i < 12; i++) {
-    const tick = new THREE.Mesh(new THREE.BoxGeometry(0.012, i % 3 ? 0.025 : 0.045, 0.005), mat(0x2b2b30));
-    const a = (i / 12) * Math.PI * 2;
-    tick.position.set(6.0 + Math.sin(a) * 0.2, 2.45 + Math.cos(a) * 0.2, z0 + 0.035);
-    tick.rotation.z = -a;
-    root.add(tick);
-  }
-  const handMat = mat(0x1d1d1f);
-  const hourHand = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.13, 0.01), handMat);
-  hourHand.geometry.translate(0, 0.065, 0);
-  hourHand.position.set(6.0, 2.45, z0 + 0.045);
-  const minHand = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.2, 0.01), handMat);
-  minHand.geometry.translate(0, 0.1, 0);
-  minHand.position.set(6.0, 2.45, z0 + 0.052);
-  root.add(hourHand, minHand);
-  // 饮水机：机身 + 倒扣水桶 + 出水口 + 接水杯
-  const cooler = new THREE.Group();
-  cooler.position.set(2.05, 0, z0 + 0.38);
-  root.add(cooler);
-  rbox(cooler, 0.36, 0.95, 0.36, mat(0xf1f1f1, { roughness: 0.4 }), 0, 0, 0, 0.04);
-  rbox(cooler, 0.3, 0.16, 0.04, mat(0x2b2e34, { roughness: 0.3 }), 0, 0.55, 0.17, 0.02);
-  for (const [sx, c] of [[-0.06, 0x3a8bd1], [0.06, 0xd94f3d]] as const) cyl(cooler, 0.015, 0.015, 0.05, mat(c, { roughness: 0.3 }), sx, 0.6, 0.2, 8);
-  lathe(cooler, [[0, 0], [0.05, 0], [0.05, 0.05], [0.15, 0.12], [0.16, 0.42], [0.14, 0.46], [0, 0.46]], new THREE.MeshStandardMaterial({ color: 0x6fb7e8, transparent: true, opacity: 0.6, roughness: 0.05, metalness: 0.1 }), 0, 0.95, 0, 24);
-  cyl(cooler, 0.07, 0.07, 0.005, mat(0x9aa0a8, { metalness: 0.6 }), 0, 0.5, 0.2, 14);
+  const clock = wallClock(root, 6.0, 2.45, z0 + 0.03);
+  waterCooler(root, 2.05, z0 + 0.38);
   // 高脚小圆桌 + 凳子
   cyl(root, 0.42, 0.42, 0.04, counterTop, 4.3, 1.02, -2.4, 32);
   cyl(root, 0.035, 0.035, 1.0, mat(0x2b2b30, { metalness: 0.6 }), 4.3, 0.02, -2.4, 10);
@@ -599,34 +624,36 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[]): Office {
     root.add(ring);
   }
 
-  // ── 沙发午睡角（左墙前段）──
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3.0), new THREE.MeshStandardMaterial({ map: rugTexture(), roughness: 1 }));
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(-5.4, 0.005, 2.4);
-  rug.receiveShadow = true;
-  root.add(rug);
-  const sofaMat = mat(0xeee6d8, { roughness: 1 });
-  const sofa = new THREE.Group();
-  rbox(sofa, 0.95, 0.36, 2.4, sofaMat, 0, 0.1, 0, 0.08);
-  rbox(sofa, 0.28, 0.86, 2.4, sofaMat, -0.36, 0.05, 0, 0.1);
-  for (const sz of [-1.12, 1.12]) rbox(sofa, 0.95, 0.6, 0.22, sofaMat, 0, 0.05, sz, 0.09);
-  for (const sz of [-0.5, 0.5]) rbox(sofa, 0.7, 0.14, 0.98, mat(0xf4eee4, { roughness: 1 }), 0.08, 0.44, sz, 0.06);
-  for (const sz of [-0.5, 0.5]) {
-    const bc = rbox(sofa, 0.18, 0.5, 0.96, mat(0xf4eee4, { roughness: 1 }), -0.17, 0.5, sz, 0.08);
-    bc.rotation.z = 0.12;
-  }
-  for (const [sz, c] of [[-0.75, 0xc8693a], [0.75, 0xd88a4a]] as const) {
-    const p = rbox(sofa, 0.13, 0.4, 0.4, mat(c, { roughness: 1 }), -0.02, 0.56, sz, 0.08);
-    p.rotation.z = 0.25;
-  }
-  // 搭在扶手上的毯子
-  rbox(sofa, 0.8, 0.04, 0.5, mat(0x7b8a99, { roughness: 1 }), 0.05, 0.6, 1.0, 0.02);
-  for (const [fx, fz] of [[0.4, -1.15], [0.4, 1.15], [-0.4, -1.15], [-0.4, 1.15]]) cyl(sofa, 0.03, 0.025, 0.1, mat(0x3a2a20), fx, 0, fz, 8);
-  sofa.position.set(-6.45, 0, 2.4);
-  root.add(shadow(sofa));
-  cyl(root, 0.38, 0.38, 0.04, mat(0x5a3a26, { roughness: 0.45 }), -5.15, 0.42, 2.4, 32);
-  lathe(root, [[0, 0], [0.16, 0], [0.06, 0.06], [0.05, 0.36], [0.1, 0.42], [0, 0.42]], mat(0x5a3a26, { roughness: 0.45 }), -5.15, 0, 2.4);
-  lathe(root, [[0, 0], [0.04, 0], [0.065, 0.1], [0.05, 0.13], [0, 0.13]], mat(0xe9e2d6, { roughness: 0.4 }), -5.05, 0.46, 2.3, 16);
+  // ── 沙发午睡角（左墙前段，设施）──
+  if (fac.has('sofa')) {
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3.0), new THREE.MeshStandardMaterial({ map: rugTexture(), roughness: 1 }));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(-5.4, 0.005, 2.4);
+    rug.receiveShadow = true;
+    root.add(rug);
+    const sofaMat = mat(0xeee6d8, { roughness: 1 });
+    const sofa = new THREE.Group();
+    rbox(sofa, 0.95, 0.36, 2.4, sofaMat, 0, 0.1, 0, 0.08);
+    rbox(sofa, 0.28, 0.86, 2.4, sofaMat, -0.36, 0.05, 0, 0.1);
+    for (const sz of [-1.12, 1.12]) rbox(sofa, 0.95, 0.6, 0.22, sofaMat, 0, 0.05, sz, 0.09);
+    for (const sz of [-0.5, 0.5]) rbox(sofa, 0.7, 0.14, 0.98, mat(0xf4eee4, { roughness: 1 }), 0.08, 0.44, sz, 0.06);
+    for (const sz of [-0.5, 0.5]) {
+      const bc = rbox(sofa, 0.18, 0.5, 0.96, mat(0xf4eee4, { roughness: 1 }), -0.17, 0.5, sz, 0.08);
+      bc.rotation.z = 0.12;
+    }
+    for (const [sz, c] of [[-0.75, 0xc8693a], [0.75, 0xd88a4a]] as const) {
+      const p = rbox(sofa, 0.13, 0.4, 0.4, mat(c, { roughness: 1 }), -0.02, 0.56, sz, 0.08);
+      p.rotation.z = 0.25;
+    }
+    // 搭在扶手上的毯子
+    rbox(sofa, 0.8, 0.04, 0.5, mat(0x7b8a99, { roughness: 1 }), 0.05, 0.6, 1.0, 0.02);
+    for (const [fx, fz] of [[0.4, -1.15], [0.4, 1.15], [-0.4, -1.15], [-0.4, 1.15]]) cyl(sofa, 0.03, 0.025, 0.1, mat(0x3a2a20), fx, 0, fz, 8);
+    sofa.position.set(-6.45, 0, 2.4);
+    root.add(shadow(sofa));
+    cyl(root, 0.38, 0.38, 0.04, mat(0x5a3a26, { roughness: 0.45 }), -5.15, 0.42, 2.4, 32);
+    lathe(root, [[0, 0], [0.16, 0], [0.06, 0.06], [0.05, 0.36], [0.1, 0.42], [0, 0.42]], mat(0x5a3a26, { roughness: 0.45 }), -5.15, 0, 2.4);
+    lathe(root, [[0, 0], [0.04, 0], [0.065, 0.1], [0.05, 0.13], [0, 0.13]], mat(0xe9e2d6, { roughness: 0.4 }), -5.05, 0.46, 2.3, 16);
+  } else plant(root, -6.4, 2.4, 1.0, 0xc8693a, 7);
   const lamps = [floorLamp(root, -6.55, 3.95), floorLamp(root, 6.45, 1.0)];
 
   // ── 前右休闲区：圆地毯、懒人沙发、矮桌 ──
@@ -657,20 +684,34 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[]): Office {
   plant(root, 6.55, -3.0, 0.8, 0xe9e2d6, 5);
 
   // ── 走位用的关键位置 ──
-  const spots: Office['spots'] = {
-    door: new THREE.Vector3(-5.85, 0, -4.75),
-    snack: [new THREE.Vector3(3.4, 0, -4.2), new THREE.Vector3(3.95, 0, -4.2), new THREE.Vector3(4.7, 0, -4.2)],
-    drink: [new THREE.Vector3(2.05, 0, -4.05), new THREE.Vector3(2.6, 0, -3.75), new THREE.Vector3(1.5, 0, -3.75)],
-    fridge: new THREE.Vector3(6.05, 0, -3.95),
-    sofa: new THREE.Vector3(-6.3, 0, 2.4),
-    whiteboard: (i: number) => {
+  const drinkAt = [new THREE.Vector3(2.05, 0, -4.05), new THREE.Vector3(2.6, 0, -3.75), new THREE.Vector3(1.5, 0, -3.75)];
+  const meeting = (i: number): Spot => {
+    if (wb) {
       // 围着白板站成扇形，间距约 0.8 米
       const a = -1.05 + i * 0.42;
-      return new THREE.Vector3(-6.95 + 1.95 * Math.cos(a), 0, -1.6 + 1.95 * Math.sin(a));
-    },
-    chat: [new THREE.Vector3(2.75, 0, 1.05), new THREE.Vector3(3.55, 0, 1.05)],
-    sub: new THREE.Vector3(-0.45, 0, 0.75),
+      const at = new THREE.Vector3(-6.95 + 1.95 * Math.cos(a), 0, -1.6 + 1.95 * Math.sin(a));
+      return { at, approach: 'WB', facing: facingTo(at, -7, -1.6), lead: i === 0 };
+    }
+    // 没有白板：在中间空地围一圈
+    const a = (i / 6) * Math.PI * 2;
+    const at = new THREE.Vector3(0.0 + Math.cos(a) * 0.9, 0, 1.8 + Math.sin(a) * 0.9);
+    return { at, approach: 'C', facing: facingTo(at, 0.0, 1.8), lead: i === 0 };
+  };
+  const spots: Venue['spots'] = {
+    snack: fac.has('snack') ? [3.4, 3.95, 4.7].map((x) => ({ at: new THREE.Vector3(x, 0, -4.2), approach: 'SN', facing: Math.PI })) : undefined,
+    drink: drinkAt.map((at) => ({ at, approach: 'WC', facing: facingTo(at, 2.05, -4.6) })),
+    fridge: fac.has('fridge') ? { at: new THREE.Vector3(6.05, 0, -3.95), approach: 'FR', facing: Math.PI } : undefined,
+    sofa: fac.has('sofa') ? { at: new THREE.Vector3(-6.3, 0, 2.4), approach: 'SO', facing: Math.PI / 2 } : undefined,
+    meeting,
+    chat: [
+      { at: new THREE.Vector3(2.75, 0, 1.05), approach: 'CH', facing: Math.PI / 2 },
+      { at: new THREE.Vector3(3.55, 0, 1.05), approach: 'CH', facing: -Math.PI / 2 },
+    ],
+    sub: { at: new THREE.Vector3(-0.45, 0, 0.75), approach: 'B1', facing: Math.PI },
   };
 
-  return { root, desks, spots, lamps, sky, wb, doorPivot, clock: { hourHand, minHand }, glowMat, fridgeDoor };
+  return {
+    level: 1, root, desks, spots, lamps, sky, wb, doorPivot, clock, glowMat, fridgeDoor,
+    nav: OFFICE_NAV, door: 'D', exit: new THREE.Vector3(-5.85, 0, -5.7),
+  };
 }

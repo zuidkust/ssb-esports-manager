@@ -1,10 +1,10 @@
 // 游戏时钟（设计文档第 3 章）
-// 白天 08:30–22:30 可见：正常速度下这 14 小时 = 现实 10 分钟；×3、×10 按比例加速
-// 22:30 之后自动快进夜间（约 6 秒），第二天 08:30 继续
+// 白天 09:00–22:00 可见：正常速度下这 13 小时 = 现实 10 分钟；×3、×10 按比例加速
+// 22:00 下班后自动快进夜间（约 6 秒，不受档位影响），第二天 09:00 继续
 // 暂停分两种：玩家手动暂停；系统自动暂停（比赛日、重大事件、要老板拍板），自动暂停要逐个解除
 
-export const DAY_START = 8 * 60 + 30;
-export const DAY_END = 22 * 60 + 30;
+export const DAY_START = 9 * 60;
+export const DAY_END = 22 * 60;
 export const REAL_SECONDS_PER_DAY = 600;
 export const BASE_RATE = (DAY_END - DAY_START) / REAL_SECONDS_PER_DAY; // 游戏分钟 / 现实秒
 export const NIGHT_SECONDS = 6;
@@ -83,7 +83,7 @@ export class GameClock {
     this.minute = minute;
   }
 
-  // realDt：现实秒。按“白天 → 22:30 → 午夜 → 08:30”分段推进，夜间固定快进
+  // realDt：现实秒。按“白天 → 22:00 → 午夜 → 09:00”分段推进，夜间固定快进
   // stopAt：当天的这些分钟是停靠点，走到就停在那里（本帧剩余时间作废），由调用方决定是否暂停
   tick(realDt: number, stopAt: number[] = []): TickResult {
     if (this.paused) return { advanced: 0, newDay: false };

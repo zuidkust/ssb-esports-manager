@@ -11,8 +11,8 @@ export const ABILITY_KEYS = ['lane', 'roam', 'fight', 'sense', 'mech', 'pool', '
 export type AbilityKey = (typeof ABILITY_KEYS)[number];
 export const ABILITY_CN: Record<AbilityKey, string> = { lane: '对线', roam: '游走', fight: '团战', sense: '意识', mech: '操作', pool: '英雄池', mental: '心态' };
 
-// 性格层：基本固定
-export const PERSONA_KEYS = ['嘴硬', '心态倾向', '胜负心', '逆风意志', '创新欲', '话痨', '摸鱼倾向', '甩锅倾向'] as const;
+// 性格层：基本固定。爱睡觉驱动午睡概率【占位数值，等人设】
+export const PERSONA_KEYS = ['嘴硬', '心态倾向', '胜负心', '逆风意志', '创新欲', '话痨', '摸鱼倾向', '甩锅倾向', '爱睡觉'] as const;
 export type PersonaKey = (typeof PERSONA_KEYS)[number];
 
 export interface Look {
@@ -47,7 +47,7 @@ export const ROSTER: MemberDef[] = [
     tagline: '无厘头发明流，全队甩锅对象，心态极好',
     arrive: 'early',
     ability: { lane: 36, roam: 40, fight: 42, sense: 35, mech: 38, pool: 60, mental: 85 },
-    persona: { 嘴硬: 20, 心态倾向: 90, 胜负心: 40, 逆风意志: 70, 创新欲: 95, 话痨: 70, 摸鱼倾向: 65, 甩锅倾向: 10 },
+    persona: { 嘴硬: 20, 心态倾向: 90, 胜负心: 40, 逆风意志: 70, 创新欲: 95, 话痨: 70, 摸鱼倾向: 65, 甩锅倾向: 10, 爱睡觉: 70 },
     heroes: ['石头人', '诺手', '加里奥', '蒙多'],
     look: { height: 1.0, girth: 1.32, glasses: true, flipflops: true, shirt: 0xe8833a, pants: 0x4a5a6e, hair: 0x2b2420, skin: 0xf0c8a0, hairStyle: 'messy' },
   },
@@ -56,7 +56,7 @@ export const ROSTER: MemberDef[] = [
     tagline: '嘴硬求胜，逆风爱提投降，爱批评施颠',
     arrive: 'normal',
     ability: { lane: 40, roam: 48, fight: 42, sense: 42, mech: 45, pool: 35, mental: 40 },
-    persona: { 嘴硬: 85, 心态倾向: 45, 胜负心: 85, 逆风意志: 30, 创新欲: 25, 话痨: 60, 摸鱼倾向: 45, 甩锅倾向: 80 },
+    persona: { 嘴硬: 85, 心态倾向: 45, 胜负心: 85, 逆风意志: 30, 创新欲: 25, 话痨: 60, 摸鱼倾向: 45, 甩锅倾向: 80, 爱睡觉: 35 },
     heroes: ['盲僧', '赵信', '男枪', '皇子'],
     look: { height: 0.86, girth: 0.92, glasses: true, shirt: 0x3f6b4f, pants: 0x2f3440, hair: 0x1d1a18, skin: 0xeec39c, shoes: 0x2b2b30, hairStyle: 'short' },
   },
@@ -65,7 +65,7 @@ export const ROSTER: MemberDef[] = [
     tagline: '发挥稳定；休息时嘴碎，口头禅“如何评价”',
     arrive: 'normal',
     ability: { lane: 54, roam: 42, fight: 52, sense: 50, mech: 55, pool: 40, mental: 68 },
-    persona: { 嘴硬: 40, 心态倾向: 70, 胜负心: 55, 逆风意志: 60, 创新欲: 30, 话痨: 85, 摸鱼倾向: 50, 甩锅倾向: 30 },
+    persona: { 嘴硬: 40, 心态倾向: 70, 胜负心: 55, 逆风意志: 60, 创新欲: 30, 话痨: 85, 摸鱼倾向: 50, 甩锅倾向: 30, 爱睡觉: 55 },
     heroes: ['卡莎', '艾希', '女警', '霞'],
     look: { height: 0.88, girth: 1.3, glasses: true, shirt: 0x5b7fb5, pants: 0x3b3b44, hair: 0x2a2420, skin: 0xf2caa6, hairStyle: 'short' },
   },
@@ -74,7 +74,7 @@ export const ROSTER: MemberDef[] = [
     tagline: '对线常被打爆，擅长偷发育后期翻盘',
     arrive: 'normal',
     ability: { lane: 45, roam: 40, fight: 50, sense: 50, mech: 48, pool: 40, mental: 70 },
-    persona: { 嘴硬: 35, 心态倾向: 65, 胜负心: 60, 逆风意志: 75, 创新欲: 30, 话痨: 25, 摸鱼倾向: 35, 甩锅倾向: 25 },
+    persona: { 嘴硬: 35, 心态倾向: 65, 胜负心: 60, 逆风意志: 75, 创新欲: 30, 话痨: 25, 摸鱼倾向: 35, 甩锅倾向: 25, 爱睡觉: 40 },
     heroes: ['沙皇', '维克托', '卡萨丁', '妖姬'],
     look: { height: 1.13, girth: 0.92, glasses: true, shirt: 0xe9e6df, pants: 0x384a66, hair: 0x231e1c, skin: 0xefc7a2, shoes: 0x3a3a40, hairStyle: 'side' },
   },
@@ -83,7 +83,7 @@ export const ROSTER: MemberDef[] = [
     tagline: '大局观强会指挥；轻松时段子手，紧张时话少',
     arrive: 'early',
     ability: { lane: 44, roam: 52, fight: 58, sense: 64, mech: 44, pool: 45, mental: 60 },
-    persona: { 嘴硬: 45, 心态倾向: 60, 胜负心: 70, 逆风意志: 55, 创新欲: 30, 话痨: 65, 摸鱼倾向: 35, 甩锅倾向: 60 },
+    persona: { 嘴硬: 45, 心态倾向: 60, 胜负心: 70, 逆风意志: 55, 创新欲: 30, 话痨: 65, 摸鱼倾向: 35, 甩锅倾向: 60, 爱睡觉: 30 },
     heroes: ['锤石', '洛', '泰坦', '娜美'],
     look: { height: 1.0, girth: 1.14, glasses: false, shirt: 0x2f3e66, pants: 0x55504a, hair: 0x151312, skin: 0xe8bd95, hairStyle: 'buzz' },
   },
@@ -92,7 +92,7 @@ export const ROSTER: MemberDef[] = [
     tagline: '对线常被打爆但嘴硬，挨骂后转头指点施颠',
     arrive: 'normal',
     ability: { lane: 36, roam: 36, fight: 40, sense: 38, mech: 40, pool: 35, mental: 52 },
-    persona: { 嘴硬: 85, 心态倾向: 55, 胜负心: 65, 逆风意志: 50, 创新欲: 30, 话痨: 55, 摸鱼倾向: 55, 甩锅倾向: 70 },
+    persona: { 嘴硬: 85, 心态倾向: 55, 胜负心: 65, 逆风意志: 50, 创新欲: 30, 话痨: 55, 摸鱼倾向: 55, 甩锅倾向: 70, 爱睡觉: 60 },
     heroes: ['剑魔', '鳄鱼', '奥恩', '慎'],
     look: { height: 0.98, girth: 1.28, glasses: false, shirt: 0x9b3b3b, pants: 0x2d2f36, hair: 0x2a211c, skin: 0xedc29b, hairStyle: 'short' },
   },
