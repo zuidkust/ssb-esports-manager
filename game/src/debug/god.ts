@@ -3,12 +3,12 @@
 import { dayInfo, MATCH_MINUTE, nextMatch, OFFSEASON_DAYS, PREMATCH_MINUTE, ROUNDS, SEASON_DAYS } from '../core/calendar';
 import { DAY_START, GameClock } from '../core/clock';
 import { actionPointMax, isPayday, MONTH_DAYS } from '../data/economy';
-import { OUR_ID, type Tier } from '../data/leagues';
+import { opponentsOf, OUR_ID, type Tier } from '../data/leagues';
 import { emptyTable, type GameState } from '../save/state';
 import { runPayday } from '../sim/economy';
-import { finishSeason } from '../sim/league';
+import { finishSeason, ourRank } from '../sim/league';
 import { autoLineup } from '../sim/lineup';
-import { commitWorldRound, isMatchDay } from '../sim/worldcup';
+import { commitWorldRound, isMatchDay, playerWorldKickoff, rewindUnplayedWorld } from '../sim/worldcup';
 import { forceDelivery, type TakeoutPerson } from '../sim/takeout';
 import type { World } from '../sim/world';
 
@@ -35,7 +35,10 @@ export function parseHM(text: string): number | null {
 
 // 和读档同一条路：两个钟一起改，world.update(..., jumped=true)，不写沿途动态。
 export function applyJump(world: World, clock: GameClock, day: number, minute: number): { day: number; minute: number } {
-  const t = clampJump(day, minute);
+  const raw = clampJump(day, minute);
+  // 调试跳转也不能把没打的世界赛日跨过去，否则 enterDay 会把对阵直接清掉。
+  const held = rewindUnplayedWorld(world.state, raw.day, raw.minute);
+  const t = held ?? raw;
   clock.releasePrefixed('match-');
   clock.set(t.day, t.minute);
   world.state.clock.day = t.day;
@@ -78,12 +81,14 @@ export function prematchOnTheWay(
   fromMinute: number,
   toDay: number,
   toMinute: number,
+  alsoMatchDays: readonly number[] = [],
 ): { day: number; minute: number } | null {
   const start = fromDay * 24 * 60 + fromMinute;
   const limit = toDay * 24 * 60 + toMinute;
   if (!(limit > start)) return null;
+  const extra = new Set(alsoMatchDays);
   for (let d = fromDay; d <= toDay; d++) {
-    if (dayInfo(d).round == null) continue;
+    if (dayInfo(d).round == null && !extra.has(d)) continue;
     const stamp = d * 24 * 60 + PREMATCH_MINUTE;
     if (stamp <= start || stamp > limit) continue;
     return { day: d, minute: PREMATCH_MINUTE };
@@ -155,7 +160,8 @@ export function jumpToNextTakeout(world: World, clock: GameClock): { day: number
       const future = enters.filter((t) => day > startDay || t > startMin + 1e-6);
       if (!future.length) continue;
       const at = applyJump(world, clock, day, Math.min(...future));
-      const stop = prematchOnTheWay(startDay, startMin, at.day, at.minute);
+      const kick = playerWorldKickoff(world.state, startDay, startMin);
+      const stop = prematchOnTheWay(startDay, startMin, at.day, at.minute, kick ? [kick.day] : []);
       return stop ? applyJump(world, clock, stop.day, stop.minute) : at;
     }
     day += 1;
@@ -164,8 +170,18 @@ export function jumpToNextTakeout(world: World, clock: GameClock): { day: number
 }
 
 export function jumpToNextMatch(world: World, clock: GameClock): { day: number; minute: number } | null {
-  const at = nextMatchAt(world.state.clock.day, world.state.clock.minute);
+  const day = world.state.clock.day;
+  const minute = world.state.clock.minute;
+  const league = nextMatchAt(day, minute);
+  const cup = playerWorldKickoff(world.state, day, minute);
+  let at = league;
+  if (cup && (!at || cup.day < at.day || (cup.day === at.day && cup.minute < at.minute))) at = cup;
   if (!at) return null;
+  // 目标若是 19:00，路上的 18:30（含这场世界赛自己的赛前）先停住，不落到开球之后。
+  const stop = prematchOnTheWay(day, minute, at.day, at.minute, cup ? [cup.day] : []);
+  if (stop && (stop.day < at.day || (stop.day === at.day && stop.minute < at.minute))) {
+    return applyJump(world, clock, stop.day, stop.minute);
+  }
   return applyJump(world, clock, at.day, at.minute);
 }
 
@@ -264,8 +280,47 @@ export function armWorldCup(world: World, clock: GameClock): { day: number; minu
   return at;
 }
 
+/** 按目标名次排一张积分榜。名次 1 胜场最多，互不并列。 */
+export function tableForRank(tier: Tier, rank: number): Record<string, { w: number; l: number }> {
+  const want = Math.max(1, Math.min(8, Math.floor(rank)));
+  const order = opponentsOf(tier).map((o) => o.id);
+  order.splice(Math.min(want - 1, order.length), 0, OUR_ID);
+  const table: Record<string, { w: number; l: number }> = {};
+  order.forEach((id, i) => {
+    table[id] = { w: 14 - i, l: i };
+  });
+  return table;
+}
+
+/**
+ * 跳到本赛季末，把积分榜改成指定名次再结算。
+ * 用来自测后两名降级、网吧联赛垫底不降级。已经结算过的话，按现在所在的联赛重算，不退回升级前的级别。
+ */
+export function setSeasonRank(world: World, clock: GameClock, rank: number): { day: number; minute: number; rank: number } {
+  const state = world.state;
+  if (state.season.settled) {
+    state.meta.seasonCount = Math.max(0, state.meta.seasonCount - 1);
+    state.meta.scores.pop();
+    state.worldCup = null;
+    state.season.phase = 'regular';
+    state.season.settled = false;
+    state.season.report = null;
+  }
+  const at = applyJump(world, clock, seasonEndDay(state.clock.day), 21 * 60);
+  state.season.table = tableForRank(state.season.tier, rank);
+  state.season.round = ROUNDS;
+  state.season.settled = false;
+  state.worldCup = null;
+  state.season.phase = 'regular';
+  state.season.report = null;
+  logLines(world, finishSeason(state));
+  return { ...at, rank: ourRank(state).rank };
+}
+
 /** 直接打完世界赛并且玩家全胜，用来看夺冠结局。 */
 export function crownWorld(world: World, clock: GameClock): { day: number; minute: number } {
+  // 八强已经输过时，旧日志里的「八强输」不能和这次的「决赛赢」叠在一起。
+  world.state.eventLog = world.state.eventLog.filter((e) => !/世界赛(八强|半决赛|决赛)|拿下了世界赛|世界冠军/.test(e.text));
   const at = armWorldCup(world, clock);
   const state = world.state;
   const slots = autoLineup(state.roster);

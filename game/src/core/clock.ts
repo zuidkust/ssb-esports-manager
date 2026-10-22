@@ -105,7 +105,8 @@ export class GameClock {
 
   // realDt：现实秒。按“白天 → 22:00 → 午夜 → 09:00”分段推进，夜间固定快进
   // stopAt：当天的这些分钟是停靠点，走到就停在那里（本次调用的剩余时间作废），由调用方决定是否暂停
-  // 单次调用最多跨过几个边界，避免一帧把好几天跳完；主循环用 drainRealtime 把积压的现实时间分批喂进来
+  // 跨过午夜就返回，不带着「昨天的停靠点」继续走下一天。否则一次大步（极快或调试 60 倍）会在同一调用里
+  // 把下一天的 18:30 赛前跳过去。主循环用 drainRealtime 分批喂时间，过了午夜会按新的一天重新要停靠点。
   tick(realDt: number, stopAt: number[] = []): TickResult {
     if (this.paused || !(realDt > 0)) return { advanced: 0, newDay: false, used: 0 };
     let remaining = realDt;
@@ -138,6 +139,7 @@ export class GameClock {
         this.minute = 0;
         this.day += 1;
         newDay = true;
+        break;
       }
     }
     return { advanced, newDay, used: realDt - remaining };

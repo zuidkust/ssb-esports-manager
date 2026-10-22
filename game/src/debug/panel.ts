@@ -19,6 +19,7 @@ import {
   crownWorld,
   jumpToOffseason,
   jumpToSeasonEnd,
+  setSeasonRank,
 } from './god';
 
 export interface GodHooks {
@@ -34,6 +35,7 @@ export interface GodHooks {
   toast: (msg: string) => void;
   showOffseason: () => void;
   showBracket: () => void;
+  refreshCheatModal: () => void;
 }
 
 export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
@@ -48,8 +50,8 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
     <button type="button" class="god-toggle" id="godToggle">调试</button>
     <div class="god-body">
       <div class="god-row god-wrap">
-        <label>第 <input id="godDay" type="number" min="1" step="1" aria-label="第几天" /> 天</label>
-        <label>时刻 <input id="godTime" type="text" inputmode="numeric" placeholder="12:00" maxlength="5" aria-label="时刻" /></label>
+        <label>第 <input id="godDay" type="text" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false" aria-label="第几天" /> 天</label>
+        <label>时刻 <input id="godTime" type="text" inputmode="numeric" placeholder="12:00" maxlength="5" autocomplete="off" spellcheck="false" aria-label="时刻" /></label>
         <button type="button" id="godJump">跳到</button>
       </div>
       <div class="god-row god-wrap">
@@ -65,6 +67,10 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
         <button type="button" data-jump="crown">直接夺冠</button>
       </div>
       <div class="god-row">
+        <label>名次 <input id="godRank" type="text" inputmode="numeric" maxlength="2" value="8" autocomplete="off" spellcheck="false" aria-label="赛季末名次" /></label>
+        <button type="button" id="godRankSet">指定赛季末名次</button>
+      </div>
+      <div class="god-row">
         <label class="god-grow">倍速 <b id="godRate">×1</b>
           <input id="godSlider" type="range" min="1" max="60" step="1" value="1" aria-label="倍速" />
         </label>
@@ -72,11 +78,11 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
       </div>
       <p class="god-note">夜间快进大约 6 秒，不吃这个倍率。底部的正常 / ×3 / ×10 会把它清掉。</p>
       <div class="god-row">
-        <label>现金 <input id="godCash" type="number" min="0" step="1" aria-label="现金" /></label>
+        <label>现金 <input id="godCash" type="text" inputmode="numeric" maxlength="12" autocomplete="off" spellcheck="false" aria-label="现金" /></label>
         <button type="button" id="godCashSet">设置</button>
       </div>
       <div class="god-row">
-        <label>行动点 <input id="godAp" type="number" min="0" max="99" step="1" aria-label="行动点" /></label>
+        <label>行动点 <input id="godAp" type="text" inputmode="numeric" maxlength="2" autocomplete="off" spellcheck="false" aria-label="行动点" /></label>
         <button type="button" id="godApSet">设置</button>
       </div>
       <div class="god-row">
@@ -117,8 +123,9 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
 
   function fillClock() {
     const clock = hooks.getClock();
-    dayInput.value = String(clock.day);
-    timeInput.value = fmtHM(clock.minute);
+    // 正在打字时不要回写，否则每帧同步会把刚敲的字盖掉。
+    if (document.activeElement !== dayInput) dayInput.value = String(clock.day);
+    if (document.activeElement !== timeInput) timeInput.value = fmtHM(clock.minute);
   }
   function sync() {
     const clock = hooks.getClock();
@@ -151,6 +158,7 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
     }
   });
   $('godToggle').setAttribute('aria-expanded', 'false');
+  root.addEventListener('keydown', (e) => e.stopPropagation());
 
   $('godJump').addEventListener('click', () => {
     const minute = parseHM(timeInput.value);
@@ -196,6 +204,16 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
     });
   });
 
+  $('godRankSet').addEventListener('click', () => {
+    const raw = Number(($('godRank') as HTMLInputElement).value.trim());
+    if (!Number.isInteger(raw) || raw < 1 || raw > 8) {
+      hooks.toast('名次要写 1 到 8');
+      return;
+    }
+    const at = setSeasonRank(hooks.world, hooks.getClock(), raw);
+    afterTime(`赛季末第 ${at.rank} 名 · 第 ${at.day} 天 ${fmtHM(at.minute)}`);
+  });
+
   slider.addEventListener('input', () => {
     hooks.ensureLive();
     hooks.getClock().setDebugRate(Number(slider.value));
@@ -211,6 +229,7 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
     hooks.ensureLive();
     const n = setCash(hooks.world.state, Number(($('godCash') as HTMLInputElement).value));
     ($('godCash') as HTMLInputElement).value = String(n);
+    hooks.refreshCheatModal();
     hooks.toast(`现金改为 ${n.toLocaleString('zh-CN')}`);
   });
   $('godApSet').addEventListener('click', () => {

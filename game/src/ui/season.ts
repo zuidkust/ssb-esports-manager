@@ -152,7 +152,7 @@ export function offseasonHtml(state: GameState): string {
     <h3>招人</h3>
     <div class="act">
       <div><b>再招一个人</b><small>本体固定 6 人。后 6 位朋友是 DLC。</small></div>
-      <button class="btn" id="recruitBtn" disabled>DLC</button>
+      <button class="btn" id="recruitBtn" type="button">DLC</button>
     </div>
     <h3>换路线</h3>
     <p class="sub">花 ${ROUTE_CHANGE_INSIGHT} 心得，磨合 ${3} 天。下面的适配度先按左边选中的人算，点按钮时以那个人为准。</p>
@@ -213,6 +213,10 @@ export function bindOffseason(state: GameState, hooks: SeasonHooks): void {
   });
   document.getElementById('recruitBtn')?.addEventListener('click', () => {
     const r = recruitMember();
+    if (!r.ok) {
+      hooks.toast(r.reason ?? '招新人是 DLC，本体一直是这 6 个人');
+      return;
+    }
     tell(r.logs, r.ok, r.reason);
   });
   const paintRoutes = () => {
@@ -230,6 +234,10 @@ export function bindOffseason(state: GameState, hooks: SeasonHooks): void {
   root.querySelectorAll<HTMLButtonElement>('[data-route]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = (document.getElementById('routeWho') as HTMLSelectElement | null)?.value ?? '';
+      if (state.insight < ROUTE_CHANGE_INSIGHT) {
+        hooks.toast(`心得不够。换路线要 ${ROUTE_CHANGE_INSIGHT}，现在只有 ${state.insight}。`);
+        return;
+      }
       const r = changeRoute(state, id, btn.dataset.route ?? '');
       tell(r.logs, r.ok, r.reason);
     });

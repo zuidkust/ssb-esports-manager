@@ -29,6 +29,13 @@ export function dayInfo(day: number): DayInfo {
   return { day, season, dayInSeason, weekday, weekdayCn: WEEK_CN[weekday - 1], round, offseason: !inRegular };
 }
 
+/** 休赛周还剩几天（含今天）。第 29 天是休赛第 1 天，应是 7，不是「距下一场联赛还有 8 天」。 */
+export function offseasonDaysLeft(day: number): number {
+  const info = dayInfo(day);
+  if (!info.offseason) return 0;
+  return SEASON_DAYS - info.dayInSeason + 1;
+}
+
 // 下一场比赛（含今天还没打的）
 export function nextMatch(day: number, minute: number): { day: number; round: number; inDays: number } | null {
   for (let d = day; d < day + SEASON_DAYS + 1; d++) {

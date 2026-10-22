@@ -1,5 +1,5 @@
 // 世界赛：国内前 2 + 6 支海外队，8 队单败淘汰 BO3。三场落在休赛周的第 1、3、5 天。
-import { dayInfo, MATCH_INTERVAL, PREMATCH_MINUTE, ROUNDS } from '../core/calendar';
+import { dayInfo, MATCH_INTERVAL, MATCH_MINUTE, PREMATCH_MINUTE, ROUNDS, SEASON_DAYS } from '../core/calendar';
 import { hashString } from '../core/rng';
 import { WORLD_CHAMP_PRIZE, WORLD_ROUND_PRIZE } from '../data/economy';
 import { opponentById, OUR_ID, OUR_NAME, type OpponentDef } from '../data/leagues';
@@ -23,6 +23,12 @@ export function worldRoundOnDay(day: number): 0 | 1 | 2 | null {
   if (n === 3) return 1;
   if (n === 5) return 2;
   return null;
+}
+
+/** 某一季世界赛第 round 轮的比赛日。八强 / 半决赛 / 决赛落在休赛周第 1、3、5 天。 */
+export function worldRoundDay(calendarSeason: number, round: 0 | 1 | 2): number {
+  const offStart = (calendarSeason - 1) * SEASON_DAYS + ROUNDS * MATCH_INTERVAL;
+  return offStart + (round === 0 ? 1 : round === 1 ? 3 : 5);
 }
 
 /** 联赛比赛日，以及世界赛那三天，全天都算比赛日（行动点 +1），打完也还算。 */
@@ -102,6 +108,45 @@ export function playerWorldPending(state: GameState, day: number): boolean {
   const round = worldRoundOnDay(day);
   if (round == null || pendingRound(cup) !== round) return false;
   return roundPairsOf(cup, round).some((p) => p[0] === OUR_ID || p[1] === OUR_ID);
+}
+
+function playerInPending(cup: NonNullable<GameState['worldCup']>): 0 | 1 | 2 | null {
+  const round = pendingRound(cup);
+  if (round == null) return null;
+  if (!roundPairsOf(cup, round).some((p) => p[0] === OUR_ID || p[1] === OUR_ID)) return null;
+  return round;
+}
+
+/** 玩家还没打的那一轮世界赛开球时刻。已经过了 19:00 就不再算「下一场」。 */
+export function playerWorldKickoff(state: GameState, day: number, minute: number): { day: number; minute: number } | null {
+  const cup = state.worldCup;
+  if (!cup || cup.done) return null;
+  const round = playerInPending(cup);
+  if (round == null) return null;
+  const due = worldRoundDay(cup.calendarSeason, round);
+  if (due < day || (due === day && minute >= MATCH_MINUTE)) return null;
+  return { day: due, minute: MATCH_MINUTE };
+}
+
+/**
+ * 时间已经走过玩家还没打的世界赛日。调用方应把钟拨回那场的 18:30。
+ * 只在「日历日已经超过比赛日」时拨回；比赛当晚的 18:30–19:00 仍交给赛前暂停。
+ */
+export function rewindUnplayedWorld(state: GameState, day: number, minute: number): { day: number; minute: number } | null {
+  void minute;
+  const cup = state.worldCup;
+  if (!cup || cup.done) return null;
+  const round = playerInPending(cup);
+  if (round == null) return null;
+  const due = worldRoundDay(cup.calendarSeason, round);
+  if (day <= due) return null;
+  return { day: due, minute: PREMATCH_MINUTE };
+}
+
+/** 联赛比赛日，以及玩家今天要打的世界赛，18:30 和 19:00 都是停靠点。 */
+export function matchPauseMinutes(state: GameState, day: number): number[] {
+  if (dayInfo(day).round != null || playerWorldPending(state, day)) return [PREMATCH_MINUTE, MATCH_MINUTE];
+  return [];
 }
 
 export function needsWorldPrematch(state: GameState, day: number, minute: number): boolean {

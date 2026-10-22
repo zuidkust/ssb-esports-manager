@@ -1,6 +1,6 @@
 // 入口：把时钟、日常模拟、3D 场景、界面和存档串起来
 import './style.css';
-import { dayInfo, MATCH_MINUTE, nextMatch, opponentForRound, PREMATCH_MINUTE } from './core/calendar';
+import { dayInfo, MATCH_MINUTE, nextMatch, offseasonDaysLeft, opponentForRound } from './core/calendar';
 import { fmtHM, GameClock, SPEEDS, sunPosition, type SpeedId } from './core/clock';
 import { hashString } from './core/rng';
 import { drainRealtime, simBudget } from './core/realtime';
@@ -24,7 +24,7 @@ import { bindManage, manageHtml } from './ui/manage';
 import { buyFacility } from './sim/economy';
 import { retuneActionPoints } from './sim/offseason';
 import { applyGameLoad, catchUpThrough, commitRound, needsBroadcast, needsIntermission, ourRank, roundSettled, winsNeeded } from './sim/league';
-import { commitWorldRound, needsWorldBroadcast, needsWorldPrematch, playerWorldOpponent, playerWorldPending, WORLD_ROUND_CN } from './sim/worldcup';
+import { commitWorldRound, matchPauseMinutes, needsWorldBroadcast, needsWorldPrematch, playerWorldOpponent, rewindUnplayedWorld, WORLD_ROUND_CN } from './sim/worldcup';
 import { benchOf, validLineup } from './sim/lineup';
 import { playOurMatch } from './sim/matchprep';
 import { cuesFrom } from './sim/script';
@@ -137,10 +137,13 @@ function frame(t: number) {
   if (running) simDebt += raw;
   else simDebt = 0;
   if (simDebt > 0) {
-    simDebt = drainRealtime(clock, simDebt, simBudget(simDebt), (day) => (dayInfo(day).round != null || playerWorldPending(state, day) ? [PREMATCH_MINUTE, MATCH_MINUTE] : []), (r) => {
+    simDebt = drainRealtime(clock, simDebt, simBudget(simDebt), (day) => matchPauseMinutes(state, day), (r) => {
+      const back = rewindUnplayedWorld(state, clock.day, clock.minute);
+      if (back) clock.set(back.day, back.minute);
       state.clock = clock.snapshot();
-      world.update(clock.minute, r.advanced, false);
-      if (r.newDay) {
+      // 拨回没打的世界赛时，这一步的分钟数不能算进摸鱼和状态漂移。
+      world.update(clock.minute, back ? 0 : r.advanced, !!back);
+      if (r.newDay && !back) {
         persist('auto');
         sinceAutosave = 0;
       }
@@ -255,7 +258,7 @@ function updateHud() {
     : inMatch
     ? `比赛中 · 第 ${info.round} 轮 vs ${world.opponentToday()?.name}`
     : info.offseason || breakOn
-    ? `休赛期 · 还有 ${nm ? nm.inDays : '?'} 天开赛`
+    ? `休赛期 · 还有 ${info.offseason ? offseasonDaysLeft(clock.day) : nm ? nm.inDays : '?'} 天开赛`
     : nm && nm.inDays === 0 && opp
       ? `今晚 19:00 第 ${nm.round} 轮 · vs ${opp.name}`
       : nm ? `下一场：${nm.inDays} 天后 · 第 ${nm.round} 轮` : '—';
@@ -327,18 +330,22 @@ function haltBroadcast() {
   stopBroadcast?.();
   stopBroadcast = null;
 }
+let modalKind = '';
 function openModal(html: string, closable = true) {
   haltBroadcast();
   modalOpen = true;
   modalClosable = closable;
   $('modalBody').classList.remove('live', 'sheet');
   $('modalBody').innerHTML = html;
+  $('modalBody').scrollTop = 0;
+  $('modal').scrollTop = 0;
   $('modal').classList.remove('hidden');
 }
 function closeModal() {
   if (!modalClosable) return;
   haltBroadcast();
   modalOpen = false;
+  modalKind = '';
   $('modalBody').classList.remove('manage', 'live', 'sheet');
   $('modal').classList.add('hidden');
 }
@@ -439,7 +446,7 @@ function showTitle() {
     `
     <div class="logo title-logo">S</div>
     <h2>SSB电竞经理</h2>
-    <p class="sub">网页试玩版 · M3（比赛、直播、联赛）</p>
+    <p class="sub">网页试玩版 · M4（基地、世界赛、结局）</p>
     <p>你是 SSB 战队的老板兼经理。六个朋友在网吧角落开始打联赛：白天训练、摸鱼、吃外卖，比赛日晚上 19:00 开打。</p>
     ${storageWarning()}
     <div class="row">
@@ -470,6 +477,7 @@ function showTitle() {
 
 function showManage(pick?: [string, string]) {
   if (!live || state.bankrupt) return;
+  modalKind = 'manage';
   const ids = world.members.map((m) => m.id);
   const sel: [string, string] = pick ?? [selected && ids.includes(selected) ? selected : ids[0], ids[1]];
   $('modalBody').classList.add('manage');
@@ -552,6 +560,7 @@ function showSettlement() {
 }
 
 function showOffseason() {
+  modalKind = 'offseason';
   openModal(offseasonHtml(state), true);
   $('modalBody').classList.add('manage');
   bindOffseason(state, seasonHooks());
@@ -801,6 +810,16 @@ if (params.get('debug') === '1') {
     toast,
     showOffseason: () => showOffseason(),
     showBracket: () => showBracket(),
+    refreshCheatModal() {
+      if (!modalOpen) return;
+      const bodyTop = $('modalBody').scrollTop;
+      const outerTop = $('modal').scrollTop;
+      if (modalKind === 'offseason') showOffseason();
+      else if (modalKind === 'manage') showManage();
+      else return;
+      $('modalBody').scrollTop = bodyTop;
+      $('modal').scrollTop = outerTop;
+    },
   });
   syncGod = () => god.sync();
 }

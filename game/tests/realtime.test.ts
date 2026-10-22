@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DAY_END, DAY_START, GameClock, REAL_SECONDS_PER_DAY } from '../src/core/clock';
+import { DAY_END, DAY_START, GameClock, REAL_SECONDS_PER_DAY, type SpeedId } from '../src/core/clock';
 import { drainRealtime, SIM_BUDGET_CAP, simBudget } from '../src/core/realtime';
 import { PREMATCH_MINUTE } from '../src/core/calendar';
+import { armWorldCup } from '../src/debug/god';
+import { createNewGame } from '../src/save/state';
+import { matchPauseMinutes } from '../src/sim/worldcup';
+import { World } from '../src/sim/world';
 
 describe('低帧率仍按真实时间走', () => {
   it('每帧 0.2 秒（5fps）走完 10 分钟现实时间，白天仍然到 22:00', () => {
@@ -52,5 +56,42 @@ describe('低帧率仍按真实时间走', () => {
     c.release('match');
     drainRealtime(c, 0, 1, () => [PREMATCH_MINUTE], () => {});
     expect(c.minute).toBeCloseTo(PREMATCH_MINUTE, 4);
+  });
+});
+
+describe('任何倍速都不能跳过世界赛', () => {
+  function runSpeed(speed: SpeedId, debugRate: number | null) {
+    const s = createNewGame(4);
+    const w = new World(s);
+    const c = new GameClock(s.clock);
+    w.update(s.clock.minute, 0, true);
+    armWorldCup(w, c);
+    c.manualPause = false;
+    if (debugRate != null) c.setDebugRate(debugRate);
+    else c.setSpeed(speed);
+    let debt = 0;
+    let guard = 0;
+    while (!c.paused && c.day < 40 && guard++ < 8000) {
+      debt += 0.25;
+      debt = drainRealtime(c, debt, simBudget(debt), (day) => matchPauseMinutes(s, day), () => {
+        const back = c.day > 29 ? { day: 29, minute: PREMATCH_MINUTE } : null;
+        if (back) c.set(back.day, back.minute);
+        s.clock.day = c.day;
+        s.clock.minute = c.minute;
+        if (c.day === 29 && c.minute >= PREMATCH_MINUTE - 1e-6) c.hold('match-29', '世界赛赛前');
+      });
+    }
+    expect(c.paused).toBe(true);
+    expect(c.day).toBe(29);
+    expect(c.minute).toBeCloseTo(PREMATCH_MINUTE, 3);
+    expect(s.worldCup?.done).toBe(false);
+    expect(s.worldCup?.games ?? []).toHaveLength(0);
+  }
+
+  it('正常、×3、×10 和调试 60 倍都停在八强 18:30', () => {
+    runSpeed('x1', null);
+    runSpeed('x3', null);
+    runSpeed('x10', null);
+    runSpeed('x1', 60);
   });
 });
