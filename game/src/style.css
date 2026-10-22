@@ -384,12 +384,12 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .scorebug span { margin: 0 4px; color: var(--muted); }
 .scorebug small { display: block; color: var(--muted); font-size: 11px; }
 .danmaku-layer {
-  position: relative; z-index: 1; flex: 0 0 28px; height: 28px; min-height: 28px; max-height: 28px;
+  position: relative; z-index: 1; flex: 0 0 32px; height: 32px; min-height: 32px; max-height: 32px;
   margin-top: 8px; overflow: hidden;
-  background: rgba(255, 255, 255, 0.04); border-radius: 8px;
+  background: rgba(255, 231, 194, 0.07); border-radius: 8px;
 }
-.danmaku {
-  position: absolute; top: 0; left: 0; height: 28px; line-height: 28px;
+.danmaku-layer .danmaku-fly {
+  position: absolute; top: 0; left: 0; height: 32px; line-height: 32px;
   margin: 0; white-space: nowrap; color: #ffe7c2; font-size: 13px; text-shadow: 0 1px 2px #000;
   pointer-events: none;
 }
@@ -399,7 +399,6 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .live-line.kill { color: #d7e4ff; }
 .live-line.highlight { color: var(--good); }
 .live-line.blunder { color: #ffb4b4; }
-.live-line.danmaku { color: #ffe7c2; }
 .live-line.result { background: rgba(233,196,106,0.16); font-weight: 650; }
 .live-line.draft { color: #d5d0c6; }
 

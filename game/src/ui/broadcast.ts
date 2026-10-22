@@ -44,13 +44,44 @@ export function mountBroadcast(opts: {
   let raf = 0;
   let acc = 0;
   let lastTick = 0;
+  const flyQueue: string[] = [];
+  let flyBusy = false;
+  let flyAnim: Animation | null = null;
+
+  // 弹幕只进底轨，不写进事件列表。快进时排队，避免一条还没飞完就被下一条挤掉。
+  const pumpFly = () => {
+    if (stopped || flyBusy || !flyQueue.length) return;
+    const text = flyQueue.shift();
+    if (!text) return;
+    flyBusy = true;
+    const fly = document.createElement('span');
+    fly.className = 'danmaku-fly';
+    fly.textContent = text;
+    layer.replaceChildren(fly);
+    const laneW = layer.clientWidth || layer.getBoundingClientRect().width || 480;
+    const textW = fly.offsetWidth || 160;
+    const start = Math.max(8, laneW - Math.min(textW, laneW - 24));
+    flyAnim = fly.animate(
+      [
+        { transform: `translate3d(${start}px,0,0)` },
+        { transform: `translate3d(${-textW - 8}px,0,0)` },
+      ],
+      { duration: 6500, easing: 'linear', fill: 'forwards' },
+    );
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      flyBusy = false;
+      flyAnim = null;
+      if (!flyQueue.length && fly.isConnected) fly.remove();
+      pumpFly();
+    };
+    flyAnim.onfinish = done;
+    window.setTimeout(done, 6800);
+  };
 
   const paint = (cue: Cue) => {
-    const row = document.createElement('div');
-    row.className = `live-line ${cue.kind}`;
-    row.textContent = cue.text;
-    feed.appendChild(row);
-    feed.scrollTop = feed.scrollHeight;
     const us = document.getElementById('bugUs');
     const them = document.getElementById('bugThem');
     const gold = document.getElementById('bugGold');
@@ -61,21 +92,15 @@ export function mountBroadcast(opts: {
       gold.textContent = `经济 ${d >= 0 ? '+' : ''}${d}`;
     }
     if (cue.kind === 'danmaku') {
-      const fly = document.createElement('span');
-      fly.className = 'danmaku';
-      fly.textContent = cue.text.replace(/^【第二解说 · [^】]+】/, '');
-      layer.replaceChildren(fly);
-      const laneW = layer.clientWidth;
-      const textW = fly.offsetWidth;
-      const start = Math.max(0, laneW - textW);
-      fly.animate(
-        [{ transform: `translateX(${start}px)` }, { transform: 'translateX(-100%)' }],
-        { duration: 5600, easing: 'linear', fill: 'forwards' },
-      );
-      window.setTimeout(() => {
-        if (fly.isConnected) fly.remove();
-      }, 5600);
+      flyQueue.push(cue.text);
+      pumpFly();
+      return;
     }
+    const row = document.createElement('div');
+    row.className = `live-line ${cue.kind}`;
+    row.textContent = cue.text;
+    feed.appendChild(row);
+    feed.scrollTop = feed.scrollHeight;
   };
 
   const stopLoop = () => {
@@ -168,6 +193,8 @@ export function mountBroadcast(opts: {
 
   return () => {
     stopped = true;
+    flyQueue.length = 0;
+    flyAnim?.cancel();
     stopLoop();
     root.classList.remove('live', 'sheet');
   };
