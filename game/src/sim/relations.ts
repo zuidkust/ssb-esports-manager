@@ -2,6 +2,9 @@
 import { pairKey } from '../data/roster';
 import type { GameState, Relation } from '../save/state';
 
+/** 铁哥们。默契连招要到这一档，并且两人同时首发 */
+export const IRON_BOND = 85;
+
 export function relation(state: GameState, a: string, b: string): Relation {
   const key = pairKey(a, b);
   return (state.relations[key] ??= { bond: 30, knots: [], unlocked: [] });

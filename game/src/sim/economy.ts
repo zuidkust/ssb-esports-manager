@@ -14,7 +14,7 @@ import {
   START_CASH,
   START_STASH,
 } from '../data/economy';
-import { MAX_SPONSORS, SPONSOR_BY_ID, SPONSORS, type SponsorTier } from '../data/sponsors';
+import { MAX_SPONSORS, SPONSOR_BY_ID, SPONSORS, type SponsorDef, type SponsorTier } from '../data/sponsors';
 import { seeded } from '../core/rng';
 import type { GameState } from '../save/state';
 import { anyBondAtLeast } from './relations';
@@ -241,6 +241,24 @@ export function noteMatch(state: GameState, won: boolean): void {
 
 export function noteSeasonRank(state: GameState, rank: number): void {
   state.record.bestRank = state.record.bestRank == null ? rank : Math.min(state.record.bestRank, rank);
+}
+
+/** 降级之后，级别不够的赞助解约。世界赛赞助只看“已有资格”，不看当前联赛。 */
+export function sponsorFitsTier(state: GameState, minTier: SponsorTier): boolean {
+  if (minTier === 'world') return state.record.worldQualified;
+  return TIER_RANK[state.season.tier] >= TIER_RANK[minTier];
+}
+
+export function cutSponsorsAfterMove(state: GameState): SponsorDef[] {
+  const dropped: SponsorDef[] = [];
+  state.sponsors = state.sponsors.filter((id) => {
+    const def = SPONSOR_BY_ID[id];
+    if (!def) return false;
+    if (sponsorFitsTier(state, def.minTier)) return true;
+    dropped.push(def);
+    return false;
+  });
+  return dropped;
 }
 
 export function nextPaydayIn(day: number): number {

@@ -1,16 +1,17 @@
 // 入口：把时钟、日常模拟、3D 场景、界面和存档串起来
 import './style.css';
-import { dayInfo, MATCH_MINUTE, nextMatch, PREMATCH_MINUTE } from './core/calendar';
+import { dayInfo, MATCH_MINUTE, nextMatch, opponentForRound, PREMATCH_MINUTE } from './core/calendar';
 import { fmtHM, GameClock, SPEEDS, sunPosition, type SpeedId } from './core/clock';
+import { hashString } from './core/rng';
 import { drainRealtime, simBudget } from './core/realtime';
 import { actionPointLabel } from './sim/actions';
 import { allFacilitiesUpTo, VENUE_CN } from './data/facilities';
 import { TIER_CN } from './data/leagues';
-import { POSITIONS, POSITION_CN } from './data/roster';
+import type { TacticId } from './data/tactics';
 import { SaveError } from './save/migrate';
 import { createWebPlatform } from './save/platform';
 import { formatWallTime, SaveManager, SLOTS, type SlotId } from './save/saves';
-import { createNewGame, needsPrematch, type GameState } from './save/state';
+import { createNewGame, needsLineupConfirm, type GameState } from './save/state';
 import { World } from './sim/world';
 import { Director } from './scene/director';
 import { Lighting } from './scene/lighting';
@@ -21,6 +22,13 @@ import { Board } from './ui/board';
 import { Card } from './ui/card';
 import { bindManage, manageHtml } from './ui/manage';
 import { buyFacility } from './sim/economy';
+import { applyGameLoad, catchUpThrough, commitRound, needsBroadcast, needsIntermission, ourRank, roundSettled, winsNeeded } from './sim/league';
+import { benchOf, validLineup } from './sim/lineup';
+import { playOurMatch } from './sim/matchprep';
+import { cuesFrom } from './sim/script';
+import { mountBroadcast } from './ui/broadcast';
+import { bindPrematch, prematchHtml, standingsTableHtml } from './ui/prematch';
+import { makeRng } from './engine/match';
 import { mountGodPanel } from './debug/panel';
 
 const params = new URLSearchParams(location.search);
@@ -78,6 +86,7 @@ document.addEventListener('click', (e) => {
 
 // 开始 / 读入一局
 function startGame(s: GameState, note?: string) {
+  haltBroadcast();
   live = true;
   state = s;
   clock = new GameClock(s.clock);
@@ -125,7 +134,7 @@ function frame(t: number) {
   if (running) simDebt += raw;
   else simDebt = 0;
   if (simDebt > 0) {
-    simDebt = drainRealtime(clock, simDebt, simBudget(simDebt), (day) => (dayInfo(day).round != null ? [PREMATCH_MINUTE] : []), (r) => {
+    simDebt = drainRealtime(clock, simDebt, simBudget(simDebt), (day) => (dayInfo(day).round != null ? [PREMATCH_MINUTE, MATCH_MINUTE] : []), (r) => {
       state.clock = clock.snapshot();
       world.update(clock.minute, r.advanced, false);
       if (r.newDay) {
@@ -163,12 +172,28 @@ function frame(t: number) {
   requestAnimationFrame(frame);
 }
 
-// 比赛日 18:30 自动暂停：赛前选首发和战术。“已确认”记在存档里，暂停中关页、读档会重新弹出
+// 比赛日 18:30 选首发和战术；19:00 起看直播。确认写进存档，暂停中关页、读档会重新弹出
 function checkPrematch() {
-  const holdId = `match-${clock.day}`;
-  if (!live || clock.isHeld(holdId) || !needsPrematch(state, clock.day, clock.minute)) return;
-  clock.hold(holdId, '比赛日：等老板确认首发');
-  showPrematch(holdId);
+  if (!live || state.bankrupt) return;
+  state.clock.day = clock.day;
+  state.clock.minute = clock.minute;
+  if (needsLineupConfirm(state, clock.day, clock.minute)) {
+    const id = `match-${clock.day}`;
+    if (!clock.isHeld(id)) clock.hold(id, '比赛日：等老板确认首发和战术');
+    if (!modalOpen) showPrematch(id, false);
+    return;
+  }
+  if (needsIntermission(state, clock.day, clock.minute)) {
+    const id = `match-gap-${clock.day}`;
+    if (!clock.isHeld(id)) clock.hold(id, '局间：可以换首发和战术');
+    if (!modalOpen) showPrematch(id, true);
+    return;
+  }
+  if (needsBroadcast(state, clock.day, clock.minute)) {
+    const id = `match-live-${clock.day}`;
+    if (!clock.isHeld(id)) clock.hold(id, '直播中');
+    if (!modalOpen) showBroadcast(id);
+  }
 }
 
 // ───────── 顶部信息与时间控制 ─────────
@@ -187,17 +212,24 @@ function updateHud() {
   $('resCash').parentElement!.title = state.unpaidMonths > 0 ? `连续 ${state.unpaidMonths} 个月没发出工资` : '公司现金';
   $('resAp').textContent = actionPointLabel(state, clock.day);
   $('resInsight').textContent = String(state.insight);
-  $('phaseChip').textContent = clock.night ? '夜里 · 快进中' : `${world.segment(clock.minute).name} · 在岗 ${world.presentCount()}/6`;
+  const settledNow = info.round != null && clock.minute >= MATCH_MINUTE && roundSettled(state);
+  const segName = settledNow ? '赛后' : world.segment(clock.minute).name;
+  $('phaseChip').textContent = clock.night ? '夜里 · 快进中' : `${segName} · 在岗 ${world.presentCount()}/6`;
   const nm = nextMatch(clock.day, clock.minute);
   const opp = nm ? world.opponentToday() : null;
   const inMatch = info.round != null && clock.minute >= MATCH_MINUTE && world.members.some((m) => m.activity.kind === 'match');
-  $('matchChip').textContent = inMatch
+  const rank = state.season.round > 0 ? ourRank(state) : null;
+  $('matchChip').textContent = settledNow
+    ? `第 ${info.round} 轮已结束 · 目前第 ${rank?.rank ?? ourRank(state).rank} 名`
+    : inMatch
     ? `比赛中 · 第 ${info.round} 轮 vs ${world.opponentToday()?.name}`
     : info.offseason
     ? `休赛期 · 还有 ${nm ? nm.inDays : '?'} 天开赛`
     : nm && nm.inDays === 0 && opp
       ? `今晚 19:00 第 ${nm.round} 轮 · vs ${opp.name}`
       : nm ? `下一场：${nm.inDays} 天后 · 第 ${nm.round} 轮` : '—';
+  $('matchChip').classList.toggle('link', state.season.round > 0);
+  $('matchChip').title = state.season.round > 0 ? '点击看积分榜' : '';
   document.querySelectorAll<HTMLElement>('#speeds button').forEach((b) => {
     b.classList.toggle('on', clock.debugRate == null && b.dataset.s === clock.speed && !clock.paused);
   });
@@ -223,8 +255,19 @@ $('speeds').addEventListener('click', (e) => {
   if (b) clock.setSpeed(b.dataset.s as SpeedId);
 });
 $('pauseBtn').addEventListener('click', () => clock.togglePause());
-$('menuBtn').addEventListener('click', () => showMenu());
-$('manageBtn').addEventListener('click', () => showManage());
+$('menuBtn').addEventListener('click', () => {
+  if (modalOpen && !modalClosable) return;
+  showMenu();
+});
+$('manageBtn').addEventListener('click', () => {
+  if (modalOpen && !modalClosable) return;
+  showManage();
+});
+$('matchChip').addEventListener('click', () => {
+  if (!live || state.season.round <= 0) return;
+  if (modalOpen && !modalClosable) return;
+  showStandings();
+});
 addEventListener('keydown', (e) => {
   const tag = (e.target as HTMLElement).tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -242,16 +285,24 @@ addEventListener('beforeunload', () => persist('auto'));
 // ───────── 弹窗 ─────────
 let modalOpen = false;
 let modalClosable = true;
+let stopBroadcast: (() => void) | null = null;
+function haltBroadcast() {
+  stopBroadcast?.();
+  stopBroadcast = null;
+}
 function openModal(html: string, closable = true) {
+  haltBroadcast();
   modalOpen = true;
   modalClosable = closable;
+  $('modalBody').classList.remove('live', 'sheet');
   $('modalBody').innerHTML = html;
   $('modal').classList.remove('hidden');
 }
 function closeModal() {
   if (!modalClosable) return;
+  haltBroadcast();
   modalOpen = false;
-  $('modalBody').classList.remove('manage');
+  $('modalBody').classList.remove('manage', 'live', 'sheet');
   $('modal').classList.add('hidden');
 }
 $('modal').addEventListener('click', (e) => {
@@ -351,7 +402,7 @@ function showTitle() {
     `
     <div class="logo title-logo">S</div>
     <h2>SSB电竞经理</h2>
-    <p class="sub">网页试玩版 · M2（外卖、经营、经济）</p>
+    <p class="sub">网页试玩版 · M3（比赛、直播、联赛）</p>
     <p>你是 SSB 战队的老板兼经理。六个朋友在网吧角落开始打联赛：白天训练、摸鱼、吃外卖，比赛日晚上 19:00 开打。</p>
     ${storageWarning()}
     <div class="row">
@@ -420,30 +471,143 @@ function checkBankrupt() {
   });
 }
 
-// 赛前（18:30）：M1 只展示自动首发；M3 改成老板手动选首发和战术
-function showPrematch(holdId: string) {
-  const opp = world.opponentToday();
+function showStandings() {
+  if (!live) return;
+  const row = ourRank(state);
   const info = dayInfo(clock.day);
-  const starters = world.starters.map((id) => world.byId[id]);
-  const bench = world.members.filter((m) => !world.starters.includes(m.id));
   openModal(
-    `
-    <h2>比赛日 · 第 ${info.round} 轮</h2>
-    <p>${TIER_CN[state.season.tier]} · 19:00 vs <b>${opp?.name}</b>（${opp?.blurb}）</p>
-    <h3>首发</h3>
-    <div class="lineup">${starters.map((m, i) => `<div>${m.name}<small>${POSITION_CN[POSITIONS[i]]}</small></div>`).join('')}</div>
-    <p class="sub">台下第二解说：${bench.map((m) => m.name).join('、')}</p>
-    <p class="sub">选首发、选战术和比赛直播在 M3 实装；现在先按状态自动排首发。</p>
-    <div class="row"><button class="btn accent" id="pmOk">确认首发，开赛</button></div>`,
-    false,
+    `<h2>积分榜 · ${TIER_CN[state.season.tier]}</h2>
+    <p>第 ${state.season.round} 轮后，SSB 第 ${row.rank} 名（${row.w} 胜 ${row.l} 负）。${info.round != null && roundSettled(state) ? '这一轮已经记进榜。' : ''}</p>
+    <div class="sheet-scroll">${standingsTableHtml(state)}</div>
+    <div class="dock"><button class="btn accent" id="stClose">回到网吧</button></div>`,
+    true,
   );
-  $('pmOk').addEventListener('click', () => {
-    state.prematchConfirmedDay = clock.day;
-    clock.release(holdId);
-    persist('auto');
+  $('modalBody').classList.add('sheet');
+  document.getElementById('stClose')?.addEventListener('click', () => {
     modalClosable = true;
     closeModal();
   });
+}
+
+function showPrematch(holdId: string, intermission: boolean) {
+  openModal(prematchHtml(state, intermission), false);
+  $('modalBody').classList.add('sheet');
+  bindPrematch(state, {
+    toast,
+    onRefresh: () => showPrematch(holdId, intermission),
+    onConfirm: (slots, tactic: TacticId) => {
+      if (!validLineup(slots)) {
+        toast('每个选手只能占一个位置');
+        return;
+      }
+      state.lineup = { day: clock.day, slots, tactic };
+      world.starters = slots.slice();
+      if (intermission && state.series) state.series.phase = 'play';
+      else state.prematchConfirmedDay = clock.day;
+      clock.release(holdId);
+      persist('auto');
+      if (intermission) {
+        const liveId = `match-live-${clock.day}`;
+        clock.hold(liveId, '直播中');
+        showBroadcast(liveId);
+        return;
+      }
+      modalClosable = true;
+      closeModal();
+      world.update(clock.minute, 0, true);
+      director.snapAll();
+    },
+  });
+}
+
+function showBroadcast(holdId: string) {
+  const info = dayInfo(clock.day);
+  const round = info.round ?? 1;
+  for (const text of catchUpThrough(state, round - 1)) world.log('剧情', text, []);
+  board.set(state.eventLog);
+  if (!state.series || state.series.day !== clock.day) {
+    state.series = { day: clock.day, game: 1, us: 0, them: 0, phase: 'play', accounted: 0, loaded: 0 };
+  }
+  const series = state.series;
+  const slots = state.lineup?.day === clock.day ? state.lineup.slots : world.starters;
+  const tactic = state.lineup?.tactic ?? state.tactics[0] ?? 'engage';
+  const opp = opponentForRound(state.season.tier, round);
+  const result = playOurMatch(state, clock.day, series.game, slots, tactic, opp);
+  const bench = benchOf(slots);
+  const seed = hashString([state.seed, 'dm', clock.day, series.game, slots.join(','), bench ?? ''].join('|'));
+  const cues = cuesFrom(result, bench, makeRng(seed).next);
+  if (!state.broadcast || state.broadcast.day !== clock.day || state.broadcast.game !== series.game || state.broadcast.seed !== seed) {
+    state.broadcast = { day: clock.day, game: series.game, cursor: 0, seed };
+  }
+  const bo = winsNeeded(state.season.tier) === 1 ? 'BO1' : `BO3 ${series.us}:${series.them}`;
+  const benchName = bench ? (world.byId[bench]?.name ?? bench) : '—';
+  const need = winsNeeded(state.season.tier);
+  const usAfter = series.us + (result.win === 'A' ? 1 : 0);
+  const themAfter = series.them + (result.win === 'A' ? 0 : 1);
+  const seriesOver = usAfter >= need || themAfter >= need;
+  modalOpen = true;
+  modalClosable = false;
+  $('modal').classList.remove('hidden');
+  stopBroadcast = mountBroadcast({
+    title: `直播 · 第 ${round} 轮`,
+    sub: `${bo} · 第 ${series.game} 局 · vs ${opp.name} · 第二解说 ${benchName}`,
+    cues,
+    start: state.broadcast.cursor,
+    box: result.box,
+    button: seriesOver ? '记入积分榜，回到网吧' : '这一局结束，局间换人',
+    onCursor: (n) => {
+      if (state.broadcast && state.broadcast.day === clock.day && state.broadcast.game === series.game) state.broadcast.cursor = n;
+      if (n % 8 === 0) persist('auto');
+    },
+    onDone: () => finishWatchedGame(holdId, result.win === 'A', slots),
+  });
+  persist('auto');
+}
+
+function finishWatchedGame(holdId: string, won: boolean, slots: string[]) {
+  haltBroadcast();
+  const series = state.series;
+  if (!series) return;
+  const game = state.broadcast?.game ?? series.game;
+  if (series.loaded < game) {
+    applyGameLoad(state, slots);
+    series.loaded = game;
+  }
+  if (series.accounted < game) {
+    if (won) series.us++;
+    else series.them++;
+    series.accounted = game;
+  }
+  const need = winsNeeded(state.season.tier);
+  if (series.us >= need || series.them >= need) {
+    const round = dayInfo(clock.day).round ?? 1;
+    const logs = commitRound(state, round, series.us > series.them, slots);
+    for (const text of logs) {
+      const major = /升入|降到|世界赛|解约|垫底|羞辱/.test(text);
+      world.log(major ? '重大' : '剧情', text, slots);
+    }
+    state.series = null;
+    state.broadcast = null;
+    world.starters = slots.slice();
+    clock.release(holdId);
+    clock.release(`match-gap-${clock.day}`);
+    modalClosable = true;
+    closeModal();
+    world.update(clock.minute, 0, true);
+    director.snapAll();
+    board.set(state.eventLog);
+    persist('auto');
+    showStandings();
+    return;
+  }
+  series.phase = 'gap';
+  series.game = game + 1;
+  state.broadcast = null;
+  clock.release(holdId);
+  const gapId = `match-gap-${clock.day}`;
+  clock.hold(gapId, '局间：可以换首发和战术');
+  showPrematch(gapId, true);
+  persist('auto');
 }
 
 let toastTimer = 0;

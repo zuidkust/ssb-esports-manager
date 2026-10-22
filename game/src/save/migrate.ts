@@ -1,8 +1,10 @@
 // 存档版本迁移：每次改存档结构，SAVE_VERSION +1，并在 MIGRATIONS 里补一个 “旧版本 → 新版本” 函数
+import { dayInfo } from '../core/calendar';
 import { DAY_START } from '../core/clock';
 import { ROSTER_BY_ID } from '../data/roster';
+import { STARTER_TACTICS } from '../data/tactics';
 import { canonMemberId, remapLegacyRoster } from './legacy';
-import { emptyFlags, emptyMeals, emptyRecord, SAVE_VERSION, type GameState } from './state';
+import { emptyFlags, emptyMeals, emptyRecord, emptySeason, SAVE_VERSION, type GameState } from './state';
 
 type AnySave = Record<string, unknown> & { version?: unknown };
 
@@ -48,6 +50,24 @@ const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
   3: (s) => {
     remapLegacyRoster(s);
     return { ...s, version: 4 };
+  },
+  // v5：首发、战术、系列赛、直播进度、积分榜赛季号
+  4: (s) => {
+    const clock = s.clock as { day?: number } | undefined;
+    const day = typeof clock?.day === 'number' ? clock.day : 1;
+    const prev = (s.season ?? {}) as { tier?: GameState['season']['tier']; round?: number; table?: GameState['season']['table'] };
+    const season = emptySeason(prev.tier ?? 'netcafe', dayInfo(day).season);
+    if (typeof prev.round === 'number') season.round = prev.round;
+    if (prev.table && typeof prev.table === 'object') season.table = { ...season.table, ...prev.table };
+    return {
+      ...s,
+      tactics: Array.isArray(s.tactics) ? s.tactics : [...STARTER_TACTICS],
+      lineup: s.lineup ?? null,
+      series: s.series ?? null,
+      broadcast: s.broadcast ?? null,
+      season,
+      version: 5,
+    };
   },
 };
 
