@@ -35,6 +35,10 @@ describe('开局阵容', () => {
     expect(ROSTER_BY_ID.diaolong.name).toBe('吊隆');
     expect(ROSTER_BY_ID.piegan.position).toBe('top');
     expect(ROSTER_BY_ID.piegan.heroes).toContain('剑魔');
+    expect(ROSTER_BY_ID.piegan.heroes).not.toContain('石头人');
+    expect(ROSTER_BY_ID.piegan.draft?.neverPicks).toEqual(['石头人']);
+    expect(ROSTER_BY_ID.piegan.draft?.teamWants).toEqual(['石头人']);
+    expect(ROSTER.filter((m) => m.id !== 'piegan').every((m) => !m.draft?.neverPicks.includes('石头人'))).toBe(true);
     expect(COMBOS.map((c) => c.name)).toEqual(['【待定】', '【待定】']);
     expect(COMBOS.map((c) => pairKey(c.a, c.b)).sort()).toEqual(['dangdeng|dibi', 'diaolong|gouliang'].sort());
     for (const n of Object.values(INITIAL_BOND)) {

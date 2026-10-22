@@ -64,6 +64,7 @@ export class Card {
         ${STATUS_KEYS.map((k) => this.bar(k, st.status[k], STATUS_COLOR[k])).join('')}</div>
       <div class="card-sec"><h4>人设</h4>
         <div>招牌 ${d.heroes.join('、')}${d.heroNote ? `。${d.heroNote}` : ''}</div>
+        ${d.draft?.neverPicks.length ? `<div>不选 ${d.draft.neverPicks.join('、')}。队伍想要开团上单，尤其${d.draft.teamWants.join('、')}，他不拿。</div>` : ''}
         <div>口头禅「${d.catchphrases[0] ?? ''}」</div>
         <div>外卖 ${food}（${d.taste.drinks}；${tea}${offal}）</div>
         <div>怎么哄 ${d.cheer}</div>

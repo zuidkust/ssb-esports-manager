@@ -51,6 +51,12 @@ export interface MemberDef {
   persona: Record<PersonaKey, number>;
   heroes: string[];
   heroNote?: string;
+  /**
+   * 英雄池边界和队伍的选人偏好。
+   * neverPicks：自己绝不选。teamWants：队伍希望留给他、希望他练的英雄，他可以拒绝。
+   * 比赛还没有 BP，选人阶段强制跳过【待定】。
+   */
+  draft?: { neverPicks: string[]; teamWants: string[] };
   traits: string[];
   catchphrases: string[];
   winLines: string[];
@@ -272,7 +278,8 @@ export const ROSTER: MemberDef[] = [
     ability: { lane: 32, roam: 40, fight: 44, sense: 40, mech: 46, pool: 32, mental: 30 },
     persona: { 嘴硬: 78, 心态倾向: 26, 胜负心: 72, 逆风意志: 28, 创新欲: 20, 话痨: 48, 摸鱼倾向: 58, 甩锅倾向: 90, 爱睡觉: 28 },
     heroes: ['剑魔'],
-    heroNote: '战士上单。剑魔战力 +30%。英雄池窄',
+    heroNote: '战士上单。剑魔战力 +30%。英雄池窄。绝不玩石头人',
+    draft: { neverPicks: ['石头人'], teamWants: ['石头人'] },
     traits: ['容易上头', '爱甩锅', '爱熬夜'],
     catchphrases: ['对面什么打野啊，3分钟来一次，5分钟又来一次'],
     winLines: [

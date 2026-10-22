@@ -80,6 +80,20 @@ const EVENTS: BoardEvent[] = [
     ],
   },
   {
+    id: 'habit_sion',
+    level: '日常',
+    members: ['piegan', 'dangdeng'],
+    segments: ['team', 'free'],
+    cooldown: 3,
+    weight: 3,
+    texts: [
+      '有人把石头人亮出来。撇干：“上单我不玩这个。”剑魔还是锁了。',
+      '队伍想要能开团的上路，石头人排在最前。撇干看了一眼，选了剑魔。',
+      '当邓：“石头人开团多稳。”撇干：“你打野你选。我不上。”',
+      '有人问要不要练石头人。撇干摇头，键盘已经停在剑魔上。',
+    ],
+  },
+  {
     id: 'moment_allin',
     level: '有趣',
     members: ['piegan'],
