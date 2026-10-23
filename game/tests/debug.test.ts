@@ -115,6 +115,17 @@ describe('调试跳转', () => {
     armWorldCup(nat.w, nat.c);
     expect(nat.s.eventLog.filter((e) => e.text.includes('不升联赛'))).toHaveLength(1);
     expect(nat.s.eventLog.filter((e) => e.text.includes('赛季第 1 名'))).toHaveLength(1);
+    expect(nat.s.eventLog.filter((e) => e.text.includes('拿到世界赛资格'))).toHaveLength(1);
+
+    // 网吧第 1 名先升城市，再触发世界赛改成国内第 1。两句「赛季第 1 名」奖金不同，也不能各留一条。
+    const promoted = boot(9);
+    jumpToSeasonEnd(promoted.w, promoted.c);
+    expect(promoted.s.eventLog.some((e) => e.text.includes('升入'))).toBe(true);
+    armWorldCup(promoted.w, promoted.c);
+    expect(promoted.s.eventLog.filter((e) => e.text.includes('赛季第 1 名'))).toHaveLength(1);
+    expect(promoted.s.eventLog.filter((e) => e.text.includes('不升联赛'))).toHaveLength(1);
+    expect(promoted.s.eventLog.filter((e) => e.text.includes('升入'))).toHaveLength(0);
+    expect(promoted.s.eventLog.filter((e) => e.text.includes('拿到世界赛资格'))).toHaveLength(1);
   });
 
   it('八强输了再直接夺冠，只保留这次的冠军，不留「八强输」', () => {

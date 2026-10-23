@@ -332,9 +332,10 @@ function haltBroadcast() {
 }
 let modalKind = '';
 function resetModalScroll() {
-  $('modalBody').scrollTop = 0;
+  const body = $('modalBody');
+  body.scrollTop = 0;
   $('modal').scrollTop = 0;
-  $('modalBody').querySelectorAll<HTMLElement>('.sheet-scroll').forEach((el) => {
+  body.querySelectorAll<HTMLElement>('.sheet-scroll').forEach((el) => {
     el.scrollTop = 0;
   });
 }
@@ -344,11 +345,24 @@ function openModal(html: string, closable = true) {
   const already = modalOpen && !$('modal').classList.contains('hidden');
   modalOpen = true;
   modalClosable = closable;
-  $('modalBody').classList.remove('live', 'sheet');
-  $('modalBody').innerHTML = html;
-  // 父级还是 display:none 时写 scrollTop 会被丢掉，旧的底部位置会留到下次打开。
+  const body = $('modalBody');
+  if (already) {
+    body.classList.remove('live', 'sheet');
+    body.innerHTML = html;
+  } else {
+    // 滚到底再关掉时，旧节点的 scrollTop 会留下来。display:none 期间赋值会被浏览器丢掉，
+    // 所以不能靠“先归零再隐藏”。换成新节点，顶部才是确定的。
+    const fresh = document.createElement('div');
+    fresh.id = 'modalBody';
+    fresh.className = 'modal panel';
+    fresh.innerHTML = html;
+    body.replaceWith(fresh);
+    $('modal').classList.remove('hidden');
+    resetModalScroll();
+    requestAnimationFrame(resetModalScroll);
+    return;
+  }
   $('modal').classList.remove('hidden');
-  if (!already) resetModalScroll();
 }
 function closeModal() {
   if (!modalClosable) return;

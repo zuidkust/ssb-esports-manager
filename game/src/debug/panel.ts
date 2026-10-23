@@ -125,21 +125,28 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
   const pauseBtn = $('godPause');
   let composing = false;
 
-  // 焦点在框里、或输入法还在组字时，不要改 value。顶栏每 250ms 会走 sync，快打时回写会把前面的字盖掉。
+  // 焦点在调试面板的输入框里、或输入法还在组字时，不要改任何一个框的 value。
+  // 顶栏每 250ms 会走 sync。快打时哪怕改的是旁边的「第几天」，也会把还在排队的按键冲掉，现金框就会少掉开头几位。
+  function godEditing(): boolean {
+    if (composing) return true;
+    const active = document.activeElement;
+    return !!active && root.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+  }
   function canWrite(input: HTMLInputElement): boolean {
-    return !composing && document.activeElement !== input;
+    return !godEditing() && document.activeElement !== input;
   }
   function fillClock() {
+    if (godEditing()) return;
     const clock = hooks.getClock();
-    if (canWrite(dayInput)) dayInput.value = String(clock.day);
-    if (canWrite(timeInput)) timeInput.value = fmtHM(clock.minute);
+    dayInput.value = String(clock.day);
+    timeInput.value = fmtHM(clock.minute);
   }
   function sync() {
     const clock = hooks.getClock();
     const mult = clock.debugRate ?? SPEEDS[clock.speed].mult;
     rateLabel.textContent = clock.manualPause ? `暂停 · ×${mult}` : `×${mult}`;
     pauseBtn.textContent = clock.manualPause ? '继续' : '暂停';
-    if (canWrite(slider)) slider.value = String(mult);
+    if (!godEditing() && document.activeElement !== slider) slider.value = String(mult);
     fillClock();
   }
   function afterTime(note: string) {

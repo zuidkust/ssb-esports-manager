@@ -231,7 +231,16 @@ function champTable(tier: Tier): Record<string, { w: number; l: number }> {
   return table;
 }
 
+// 和 world.logAt 认的是同一类结算原文。发薪里的「赛季第 N 天」不要算进来。
+const SEASON_SETTLEMENT = /赛季第 \d+ 名|不升联赛|拿到世界赛资格|对手悄悄变强|看了排名，把赞助解约|不降级|前两名，升入|最后两名，降到|这个赛季留在原联赛/;
+
 function logLines(world: World, lines: string[]): void {
+  // 调试会把同一赛季再结算一次（跳到赛季末之后再触发世界赛）。奖金数字往往不一样，按整句去重去不掉。
+  // 这一季的结算只留最新这一次。
+  if (lines.some((text) => SEASON_SETTLEMENT.test(text))) {
+    const season = dayInfo(world.state.clock.day).season;
+    world.state.eventLog = world.state.eventLog.filter((e) => !(SEASON_SETTLEMENT.test(e.text) && dayInfo(e.day).season === season));
+  }
   for (const text of lines) world.log(/升入|降到|世界赛|冠军|解约|羞辱/.test(text) ? '重大' : '剧情', text, []);
 }
 

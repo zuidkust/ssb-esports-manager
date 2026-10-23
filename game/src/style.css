@@ -321,10 +321,9 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 
 .modal-back {
   position: absolute; inset: 0; z-index: 40; background: rgba(5,8,14,0.55); backdrop-filter: blur(3px);
-  display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px 24px; overflow: auto;
-  overflow-anchor: none;
+  display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px 24px; overflow: hidden;
 }
-.modal { position: relative; width: min(520px, 92vw); padding: 20px 22px; max-height: min(78vh, 760px); overflow: auto; scrollbar-gutter: stable; overflow-anchor: none; }
+.modal { position: relative; width: min(520px, 92vw); padding: 20px 22px; max-height: min(78vh, 760px); min-height: 0; overflow: auto; scrollbar-gutter: stable; overflow-anchor: none; }
 .modal.manage { width: min(720px, 94vw); }
 .ledger { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .ledger span { padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 12px; color: var(--muted); }
