@@ -2,7 +2,7 @@
   "name": "ssb-esports-manager",
   "private": true,
   "version": "0.4.0",
-  "description": "SSB电竞经理 · 网页版（M4）",
+  "description": "SSB电竞经理 · 网页试玩版 v0.4.0-pre（M4）",
   "type": "module",
   "scripts": {
     "dev": "vite",
