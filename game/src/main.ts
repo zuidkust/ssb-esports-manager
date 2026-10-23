@@ -34,6 +34,11 @@ import { makeRng } from './engine/match';
 import { mountGodPanel } from './debug/panel';
 import { bindBracket, bindEnding, bindOffseason, bindSettlement, bracketHtml, endingHtml, offseasonHtml, settlementHtml } from './ui/season';
 
+/** 开始菜单和标签页上的预发布标记。package.json 的 version 仍是 0.4.0。 */
+const RELEASE_TITLE = 'SSB电竞经理 · v0.4.0-pre';
+const RELEASE_LABEL = '网页试玩版 · v0.4.0-pre（M4）';
+document.title = RELEASE_TITLE;
+
 const params = new URLSearchParams(location.search);
 const $ = (id: string) => document.getElementById(id)!;
 const AUTOSAVE_SECONDS = 60;
@@ -470,7 +475,7 @@ function showTitle() {
     `
     <div class="logo title-logo">S</div>
     <h2>SSB电竞经理</h2>
-    <p class="sub">网页试玩版 · M4（基地、世界赛、结局）</p>
+    <p class="sub">${RELEASE_LABEL}</p>
     <p>你是 SSB 战队的老板兼经理。六个朋友在网吧角落开始打联赛：白天训练、摸鱼、吃外卖，比赛日晚上 19:00 开打。</p>
     ${storageWarning()}
     <div class="row">
