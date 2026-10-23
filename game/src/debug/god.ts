@@ -6,7 +6,7 @@ import { actionPointMax, isPayday, MONTH_DAYS } from '../data/economy';
 import { opponentsOf, OUR_ID, type Tier } from '../data/leagues';
 import { emptyTable, type GameState } from '../save/state';
 import { runPayday } from '../sim/economy';
-import { finishSeason, ourRank } from '../sim/league';
+import { finishSeason, ourRank, syncSeasonEndHold } from '../sim/league';
 import { autoLineup } from '../sim/lineup';
 import { commitWorldRound, isMatchDay, playerWorldKickoff, rewindUnplayedWorld } from '../sim/worldcup';
 import { forceDelivery, type TakeoutPerson } from '../sim/takeout';
@@ -267,6 +267,8 @@ export function jumpToOffseason(world: World, clock: GameClock): { day: number; 
   }
   if (state.season.phase === 'regular') state.season.phase = state.worldCup && !state.worldCup.done ? 'world' : 'offseason';
   if (state.season.report) state.season.report.acked = true;
+  // 「跳到赛季末」会先挂上赛季结算暂停。进了休赛就把这条放行，别的暂停不动。
+  syncSeasonEndHold(clock, false);
   return at;
 }
 
@@ -284,6 +286,8 @@ export function armWorldCup(world: World, clock: GameClock): { day: number; minu
   state.record.worldQualified = false;
   logLines(world, finishSeason(state));
   if (state.season.report) state.season.report.acked = true;
+  // 停在八强开赛前（18:20）。赛季结算暂停不放行的话，回到场地后时钟钉死，到不了 18:30 首发。
+  syncSeasonEndHold(clock, false);
   const spent = state.actionHistory.some((h) => h.day === state.clock.day);
   if (!spent) state.actionPoints = actionPointMax(state.venueLevel, isMatchDay(state, state.clock.day));
   return at;

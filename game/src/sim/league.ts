@@ -1,5 +1,6 @@
 // 联赛：8 队双循环、积分榜、BO1/BO3、赛季末升降、排名奖、赞助解约
 import { dayInfo, MATCH_INTERVAL, MATCH_MINUTE, opponentForRound, SEASON_DAYS } from '../core/calendar';
+import type { GameClock } from '../core/clock';
 import { hashString, mulberry32, pick } from '../core/rng';
 import { WIN_BONUS, placementPrize } from '../data/economy';
 import { OUR_ID, OUR_NAME, nextTier, opponentById, opponentsOf, prevTier, type Tier } from '../data/leagues';
@@ -237,6 +238,18 @@ export function finishSeason(state: GameState): string[] {
   state.meta.scores.push(row.rank);
   for (const s of cutSponsorsAfterMove(state)) logs.push(`${s.name} 看了排名，把赞助解约了。`);
   return logs;
+}
+
+/**
+ * 「赛季结算」自动暂停。结算还没确认时挂上；确认后必须放行。
+ * 只动 season-end。世界赛赛前、直播、夺冠是别的暂停，不能在这里清掉。
+ */
+export function syncSeasonEndHold(clock: GameClock, pending: boolean): void {
+  if (pending) {
+    if (!clock.isHeld('season-end')) clock.hold('season-end', '赛季结算');
+    return;
+  }
+  clock.release('season-end');
 }
 
 /** 把这一轮记进积分榜。玩家的胜负由直播给出，另外三场现场算。 */

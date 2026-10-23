@@ -23,7 +23,7 @@ import { Card } from './ui/card';
 import { bindManage, manageHtml } from './ui/manage';
 import { buyFacility } from './sim/economy';
 import { retuneActionPoints } from './sim/offseason';
-import { applyGameLoad, catchUpThrough, commitRound, needsBroadcast, needsIntermission, ourRank, roundSettled, winsNeeded } from './sim/league';
+import { applyGameLoad, catchUpThrough, commitRound, needsBroadcast, needsIntermission, ourRank, roundSettled, syncSeasonEndHold, winsNeeded } from './sim/league';
 import { commitWorldRound, matchPauseMinutes, needsWorldBroadcast, needsWorldPrematch, playerWorldOpponent, rewindUnplayedWorld, WORLD_ROUND_CN } from './sim/worldcup';
 import { benchOf, validLineup } from './sim/lineup';
 import { playOurMatch } from './sim/matchprep';
@@ -189,10 +189,14 @@ function checkPrematch() {
   state.clock.day = clock.day;
   state.clock.minute = clock.minute;
   if (state.season.report && !state.season.report.acked) {
-    if (!clock.isHeld('season-end')) clock.hold('season-end', '赛季结算');
+    syncSeasonEndHold(clock, true);
     if (!modalOpen) showSettlement();
     return;
   }
+  // 结算已经确认，或这季没有待看的结算。清掉残留的「赛季结算」。
+  // 调试先「跳到赛季末」会挂上这个暂停；接着「触发世界赛」或关掉结算弹窗进入休赛 / 世界赛日，只把弹窗换掉。
+  // 暂停不放行的话，回到场地后时钟钉在 18:20，到不了 18:30 的世界赛首发。赛前、直播、夺冠仍走下面各自的暂停。
+  syncSeasonEndHold(clock, false);
   if (state.worldCup?.champion && !state.meta.endingSeen) {
     if (!clock.isHeld('ending')) clock.hold('ending', '世界赛夺冠');
     if (!modalOpen) showEnding();
@@ -561,15 +565,17 @@ function seasonHooks() {
     refresh: () => showOffseason(),
     openBracket: () => {
       if (state.season.report) state.season.report.acked = true;
-      clock.release('season-end');
+      syncSeasonEndHold(clock, false);
       showBracket();
     },
     openOffseason: () => {
       if (state.season.report) state.season.report.acked = true;
-      clock.release('season-end');
+      syncSeasonEndHold(clock, false);
       showOffseason();
     },
     close: () => {
+      // 回到场地。结算已经确认过就不要再占着「赛季结算」；还没确认的留给下一帧重新弹出。
+      if (!state.season.report || state.season.report.acked) syncSeasonEndHold(clock, false);
       modalClosable = true;
       closeModal();
     },
