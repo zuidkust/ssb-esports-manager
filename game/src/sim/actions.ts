@@ -1,5 +1,5 @@
 // 老板动作：行动点、联赛倍率、对人冷却、7 天滑动递减（第 4 次起反噬）。
-import { dayInfo } from '../core/calendar';
+import { isMatchDay } from './worldcup';
 import { seeded, pick, type Rand } from '../core/rng';
 import { ACTION_BY_ID, actionCooldownKey, ACTIONS, type ActionDef } from '../data/actions';
 import { actionPointMax, tierCashMult } from '../data/economy';
@@ -339,7 +339,7 @@ export function performAction(
 }
 
 export function actionPointLabel(state: GameState, day: number): string {
-  const max = actionPointMax(state.venueLevel, dayInfo(day).round != null);
+  const max = actionPointMax(state.venueLevel, isMatchDay(state, day));
   return `${state.actionPoints}/${max}`;
 }
 

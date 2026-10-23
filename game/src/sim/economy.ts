@@ -13,6 +13,7 @@ import {
   SLACK_CUTOFF,
   START_CASH,
   START_STASH,
+  WORLD_SALARY,
 } from '../data/economy';
 import { MAX_SPONSORS, SPONSOR_BY_ID, SPONSORS, type SponsorDef, type SponsorTier } from '../data/sponsors';
 import { seeded } from '../core/rng';
@@ -22,11 +23,18 @@ import { anyBondAtLeast } from './relations';
 const TIER_RANK: Record<SponsorTier, number> = { netcafe: 0, city: 1, national: 2, world: 3 };
 
 export function monthlySalaryEach(state: GameState): number {
+  if (state.season.tier === 'national' && state.record.worldQualified) return WORLD_SALARY;
   return SALARY[state.season.tier];
 }
 
+/** 谈过少涨或兄弟价的人锁住月薪，其余按表。 */
+export function paycheck(state: GameState, member: GameState['roster'][number]): number {
+  if (member.salaryDeal === 'low' || member.salaryDeal === 'bond') return member.salary;
+  return monthlySalaryEach(state);
+}
+
 export function monthlySalaryTotal(state: GameState): number {
-  return state.roster.length * monthlySalaryEach(state);
+  return state.roster.reduce((sum, m) => sum + paycheck(state, m), 0);
 }
 
 export function monthlyRent(state: GameState): number {
@@ -146,9 +154,12 @@ export interface PaydayResult {
 }
 
 export function runPayday(state: GameState, day: number): PaydayResult {
-  const each = monthlySalaryEach(state);
-  for (const m of state.roster) m.salary = each;
-  const salaries = each * state.roster.length;
+  let salaries = 0;
+  for (const m of state.roster) {
+    const pay = paycheck(state, m);
+    if (m.salaryDeal !== 'low' && m.salaryDeal !== 'bond') m.salary = pay;
+    salaries += pay;
+  }
   const rent = monthlyRent(state);
   const meal = mealAllowanceDue(state);
   const income = sponsorIncome(state);

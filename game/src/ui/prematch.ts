@@ -6,6 +6,7 @@ import { TACTICS, type TacticId } from '../data/tactics';
 import type { GameState } from '../save/state';
 import { winsNeeded, standings } from '../sim/league';
 import { lineupSlots, researchTactic, validLineup } from '../sim/lineup';
+import { playerWorldOpponent, WORLD_ROUND_CN } from '../sim/worldcup';
 
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
 
@@ -18,12 +19,13 @@ export function standingsTableHtml(state: GameState): string {
 
 export function prematchHtml(state: GameState, intermission: boolean): string {
   const info = dayInfo(state.clock.day);
-  const opp = info.round == null ? null : opponentForRound(state.season.tier, info.round);
+  const world = playerWorldOpponent(state, state.clock.day);
+  const opp = world ? world.opponent : info.round == null ? null : opponentForRound(state.season.tier, info.round);
   const slots = lineupSlots(state, state.clock.day);
   const tactic = state.lineup?.day === state.clock.day ? state.lineup.tactic : (state.tactics[0] ?? 'engage');
   const bench = ROSTER.filter((m) => !slots.includes(m.id)).map((m) => m.name);
   const series = state.series;
-  const bo = winsNeeded(state.season.tier) === 1 ? 'BO1' : 'BO3';
+  const bo = world || winsNeeded(state.season.tier) !== 1 ? 'BO3' : 'BO1';
   const takenElsewhere = (index: number) => new Set(slots.filter((_, j) => j !== index));
   const options = (current: string, index: number) => {
     const taken = takenElsewhere(index);
@@ -39,8 +41,8 @@ export function prematchHtml(state: GameState, intermission: boolean): string {
   }).join('');
   return `
     <div class="sheet-scroll">
-    <h2>${intermission ? '局间换人' : '比赛日'} · 第 ${info.round ?? '?'} 轮</h2>
-    <p>${TIER_CN[state.season.tier]} · ${bo}${series && intermission ? ` · 目前 ${series.us}:${series.them}` : ''} · 19:00 vs <b>${esc(opp?.name ?? '对手')}</b></p>
+    <h2>${intermission ? '局间换人' : world ? `世界赛 · ${WORLD_ROUND_CN[world.round]}` : `比赛日 · 第 ${info.round ?? '?'} 轮`}</h2>
+    <p>${world ? '世界赛' : TIER_CN[state.season.tier]} · ${bo}${series && intermission ? ` · 目前 ${series.us}:${series.them}` : ''} · 19:00 vs <b>${esc(opp?.name ?? '对手')}</b></p>
     <p class="sub">${esc(opp?.blurb ?? '')}</p>
     <h3>首发</h3>
     <div class="lineup pick">

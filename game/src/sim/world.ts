@@ -17,6 +17,7 @@ import { performAction } from './actions';
 import { grantDailyInsight, runPayday } from './economy';
 import { expireKnots } from './relations';
 import { enterDay, roundSettled } from './league';
+import { isMatchDay } from './worldcup';
 import { lineupSlots } from './lineup';
 import { buildPlans, MATCH_END, segmentAt, type DayPlan } from './schedule';
 import { courierTrack, orderFor, planMorning, resolveMeal, settleMeals, type CourierTrack, type TakeoutPerson } from './takeout';
@@ -40,6 +41,11 @@ export interface Activity {
 const TEAM_START = 14 * 60 + 30;
 const GAME_MIN = 35;
 const QUEUE_MIN = 4;
+
+// 只认结算原文。发薪日志里的「赛季第 N 天」不是名次，不要算进去。
+function sameSeasonSettlement(text: string): boolean {
+  return /赛季第 \d+ 名|不升联赛|拿到世界赛资格|对手悄悄变强|看了排名，把赞助解约|不降级|前两名，升入|最后两名，降到|这个赛季留在原联赛/.test(text);
+}
 
 const HIDDEN: ActivityKind[] = ['absent', 'toilet'];
 const SLACK: ActivityKind[] = ['slack_phone', 'slack_stream', 'snack', 'drink', 'fridge', 'chat', 'toilet', 'nap_desk', 'nap_sofa'];
@@ -147,8 +153,13 @@ export class World {
         this.logAt(pay.bankrupt ? '重大' : '剧情', pay.text, [], DAY_START);
       }
       this.overnight(day);
+      for (const m of this.members) {
+        if (m.state.route && m.state.routeGrindUntil >= day) {
+          m.state.status.心情 = Math.max(0, m.state.status.心情 - 2);
+        }
+      }
     }
-    const apMax = actionPointMax(this.state.venueLevel, dayInfo(day).round != null);
+    const apMax = actionPointMax(this.state.venueLevel, isMatchDay(this.state, day));
     const spentToday = this.state.actionHistory.some((h) => h.day === day);
     // 比赛日多出来的 1 点写进当天的池子。旧档没记 apDay、或记了当天但池子还是平日的 3，且今天还没花过，就补齐。
     if (this.state.apDay !== day || (!spentToday && this.state.actionPoints !== apMax)) {
@@ -547,6 +558,12 @@ export class World {
   }
 
   logAt(level: LogEntry['level'], text: string, ids: string[], minute: number) {
+    // 同一赛季的结算文案只留一条。调试「跳到赛季末」后再「触发世界赛」会再结算一次，事件栏就会出现两遍。
+    if (sameSeasonSettlement(text)) {
+      const season = dayInfo(this.state.clock.day).season;
+      const dup = this.state.eventLog.some((e) => e.text === text && dayInfo(e.day).season === season);
+      if (dup) return;
+    }
     const e: LogEntry = { id: this.state.nextLogId++, day: this.state.clock.day, minute: Math.floor(minute), level, text, ids };
     this.state.eventLog.unshift(e);
     if (this.state.eventLog.length > 300) this.state.eventLog.length = 300;

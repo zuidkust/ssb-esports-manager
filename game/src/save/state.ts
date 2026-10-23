@@ -7,7 +7,7 @@ import { OPPONENTS, OUR_ID, type Tier } from '../data/leagues';
 import { ROSTER, INITIAL_BOND, type AbilityKey, type PersonaKey } from '../data/roster';
 import { STARTER_TACTICS, type TacticId } from '../data/tactics';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export const FOUNDING_TEXT = '老板在网吧包下了角落的 6 台机器，SSB 战队今天正式成立。目标：打出网吧联赛。';
 
@@ -19,8 +19,12 @@ export interface MemberState {
   ability: Record<AbilityKey, number>;
   persona: Record<PersonaKey, number>;
   status: Record<StatusKey, number>;
-  route: string | null; // 训练路线（设计文档 5.2），M1 未启用
+  route: string | null; // 训练路线 id（data/routes.ts）
+  /** 磨合期最后一天（含）。0 = 没有 */
+  routeGrindUntil: number;
   salary: number;
+  /** 休赛期谈过薪才有。table 照表，low / bond 锁住月薪直到下次升降级 */
+  salaryDeal: null | 'table' | 'low' | 'bond';
 }
 
 export interface Knot {
@@ -150,6 +154,37 @@ export interface SeasonState {
   growth: Partial<Record<Tier, number>>;
   /** 本日历赛季的升降和排名奖已经发过 */
   settled: boolean;
+  /** regular 常规赛；world 休赛周里还有世界赛要打；offseason 只剩休赛安排 */
+  phase: 'regular' | 'world' | 'offseason';
+  report: SeasonReport | null;
+}
+
+export interface SeasonReport {
+  from: Tier;
+  to: Tier;
+  rank: number;
+  move: 'up' | 'down' | 'stay';
+  world: boolean;
+  prize: number;
+  /** 结算弹窗点过之后才算看过 */
+  acked: boolean;
+}
+
+export interface WorldGame {
+  /** 0 八强，1 半决赛，2 决赛 */
+  round: number;
+  a: string;
+  b: string;
+  winner: string;
+}
+
+export interface WorldCupState {
+  calendarSeason: number;
+  /** 八强签位，两两一对 */
+  order: string[];
+  games: WorldGame[];
+  done: boolean;
+  champion: boolean;
 }
 
 export interface LineupSave {
@@ -186,7 +221,7 @@ export function emptyTable(tier: Tier): Record<string, { w: number; l: number }>
 }
 
 export function emptySeason(tier: Tier = 'netcafe', calendarSeason = 1): SeasonState {
-  return { tier, round: 0, table: emptyTable(tier), calendarSeason, growth: {}, settled: false };
+  return { tier, round: 0, table: emptyTable(tier), calendarSeason, growth: {}, settled: false, phase: 'regular', report: null };
 }
 
 export interface GameState {
@@ -204,6 +239,8 @@ export interface GameState {
   series: SeriesSave | null;
   /** 直播放到第几条。读档接着放 */
   broadcast: BroadcastSave | null;
+  /** 本赛季的世界赛。没资格是 null */
+  worldCup: WorldCupState | null;
   cash: number;
   insight: number;
   privateStash: number;
@@ -225,7 +262,7 @@ export interface GameState {
   meals: MealsState;
   record: GameRecord;
   flags: DayFlags;
-  meta: { seasonCount: number; scores: number[]; ngPlus: number; worldChampion: boolean };
+  meta: { seasonCount: number; scores: number[]; ngPlus: number; worldChampion: boolean; endingSeen: boolean };
 }
 
 export function newMemberState(id: string): MemberState {
@@ -236,7 +273,9 @@ export function newMemberState(id: string): MemberState {
     persona: { ...def.persona },
     status: { 体力: 85, 心情: 70, 专注: 65, 手感: 60, 饥饿: 30, 疲劳: 10, 压力: 20 },
     route: null,
+    routeGrindUntil: 0,
     salary: 1500,
+    salaryDeal: null,
   };
 }
 
@@ -255,6 +294,7 @@ export function createNewGame(seed = Math.floor(Math.random() * 2 ** 31)): GameS
     lineup: null,
     series: null,
     broadcast: null,
+    worldCup: null,
     cash: START_CASH,
     insight: 0,
     privateStash: START_STASH,
@@ -276,7 +316,7 @@ export function createNewGame(seed = Math.floor(Math.random() * 2 ** 31)): GameS
     meals: emptyMeals(0),
     record: emptyRecord(),
     flags: emptyFlags(),
-    meta: { seasonCount: 0, scores: [], ngPlus: 0, worldChampion: false },
+    meta: { seasonCount: 0, scores: [], ngPlus: 0, worldChampion: false, endingSeen: false },
   };
 }
 

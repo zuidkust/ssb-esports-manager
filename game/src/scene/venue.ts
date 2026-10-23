@@ -1,7 +1,7 @@
 // 场地：按存档里的场地等级选场景（网吧角落 / 小办公室……），设施按“已购买”显示
 // 导演层和灯光层只认这里的接口，不关心具体是哪个场景
 import type * as THREE from 'three';
-import { venueScene, type FacilityId } from '../data/facilities';
+import { venueLook, venueScene, type FacilityId } from '../data/facilities';
 import type { MemberDef } from '../data/roster';
 import type { NavGraph } from './nav';
 import { buildNetcafe } from './netcafe';
@@ -43,7 +43,7 @@ export interface Venue {
 }
 
 export function buildVenue(scene: THREE.Scene, level: number, members: MemberDef[], fac: ReadonlySet<FacilityId>): Venue {
-  return venueScene(level) === 'netcafe' ? buildNetcafe(scene, members, fac) : buildOffice(scene, members, fac);
+  return venueScene(level) === 'netcafe' ? buildNetcafe(scene, members, fac) : buildOffice(scene, members, fac, venueLook(level));
 }
 
 export function venueKey(level: number, fac: ReadonlySet<FacilityId>): string {

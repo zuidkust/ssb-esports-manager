@@ -9,13 +9,19 @@ export const MONTH_DAYS = 28;
 export const BANKRUPT_MONTHS = 3;
 
 export const SALARY: Record<Tier, number> = { netcafe: 1500, city: 3000, national: 8000 };
-// 世界赛级月薪 15000。赛季 tier 目前没有这一档，先记在这里，等 M3/M4 有资格赛再接入
+// 世界赛级月薪。国内联赛且已经有过世界赛资格时用这一档。
 export const WORLD_SALARY = 15000;
 
 // 下标 = 场地等级
 export const RENT = [2000, 6000, 18000, 50000];
 
 export const WIN_BONUS: Record<Tier, number> = { netcafe: 500, city: 2000, national: 8000 };
+/** 世界赛：每晋级一轮（八强、半决赛）的奖金。决赛冠军另计。 */
+export const WORLD_ROUND_PRIZE = 50_000;
+export const WORLD_CHAMP_PRIZE = 500_000;
+/** 搬家费，下标 = 目标场地等级。退租返还当前场地搬家费的 40%。 */
+export const MOVE_FEE = [0, 30_000, 120_000, 400_000];
+export const MOVE_REFUND_RATE = 0.4;
 export const MATCH_INSIGHT = { win: 60, loss: 30 };
 // 赛季排名奖。5 名及以后没有排名奖；网吧垫底也不降级，只是拿不到这笔
 export const SEASON_PRIZE: Record<Tier, { champ: number; runner: number; top4: number }> = {

@@ -88,6 +88,14 @@ describe('GameClock', () => {
     expect(c.isHeld('bankrupt')).toBe(true);
   });
 
+  it('跨过午夜就交还剩余时间，不带着旧停靠点走进下一天', () => {
+    const c = new GameClock({ day: 30, minute: 10 * 60, speed: 'x1', paused: false });
+    c.setDebugRate(60);
+    c.tick(30, []);
+    expect(c.day).toBe(31);
+    expect(c.minute).toBe(0);
+  });
+
   it('停靠点：走到 18:30 精确停下，解除后不会重复停', () => {
     const c = new GameClock({ day: 2, minute: 18 * 60 + 20, speed: 'x10', paused: false });
     c.tick(30, [18 * 60 + 30]);

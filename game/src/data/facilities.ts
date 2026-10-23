@@ -4,10 +4,17 @@
 export type VenueLevel = 0 | 1 | 2 | 3;
 export const VENUE_CN = ['网吧角落', '小办公室', '电竞基地', '豪华基地'];
 
-// 各级场地用哪个场景：电竞基地、豪华基地的场景在 M4 做，先沿用小办公室
+// 网吧角落用网吧场景。小办公室 / 电竞基地 / 豪华基地共用办公室平面：
+// 后两级只换墙色和招牌，独立户型这一阶段没做。
 export type VenueScene = 'netcafe' | 'office';
+export type OfficeLook = 'office' | 'base' | 'luxury';
 export function venueScene(level: number): VenueScene {
   return level <= 0 ? 'netcafe' : 'office';
+}
+export function venueLook(level: number): OfficeLook {
+  if (level >= 3) return 'luxury';
+  if (level >= 2) return 'base';
+  return 'office';
 }
 
 export type FacilityId = 'cooler' | 'snack' | 'headset' | 'fridge' | 'sofa' | 'whiteboard' | 'mealAllowance';

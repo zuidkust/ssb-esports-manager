@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { applyJump, clearCooldowns, forceTakeout, jumpToNextPayday, jumpToNextTakeout, nextEventAt, nextMatchAt, nextPaydayDay, prematchOnTheWay, setActionPoints, setCash } from '../src/debug/god';
+import { applyJump, armWorldCup, clearCooldowns, crownWorld, forceTakeout, jumpToNextMatch, jumpToNextPayday, jumpToNextTakeout, jumpToSeasonEnd, nextEventAt, nextMatchAt, nextPaydayDay, prematchOnTheWay, setActionPoints, setCash, setSeasonRank } from '../src/debug/god';
+import { PREMATCH_MINUTE } from '../src/core/calendar';
 import { GameClock } from '../src/core/clock';
 import { createNewGame } from '../src/save/state';
+import { autoLineup } from '../src/sim/lineup';
+import { commitWorldRound } from '../src/sim/worldcup';
 import { courierTrack } from '../src/sim/takeout';
 import { World } from '../src/sim/world';
 
@@ -46,6 +49,100 @@ describe('调试跳转', () => {
     expect(s.eventLog.some((e) => e.text.includes('发薪'))).toBe(false);
     expect(s.cash).toBe(cash);
     expect(s.eventLog.length).toBeLessThan(40);
+  });
+
+  it('世界赛当晚的下一场停在八强赛前，不会跳进下赛季', () => {
+    const { w, c, s } = boot(4);
+    armWorldCup(w, c);
+    expect(s.worldCup && !s.worldCup.done).toBe(true);
+    const at = jumpToNextMatch(w, c);
+    expect(at).toEqual({ day: 29, minute: PREMATCH_MINUTE });
+    expect(s.worldCup?.done).toBe(false);
+    expect(s.season.calendarSeason).toBe(1);
+    expect(s.clock.day).toBe(29);
+  });
+
+  it('直接把钟拨过世界赛日也会被拉回八强赛前', () => {
+    const { w, c, s } = boot(4);
+    armWorldCup(w, c);
+    const at = applyJump(w, c, 37, 19 * 60);
+    expect(at).toEqual({ day: 29, minute: PREMATCH_MINUTE });
+    expect(s.worldCup?.done).toBe(false);
+    expect(s.season.tier).toBe('national');
+  });
+
+  it('指定赛季末名次：后两名降级，网吧联赛垫底不降级', () => {
+    const cafe8 = boot(2);
+    const at8 = setSeasonRank(cafe8.w, cafe8.c, 8);
+    expect(at8.rank).toBe(8);
+    expect(cafe8.s.season.tier).toBe('netcafe');
+    expect(cafe8.s.eventLog.map((e) => e.text).join('\n')).toMatch(/不降级/);
+
+    const cafe7 = boot(3);
+    expect(setSeasonRank(cafe7.w, cafe7.c, 7).rank).toBe(7);
+    expect(cafe7.s.season.tier).toBe('netcafe');
+
+    const city = boot(5);
+    city.s.season.tier = 'city';
+    expect(setSeasonRank(city.w, city.c, 7).rank).toBe(7);
+    expect(city.s.season.tier).toBe('netcafe');
+    const city8 = boot(6);
+    city8.s.season.tier = 'city';
+    expect(setSeasonRank(city8.w, city8.c, 8).rank).toBe(8);
+    expect(city8.s.season.tier).toBe('netcafe');
+
+    const up = boot(7);
+    up.s.season.tier = 'city';
+    expect(setSeasonRank(up.w, up.c, 2).rank).toBe(2);
+    expect(up.s.season.tier).toBe('national');
+    expect(setSeasonRank(up.w, up.c, 8).rank).toBe(8);
+    expect(up.s.season.tier).toBe('city');
+  });
+
+  it('同一赛季的结算日志只记一遍', () => {
+    const again = boot(2);
+    setSeasonRank(again.w, again.c, 8);
+    setSeasonRank(again.w, again.c, 8);
+    expect(again.s.eventLog.filter((e) => e.text.includes('不降级'))).toHaveLength(1);
+    expect(again.s.eventLog.filter((e) => /赛季第 8 名/.test(e.text))).toHaveLength(1);
+    again.w.log('日常', '摸鱼', []);
+    again.w.log('日常', '摸鱼', []);
+    expect(again.s.eventLog.filter((e) => e.text === '摸鱼')).toHaveLength(2);
+
+    const nat = boot(4);
+    nat.s.season.tier = 'national';
+    jumpToSeasonEnd(nat.w, nat.c);
+    armWorldCup(nat.w, nat.c);
+    expect(nat.s.eventLog.filter((e) => e.text.includes('不升联赛'))).toHaveLength(1);
+    expect(nat.s.eventLog.filter((e) => e.text.includes('赛季第 1 名'))).toHaveLength(1);
+    expect(nat.s.eventLog.filter((e) => e.text.includes('拿到世界赛资格'))).toHaveLength(1);
+
+    // 网吧第 1 名先升城市，再触发世界赛改成国内第 1。两句「赛季第 1 名」奖金不同，也不能各留一条。
+    const promoted = boot(9);
+    jumpToSeasonEnd(promoted.w, promoted.c);
+    expect(promoted.s.eventLog.some((e) => e.text.includes('升入'))).toBe(true);
+    armWorldCup(promoted.w, promoted.c);
+    expect(promoted.s.eventLog.filter((e) => e.text.includes('赛季第 1 名'))).toHaveLength(1);
+    expect(promoted.s.eventLog.filter((e) => e.text.includes('不升联赛'))).toHaveLength(1);
+    expect(promoted.s.eventLog.filter((e) => e.text.includes('升入'))).toHaveLength(0);
+    expect(promoted.s.eventLog.filter((e) => e.text.includes('拿到世界赛资格'))).toHaveLength(1);
+  });
+
+  it('八强输了再直接夺冠，只保留这次的冠军，不留「八强输」', () => {
+    const { w, c, s } = boot(8);
+    armWorldCup(w, c);
+    for (const text of commitWorldRound(s, 0, false, autoLineup(s.roster))) w.log('重大', text, []);
+    expect(s.eventLog.some((e) => e.text.includes('八强输'))).toBe(true);
+    expect(s.worldCup?.done).toBe(true);
+    crownWorld(w, c);
+    const text = s.eventLog.map((e) => e.text).join('\n');
+    expect(text).not.toMatch(/八强输/);
+    expect(text).toMatch(/决赛赢/);
+    expect(s.worldCup?.champion).toBe(true);
+    expect(s.worldCup?.done).toBe(true);
+    const ours = s.worldCup?.games.filter((g) => g.a === 'ssb' || g.b === 'ssb') ?? [];
+    expect(ours.length).toBeGreaterThan(0);
+    expect(ours.every((g) => g.winner === 'ssb')).toBe(true);
   });
 
   it('下一场比赛落在 19:00，首发在打、一个人在台下', () => {
