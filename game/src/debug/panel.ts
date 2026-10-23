@@ -50,8 +50,8 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
     <button type="button" class="god-toggle" id="godToggle">调试</button>
     <div class="god-body">
       <div class="god-row god-wrap">
-        <label>第 <input id="godDay" type="text" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false" aria-label="第几天" /> 天</label>
-        <label>时刻 <input id="godTime" type="text" inputmode="numeric" placeholder="12:00" maxlength="5" autocomplete="off" spellcheck="false" aria-label="时刻" /></label>
+        <label>第 <input id="godDay" type="text" name="ssb-debug-day" maxlength="6" autocomplete="off" spellcheck="false" aria-label="第几天" /> 天</label>
+        <label>时刻 <input id="godTime" type="text" name="ssb-debug-time" placeholder="12:00" maxlength="5" autocomplete="off" spellcheck="false" aria-label="时刻" /></label>
         <button type="button" id="godJump">跳到</button>
       </div>
       <div class="god-row god-wrap">
@@ -67,7 +67,7 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
         <button type="button" data-jump="crown">直接夺冠</button>
       </div>
       <div class="god-row">
-        <label>名次 <input id="godRank" type="text" inputmode="numeric" maxlength="2" value="8" autocomplete="off" spellcheck="false" aria-label="赛季末名次" /></label>
+        <label>名次 <input id="godRank" type="text" name="ssb-debug-rank" maxlength="2" value="8" autocomplete="off" spellcheck="false" aria-label="赛季末名次" /></label>
         <button type="button" id="godRankSet">指定赛季末名次</button>
       </div>
       <div class="god-row">
@@ -78,11 +78,11 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
       </div>
       <p class="god-note">夜间快进大约 6 秒，不吃这个倍率。底部的正常 / ×3 / ×10 会把它清掉。</p>
       <div class="god-row">
-        <label>现金 <input id="godCash" type="text" inputmode="numeric" maxlength="12" autocomplete="off" spellcheck="false" aria-label="现金" /></label>
+        <label>现金 <input id="godCash" type="text" name="ssb-debug-cash" maxlength="12" autocomplete="off" spellcheck="false" aria-label="现金" /></label>
         <button type="button" id="godCashSet">设置</button>
       </div>
       <div class="god-row">
-        <label>行动点 <input id="godAp" type="text" inputmode="numeric" maxlength="2" autocomplete="off" spellcheck="false" aria-label="行动点" /></label>
+        <label>行动点 <input id="godAp" type="text" name="ssb-debug-ap" maxlength="2" autocomplete="off" spellcheck="false" aria-label="行动点" /></label>
         <button type="button" id="godApSet">设置</button>
       </div>
       <div class="god-row">
@@ -117,22 +117,30 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
   const $ = (id: string) => root.querySelector<HTMLElement>(`#${id}`)!;
   const dayInput = $('godDay') as HTMLInputElement;
   const timeInput = $('godTime') as HTMLInputElement;
+  const cashInput = $('godCash') as HTMLInputElement;
+  const apInput = $('godAp') as HTMLInputElement;
+  const rankInput = $('godRank') as HTMLInputElement;
   const slider = $('godSlider') as HTMLInputElement;
   const rateLabel = $('godRate');
   const pauseBtn = $('godPause');
+  let composing = false;
 
+  // 焦点在框里、或输入法还在组字时，不要改 value。顶栏每 250ms 会走 sync，快打时回写会把前面的字盖掉。
+  function canWrite(input: HTMLInputElement): boolean {
+    return !composing && document.activeElement !== input;
+  }
   function fillClock() {
     const clock = hooks.getClock();
-    // 正在打字时不要回写，否则每帧同步会把刚敲的字盖掉。
-    if (document.activeElement !== dayInput) dayInput.value = String(clock.day);
-    if (document.activeElement !== timeInput) timeInput.value = fmtHM(clock.minute);
+    if (canWrite(dayInput)) dayInput.value = String(clock.day);
+    if (canWrite(timeInput)) timeInput.value = fmtHM(clock.minute);
   }
   function sync() {
     const clock = hooks.getClock();
     const mult = clock.debugRate ?? SPEEDS[clock.speed].mult;
     rateLabel.textContent = clock.manualPause ? `暂停 · ×${mult}` : `×${mult}`;
     pauseBtn.textContent = clock.manualPause ? '继续' : '暂停';
-    if (document.activeElement !== slider) slider.value = String(mult);
+    if (canWrite(slider)) slider.value = String(mult);
+    fillClock();
   }
   function afterTime(note: string) {
     hooks.ensureLive();
@@ -151,14 +159,25 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
     $('godToggle').setAttribute('aria-expanded', open ? 'false' : 'true');
     if (!root.classList.contains('collapsed')) {
       fillClock();
-      ( $('godCash') as HTMLInputElement).value = String(hooks.world.state.cash);
-      ( $('godAp') as HTMLInputElement).value = String(hooks.world.state.actionPoints);
+      if (canWrite(cashInput)) cashInput.value = String(hooks.world.state.cash);
+      if (canWrite(apInput)) apInput.value = String(hooks.world.state.actionPoints);
       ( $('godVenue') as HTMLSelectElement).value = String(hooks.world.state.venueLevel);
       sync();
     }
   });
   $('godToggle').setAttribute('aria-expanded', 'false');
-  root.addEventListener('keydown', (e) => e.stopPropagation());
+  // 输入框的按键必须冒泡。拦掉之后中文输入法和数字组字收不到，快打会丢前面的字；弹窗开着时名次框会一个字都进不去。
+  root.addEventListener('compositionstart', () => {
+    composing = true;
+  });
+  root.addEventListener('compositionend', () => {
+    composing = false;
+  });
+  root.addEventListener('keydown', (e) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    e.stopPropagation();
+  });
 
   $('godJump').addEventListener('click', () => {
     const minute = parseHM(timeInput.value);
@@ -205,7 +224,7 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
   });
 
   $('godRankSet').addEventListener('click', () => {
-    const raw = Number(($('godRank') as HTMLInputElement).value.trim());
+    const raw = Number(rankInput.value.trim());
     if (!Number.isInteger(raw) || raw < 1 || raw > 8) {
       hooks.toast('名次要写 1 到 8');
       return;
@@ -227,15 +246,15 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
 
   $('godCashSet').addEventListener('click', () => {
     hooks.ensureLive();
-    const n = setCash(hooks.world.state, Number(($('godCash') as HTMLInputElement).value));
-    ($('godCash') as HTMLInputElement).value = String(n);
+    const n = setCash(hooks.world.state, Number(cashInput.value));
+    cashInput.value = String(n);
     hooks.refreshCheatModal();
     hooks.toast(`现金改为 ${n.toLocaleString('zh-CN')}`);
   });
   $('godApSet').addEventListener('click', () => {
     hooks.ensureLive();
-    const n = setActionPoints(hooks.world.state, Number(($('godAp') as HTMLInputElement).value));
-    ($('godAp') as HTMLInputElement).value = String(n);
+    const n = setActionPoints(hooks.world.state, Number(apInput.value));
+    apInput.value = String(n);
     hooks.toast(`行动点改为 ${n}`);
   });
   $('godVenueSet').addEventListener('click', () => {

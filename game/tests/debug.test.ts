@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyJump, armWorldCup, clearCooldowns, crownWorld, forceTakeout, jumpToNextMatch, jumpToNextPayday, jumpToNextTakeout, nextEventAt, nextMatchAt, nextPaydayDay, prematchOnTheWay, setActionPoints, setCash, setSeasonRank } from '../src/debug/god';
+import { applyJump, armWorldCup, clearCooldowns, crownWorld, forceTakeout, jumpToNextMatch, jumpToNextPayday, jumpToNextTakeout, jumpToSeasonEnd, nextEventAt, nextMatchAt, nextPaydayDay, prematchOnTheWay, setActionPoints, setCash, setSeasonRank } from '../src/debug/god';
 import { PREMATCH_MINUTE } from '../src/core/calendar';
 import { GameClock } from '../src/core/clock';
 import { createNewGame } from '../src/save/state';
@@ -97,6 +97,24 @@ describe('调试跳转', () => {
     expect(up.s.season.tier).toBe('national');
     expect(setSeasonRank(up.w, up.c, 8).rank).toBe(8);
     expect(up.s.season.tier).toBe('city');
+  });
+
+  it('同一赛季的结算日志只记一遍', () => {
+    const again = boot(2);
+    setSeasonRank(again.w, again.c, 8);
+    setSeasonRank(again.w, again.c, 8);
+    expect(again.s.eventLog.filter((e) => e.text.includes('不降级'))).toHaveLength(1);
+    expect(again.s.eventLog.filter((e) => /赛季第 8 名/.test(e.text))).toHaveLength(1);
+    again.w.log('日常', '摸鱼', []);
+    again.w.log('日常', '摸鱼', []);
+    expect(again.s.eventLog.filter((e) => e.text === '摸鱼')).toHaveLength(2);
+
+    const nat = boot(4);
+    nat.s.season.tier = 'national';
+    jumpToSeasonEnd(nat.w, nat.c);
+    armWorldCup(nat.w, nat.c);
+    expect(nat.s.eventLog.filter((e) => e.text.includes('不升联赛'))).toHaveLength(1);
+    expect(nat.s.eventLog.filter((e) => e.text.includes('赛季第 1 名'))).toHaveLength(1);
   });
 
   it('八强输了再直接夺冠，只保留这次的冠军，不留「八强输」', () => {

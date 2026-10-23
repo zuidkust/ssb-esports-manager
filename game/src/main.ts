@@ -331,15 +331,24 @@ function haltBroadcast() {
   stopBroadcast = null;
 }
 let modalKind = '';
+function resetModalScroll() {
+  $('modalBody').scrollTop = 0;
+  $('modal').scrollTop = 0;
+  $('modalBody').querySelectorAll<HTMLElement>('.sheet-scroll').forEach((el) => {
+    el.scrollTop = 0;
+  });
+}
 function openModal(html: string, closable = true) {
   haltBroadcast();
+  // 已经开着时是刷新（改现金），不要把玩家滚走。关掉再开才回到顶部。
+  const already = modalOpen && !$('modal').classList.contains('hidden');
   modalOpen = true;
   modalClosable = closable;
   $('modalBody').classList.remove('live', 'sheet');
   $('modalBody').innerHTML = html;
-  $('modalBody').scrollTop = 0;
-  $('modal').scrollTop = 0;
+  // 父级还是 display:none 时写 scrollTop 会被丢掉，旧的底部位置会留到下次打开。
   $('modal').classList.remove('hidden');
+  if (!already) resetModalScroll();
 }
 function closeModal() {
   if (!modalClosable) return;
@@ -347,6 +356,7 @@ function closeModal() {
   modalOpen = false;
   modalKind = '';
   $('modalBody').classList.remove('manage', 'live', 'sheet');
+  resetModalScroll();
   $('modal').classList.add('hidden');
 }
 $('modal').addEventListener('click', (e) => {
