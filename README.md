@@ -22,9 +22,9 @@
 
 ![网吧角落](docs/readme-shots/01-netcafe.png)
 
-事件看板。摸鱼、甩锅、谁又去刷短视频，都记在这里。
+赛前首发。世界赛开打前排阵容和战术。
 
-![事件看板](docs/readme-shots/03-events.png)
+![赛前首发](docs/readme-shots/02-lineup.png)
 
 世界赛冠军。打完这场，还可以选择继续经营。
 
