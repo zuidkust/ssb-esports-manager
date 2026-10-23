@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { applyJump, armWorldCup, clearCooldowns, crownWorld, forceTakeout, jumpToNextMatch, jumpToNextPayday, jumpToNextTakeout, jumpToSeasonEnd, nextEventAt, nextMatchAt, nextPaydayDay, prematchOnTheWay, setActionPoints, setCash, setSeasonRank } from '../src/debug/god';
+import { applyJump, armWorldCup, clearCooldowns, crownWorld, forceTakeout, jumpToNextMatch, jumpToNextPayday, jumpToNextTakeout, jumpToOffseason, jumpToSeasonEnd, nextEventAt, nextMatchAt, nextPaydayDay, prematchOnTheWay, setActionPoints, setCash, setSeasonRank } from '../src/debug/god';
 import { PREMATCH_MINUTE } from '../src/core/calendar';
 import { GameClock } from '../src/core/clock';
 import { createNewGame } from '../src/save/state';
 import { autoLineup } from '../src/sim/lineup';
-import { commitWorldRound } from '../src/sim/worldcup';
+import { syncSeasonEndHold } from '../src/sim/league';
+import { commitWorldRound, needsWorldPrematch } from '../src/sim/worldcup';
 import { courierTrack } from '../src/sim/takeout';
 import { World } from '../src/sim/world';
 
@@ -99,6 +100,53 @@ describe('调试跳转', () => {
     expect(up.s.season.tier).toBe('city');
   });
 
+  it('赛季结算暂停只在未确认时留着；进休赛或世界赛日会放行，世界赛赛前暂停不动', () => {
+    const clock = new GameClock({ day: 29, minute: 18 * 60 + 20, speed: 'x1', paused: false });
+    syncSeasonEndHold(clock, true);
+    clock.hold('match-29', '世界赛：等老板确认首发和战术');
+    syncSeasonEndHold(clock, true);
+    expect(clock.holdReasons.filter((r) => r === '赛季结算')).toEqual(['赛季结算']);
+    expect(clock.isHeld('match-29')).toBe(true);
+    syncSeasonEndHold(clock, false);
+    expect(clock.isHeld('season-end')).toBe(false);
+    expect(clock.isHeld('match-29')).toBe(true);
+
+    const stuck = boot(4);
+    jumpToSeasonEnd(stuck.w, stuck.c);
+    stuck.c.hold('season-end', '赛季结算');
+    expect(stuck.s.season.report?.acked).toBe(false);
+    expect(stuck.c.isHeld('season-end')).toBe(true);
+    // 再跳一次赛季末仍是未确认的结算，这条暂停不能被跳转本身清掉。
+    jumpToSeasonEnd(stuck.w, stuck.c);
+    expect(stuck.s.season.report?.acked).toBe(false);
+    expect(stuck.c.isHeld('season-end')).toBe(true);
+
+    const off = boot(3);
+    jumpToSeasonEnd(off.w, off.c);
+    off.c.hold('season-end', '赛季结算');
+    const offAt = jumpToOffseason(off.w, off.c);
+    expect(off.s.season.report?.acked).toBe(true);
+    expect(off.c.isHeld('season-end')).toBe(false);
+    expect(off.s.season.phase === 'offseason' || off.s.season.phase === 'world').toBe(true);
+    expect(offAt.minute).toBe(10 * 60);
+
+    armWorldCup(stuck.w, stuck.c);
+    expect(stuck.s.season.report?.acked).toBe(true);
+    expect(stuck.c.isHeld('season-end')).toBe(false);
+    expect(stuck.c.paused).toBe(false);
+    expect(stuck.c.day).toBe(29);
+    expect(stuck.c.minute).toBe(18 * 60 + 20);
+    expect(needsWorldPrematch(stuck.s, stuck.c.day, stuck.c.minute)).toBe(false);
+    stuck.c.tick(30, [PREMATCH_MINUTE]);
+    expect(stuck.c.day).toBe(29);
+    expect(stuck.c.minute).toBeCloseTo(PREMATCH_MINUTE, 3);
+    expect(needsWorldPrematch(stuck.s, stuck.c.day, stuck.c.minute)).toBe(true);
+    stuck.c.hold('match-29', '世界赛：等老板确认首发和战术');
+    expect(stuck.c.isHeld('season-end')).toBe(false);
+    expect(stuck.c.paused).toBe(true);
+    expect(stuck.c.tick(30, [19 * 60]).advanced).toBe(0);
+  });
+
   it('同一赛季的结算日志只记一遍', () => {
     const again = boot(2);
     setSeasonRank(again.w, again.c, 8);
@@ -130,6 +178,7 @@ describe('调试跳转', () => {
 
   it('八强输了再直接夺冠，只保留这次的冠军，不留「八强输」', () => {
     const { w, c, s } = boot(8);
+    c.hold('season-end', '赛季结算');
     armWorldCup(w, c);
     for (const text of commitWorldRound(s, 0, false, autoLineup(s.roster))) w.log('重大', text, []);
     expect(s.eventLog.some((e) => e.text.includes('八强输'))).toBe(true);
@@ -140,6 +189,7 @@ describe('调试跳转', () => {
     expect(text).toMatch(/决赛赢/);
     expect(s.worldCup?.champion).toBe(true);
     expect(s.worldCup?.done).toBe(true);
+    expect(c.isHeld('season-end')).toBe(false);
     const ours = s.worldCup?.games.filter((g) => g.a === 'ssb' || g.b === 'ssb') ?? [];
     expect(ours.length).toBeGreaterThan(0);
     expect(ours.every((g) => g.winner === 'ssb')).toBe(true);
