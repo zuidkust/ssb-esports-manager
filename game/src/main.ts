@@ -34,9 +34,9 @@ import { makeRng } from './engine/match';
 import { mountGodPanel } from './debug/panel';
 import { bindBracket, bindEnding, bindOffseason, bindSettlement, bracketHtml, endingHtml, offseasonHtml, settlementHtml } from './ui/season';
 
-/** 开始菜单和标签页上的预发布标记。package.json 的 version 仍是 0.4.0。 */
-const RELEASE_TITLE = 'SSB电竞经理 · v0.4.0-pre';
-const RELEASE_LABEL = '网页试玩版 · v0.4.0-pre（M4）';
+/** 开始菜单和标签页上的预发布标记。package.json 的 version 是 0.5.0。 */
+const RELEASE_TITLE = 'SSB电竞经理 · v0.5.0-pre';
+const RELEASE_LABEL = '网页试玩版 · v0.5.0-pre（M5 玩法补全）';
 document.title = RELEASE_TITLE;
 
 const params = new URLSearchParams(location.search);

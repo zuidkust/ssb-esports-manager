@@ -76,14 +76,19 @@ export function changeRoute(state: GameState, memberId: string, routeId: string)
   if (member.route === route.id) return { ok: false, reason: '已经在练这条', logs: [] };
   if (state.insight < ROUTE_CHANGE_INSIGHT) return { ok: false, reason: `改路线要 ${ROUTE_CHANGE_INSIGHT} 心得`, logs: [] };
   state.insight -= ROUTE_CHANGE_INSIGHT;
+  const lostTrait = member.routeTrait;
   member.route = route.id;
   member.routeGrindUntil = state.clock.day + ROUTE_GRIND_DAYS - 1;
+  member.routeTrait = null;
+  member.routeTraitReady = false;
   member.status.心情 = Math.max(0, member.status.心情 - 6);
   const who = ROSTER_BY_ID[memberId]?.name ?? memberId;
   const fit = routeFit(member.ability, member.persona, route);
   return {
     ok: true,
-    logs: [`${who} 改练「${route.name}」，适配 ${fit}。磨合到第 ${member.routeGrindUntil} 天，心得 -${ROUTE_CHANGE_INSIGHT}。`],
+    logs: [
+      `${who} 改练「${route.name}」，适配 ${fit}。磨合到第 ${member.routeGrindUntil} 天，心得 -${ROUTE_CHANGE_INSIGHT}。${lostTrait ? `之前练成的「${lostTrait}」暂时失效。` : ''}`,
+    ],
   };
 }
 

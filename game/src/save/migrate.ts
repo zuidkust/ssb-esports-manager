@@ -1,11 +1,12 @@
 // 存档版本迁移：每次改存档结构，SAVE_VERSION +1，并在 MIGRATIONS 里补一个 “旧版本 → 新版本” 函数
 import { dayInfo } from '../core/calendar';
 import { DAY_START } from '../core/clock';
-import { ROSTER_BY_ID } from '../data/roster';
+import { ABILITY_KEYS, ROSTER_BY_ID } from '../data/roster';
+import { ROUTE_BY_ID } from '../data/routes';
 import { STARTER_TACTICS } from '../data/tactics';
 import { canonMemberId, remapLegacyRoster } from './legacy';
 import { armLegacyWorldCup } from '../sim/worldcup';
-import { emptyFlags, emptyMeals, emptyRecord, emptySeason, SAVE_VERSION, type GameState } from './state';
+import { emptyEvents, emptyFlags, emptyMeals, emptyRecord, emptySeason, emptyScrim, zeroAbility, SAVE_VERSION, type GameState } from './state';
 
 type AnySave = Record<string, unknown> & { version?: unknown };
 
@@ -93,6 +94,36 @@ const MIGRATIONS: Record<number, (s: AnySave) => AnySave> = {
     const next = { ...s, season, meta, worldCup: s.worldCup ?? null, version: 6 };
     armLegacyWorldCup(next as unknown as GameState);
     return next;
+  },
+  // v7：训练成长、路线特性、摸鱼分钟、排位结果、事件库状态。旧档不追溯已经过去的天。
+  6: (s) => {
+    const roster = Array.isArray(s.roster) ? s.roster : [];
+    for (const m of roster) {
+      if (!m || typeof m !== 'object') continue;
+      const mem = m as Record<string, unknown>;
+      const def = ROSTER_BY_ID[String(mem.id ?? '')];
+      const routeId = typeof mem.route === 'string' ? mem.route : null;
+      if (!routeId || !ROUTE_BY_ID[routeId]) mem.route = def?.defaultRoute ?? null;
+      if (typeof mem.routeGrindUntil !== 'number') mem.routeGrindUntil = 0;
+      if (!('routeTrait' in mem)) mem.routeTrait = null;
+      if (typeof mem.routeTraitReady !== 'boolean') mem.routeTraitReady = false;
+      const carry = mem.abilityCarry;
+      if (!carry || typeof carry !== 'object') mem.abilityCarry = zeroAbility();
+      else {
+        const c = carry as Record<string, unknown>;
+        for (const k of ABILITY_KEYS) if (typeof c[k] !== 'number') c[k] = 0;
+      }
+      if (!mem.lastGain || typeof mem.lastGain !== 'object') mem.lastGain = {};
+      if (typeof mem.slackMin !== 'number') mem.slackMin = 0;
+      if (!mem.scrim || typeof mem.scrim !== 'object') mem.scrim = emptyScrim();
+      // 主属性本来就已经到 70 的人，迁移后直接进入“等比赛开窍”
+      const route = ROUTE_BY_ID[String(mem.route ?? '')];
+      const ability = mem.ability as Record<string, unknown> | undefined;
+      if (route?.main && typeof ability?.[route.main] === 'number' && (ability[route.main] as number) >= 70) {
+        mem.routeTraitReady = true;
+      }
+    }
+    return { ...s, roster, events: s.events ?? emptyEvents(), version: 7 };
   },
 };
 

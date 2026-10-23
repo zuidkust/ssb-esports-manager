@@ -10,6 +10,8 @@
 
 平日是日常养成。他们按自己的脾气点外卖、刷手机、午睡、闲聊、组排。你用老板动作偶尔插手：单独谈谈、当众夸一句、点名批评、请一杯喝的。话说重了，他们会别扭一阵。
 
+队员会按训练路线慢慢变强：主属性到 70 后成长放缓，之后每场比赛有机会「开窍」解锁路线特性。看板上除了日常，还有 90 多条性格事件——连胜、连败、甩锅、冷战、和解、外卖翻车，都会记下来。
+
 比赛日忙一些。赛前排好首发和战术，晚上一起看直播。联赛有升降级，从网吧打到城市，再到国内。国内前两名在休赛周打世界赛。夺冠会迎来一场结局；点「继续经营」，这支队伍还在。
 
 ## 里面长这样
@@ -34,7 +36,8 @@
 
 网页版，一个 HTML 就能开。
 
-- 下载预发布单文件：[v0.4.0-pre](https://github.com/zuidkust/ssb-esports-manager/releases/tag/v0.4.0-pre)（`SSB-esports-manager-v0.4.0-pre.html`，双击打开）
+- 下载已发布预发布单文件：[v0.4.0-pre](https://github.com/zuidkust/ssb-esports-manager/releases/tag/v0.4.0-pre)（`SSB-esports-manager-v0.4.0-pre.html`，双击打开）
+- 仓库当前开发版是 **v0.5.0-pre（M5 玩法补全）**：训练成长、路线特性、93 条事件、平衡校准。按下面的命令构建后双击 `game/dist/index.html`。
 - 或在仓库里自己构建后，双击 `game/dist/index.html`：
 
 ```bash
@@ -56,4 +59,7 @@ tools/   小工具
 
 - 设计：[设计文档 v0.3](docs/SSB电竞经理-设计文档-v0.3.md)
 - 网页版说明：[game/README.md](game/README.md)
+- 本版发布说明：[v0.5.0-pre](docs/RELEASE-NOTES-v0.5.0-pre.md)
+- 事件库接入报告：[事件库-接入报告-v1.md](docs/事件库-接入报告-v1.md)
+- 平衡记录：[数值-v0.5.md](docs/数值-v0.5.md)
 - License：未定。人物素材请勿擅自商用。

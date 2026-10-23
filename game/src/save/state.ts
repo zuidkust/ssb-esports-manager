@@ -7,12 +7,46 @@ import { OPPONENTS, OUR_ID, type Tier } from '../data/leagues';
 import { ROSTER, INITIAL_BOND, type AbilityKey, type PersonaKey } from '../data/roster';
 import { STARTER_TACTICS, type TacticId } from '../data/tactics';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export const FOUNDING_TEXT = '老板在网吧包下了角落的 6 台机器，SSB 战队今天正式成立。目标：打出网吧联赛。';
 
 export const STATUS_KEYS = ['体力', '心情', '专注', '手感', '饥饿', '疲劳', '压力'] as const;
 export type StatusKey = (typeof STATUS_KEYS)[number];
+
+export type ScrimResult = 'win' | 'lose';
+
+/** 日常单排 / 双排 / 组排的结果，只给事件看板和对局类条件用，不进联赛积分。 */
+export interface ScrimState {
+  wins: number;
+  losses: number;
+  /** 正数 = 连胜，负数 = 连败 */
+  streak: number;
+  last: ScrimResult | null;
+  lastMinute: number;
+  /** 已经结算到哪个 35 分钟块，避免一局重复结算 */
+  block: number;
+}
+
+/** 事件库的持久状态：分钟级冷却、最近触发日、flag、chain 权重。 */
+export interface EventState {
+  cooldownUntil: Record<string, number>;
+  lastFiredDay: Record<string, number>;
+  flags: Record<string, number>;
+  boosts: Record<string, { pct: number; until: number }>;
+}
+
+export function emptyScrim(): ScrimState {
+  return { wins: 0, losses: 0, streak: 0, last: null, lastMinute: 0, block: -1 };
+}
+
+export function emptyEvents(): EventState {
+  return { cooldownUntil: {}, lastFiredDay: {}, flags: {}, boosts: {} };
+}
+
+export function zeroAbility(): Record<AbilityKey, number> {
+  return { lane: 0, roam: 0, fight: 0, sense: 0, mech: 0, pool: 0, mental: 0 };
+}
 
 export interface MemberState {
   id: string;
@@ -22,6 +56,18 @@ export interface MemberState {
   route: string | null; // 训练路线 id（data/routes.ts）
   /** 磨合期最后一天（含）。0 = 没有 */
   routeGrindUntil: number;
+  /** 当前路线已解锁的路线特性名；换路线会清空 */
+  routeTrait: string | null;
+  /** 主属性已经到 70，等一场比赛开窍 */
+  routeTraitReady: boolean;
+  /** 属性小数进位，满 1 才加到 ability */
+  abilityCarry: Record<AbilityKey, number>;
+  /** 昨天每项属性的小数成长，卡面显示用 */
+  lastGain: Partial<Record<AbilityKey, number>>;
+  /** 今天摸鱼分钟。持久化，读档后当天成长/心得不会少算 */
+  slackMin: number;
+  /** 日常排位/组排结果，给对局类事件和后文用 */
+  scrim: ScrimState;
   salary: number;
   /** 休赛期谈过薪才有。table 照表，low / bond 锁住月薪直到下次升降级 */
   salaryDeal: null | 'table' | 'low' | 'bond';
@@ -262,6 +308,8 @@ export interface GameState {
   meals: MealsState;
   record: GameRecord;
   flags: DayFlags;
+  /** 事件库状态（v7）。人设事件仍走 cooldowns，不用这个 */
+  events: EventState;
   meta: { seasonCount: number; scores: number[]; ngPlus: number; worldChampion: boolean; endingSeen: boolean };
 }
 
@@ -272,8 +320,14 @@ export function newMemberState(id: string): MemberState {
     ability: { ...def.ability },
     persona: { ...def.persona },
     status: { 体力: 85, 心情: 70, 专注: 65, 手感: 60, 饥饿: 30, 疲劳: 10, 压力: 20 },
-    route: null,
+    route: def.defaultRoute,
     routeGrindUntil: 0,
+    routeTrait: null,
+    routeTraitReady: false,
+    abilityCarry: zeroAbility(),
+    lastGain: {},
+    slackMin: 0,
+    scrim: emptyScrim(),
     salary: 1500,
     salaryDeal: null,
   };
@@ -316,6 +370,7 @@ export function createNewGame(seed = Math.floor(Math.random() * 2 ** 31)): GameS
     meals: emptyMeals(0),
     record: emptyRecord(),
     flags: emptyFlags(),
+    events: emptyEvents(),
     meta: { seasonCount: 0, scores: [], ngPlus: 0, worldChampion: false, endingSeen: false },
   };
 }

@@ -2,7 +2,7 @@
 import { MOVE_FEE, MOVE_REFUND_RATE } from '../data/economy';
 import { VENUE_CN } from '../data/facilities';
 import { TIER_CN } from '../data/leagues';
-import { ROUTE_CHANGE_INSIGHT, routeFit } from '../data/routes';
+import { ROUTE_BY_ID, ROUTE_CHANGE_INSIGHT, ROUTE_GRIND_DAYS, routeFit } from '../data/routes';
 import { ROSTER, ROSTER_BY_ID } from '../data/roster';
 import { SPONSORS } from '../data/sponsors';
 import type { GameState } from '../save/state';
@@ -155,8 +155,9 @@ export function offseasonHtml(state: GameState): string {
       <button class="btn" id="recruitBtn" type="button">DLC</button>
     </div>
     <h3>换路线</h3>
-    <p class="sub">花 ${ROUTE_CHANGE_INSIGHT} 心得，磨合 ${3} 天。下面的适配度先按左边选中的人算，点按钮时以那个人为准。</p>
+    <p class="sub">花 ${ROUTE_CHANGE_INSIGHT} 心得，磨合 ${ROUTE_GRIND_DAYS} 天。下面的适配度按左边选中的人算，点按钮时以那个人为准。换路线会清掉已练成的路线特性。</p>
     <div class="row"><select id="routeWho">${who}</select></div>
+    <p class="sub" id="routeNow"></p>
     <div class="route-picks" id="routePicks">${routes}</div>
     <h3>谈薪</h3>
     <div class="act-list">${salary}</div>
@@ -228,6 +229,15 @@ export function bindOffseason(state: GameState, hooks: SeasonHooks): void {
       const fit = routeFit(member.ability, member.persona, route);
       btn.innerHTML = `${esc(route.name)} <small>适配 ${fit}</small>`;
     });
+    const now = document.getElementById('routeNow');
+    if (!now || !member) return;
+    const cur = member.route ? (ROUTE_BY_ID[member.route] ?? null) : null;
+    const fit = cur ? routeFit(member.ability, member.persona, cur) : null;
+    const grind = member.routeGrindUntil >= state.clock.day ? ` · 磨合到第 ${member.routeGrindUntil} 天` : '';
+    const trait = member.routeTrait ? ` · 特性「${member.routeTrait}」` : '';
+    now.textContent = cur
+      ? `当前：${cur.name}（适配 ${fit}）${grind}${trait}`
+      : '当前：还没定路线';
   };
   document.getElementById('routeWho')?.addEventListener('change', paintRoutes);
   paintRoutes();

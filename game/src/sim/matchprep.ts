@@ -1,6 +1,6 @@
 // 把存档里的人折成引擎选手：位置适性、疲劳、压力、心结、默契连招、选人
 import { hashString, type Rand } from '../core/rng';
-import { ABILITY_KEYS, COMBOS, POSITIONS, ROSTER_BY_ID, pairKey, positionFit, type AbilityKey } from '../data/roster';
+import { ABILITY_CN, ABILITY_KEYS, COMBOS, POSITIONS, ROSTER_BY_ID, pairKey, positionFit, type AbilityKey } from '../data/roster';
 import type { OpponentDef } from '../data/leagues';
 import { tacticIdOf, type TacticId } from '../data/tactics';
 import { draftPlayer } from '../engine/draft';
@@ -14,6 +14,7 @@ import {
 } from '../engine/match';
 import type { GameState } from '../save/state';
 import { IRON_BOND } from './relations';
+import { activeTraitRoute } from './growth';
 
 const ROLE_BIAS: Record<Slot, Partial<Record<AbilityKey, number>>> = {
   top: { lane: 8, roam: -6, fight: 4 },
@@ -132,12 +133,26 @@ export function buildOurSide(state: GameState, slots: readonly string[], gameIdx
     const knot = knotFactor(state, id, slots);
     for (const note of knot.notes) if (!preface.includes(note)) preface.push(note);
     const combo = comboById.get(id);
+    const stats = { ...(member?.ability ?? def?.ability ?? emptyStats()) };
+    const fit = fitOf(id);
+    const trait = member ? activeTraitRoute(member) : null;
+    if (trait && member) {
+      const eff = trait.traitEffect;
+      const name = def?.name ?? id;
+      if (eff.kind === 'stat' && !eff.team) {
+        stats[eff.key] = Math.min(99, stats[eff.key] + eff.value);
+        preface.push(`开窍：${name}「${trait.trait}」，本局${ABILITY_CN[eff.key]} +${eff.value}。`);
+      } else if (eff.kind === 'fit') {
+        for (const s of SLOTS) fit[s] = Math.min(1, fit[s] + eff.value);
+        preface.push(`开窍：${name}「${trait.trait}」，客串位置适性 +${eff.value.toFixed(2)}。`);
+      }
+    }
     return {
       id,
       name: def?.name ?? id,
       hero: drafted.hero,
-      stats: { ...(member?.ability ?? def?.ability ?? emptyStats()) },
-      fit: fitOf(id),
+      stats,
+      fit,
       stress: member?.status.压力 ?? 20,
       fatigue: member?.status.疲劳 ?? 10,
       aatroxAmp: id === 'piegan' && drafted.hero === '剑魔',
@@ -148,6 +163,15 @@ export function buildOurSide(state: GameState, slots: readonly string[], gameIdx
       comboText: combo?.text,
     } satisfies EnginePlayer;
   });
+  for (const id of slots) {
+    const member = state.roster.find((m) => m.id === id);
+    const trait = member ? activeTraitRoute(member) : null;
+    const eff = trait?.traitEffect;
+    if (eff?.kind === 'stat' && eff.team) {
+      for (const p of players) p.stats[eff.key] = Math.min(99, p.stats[eff.key] + eff.value);
+      preface.push(`开窍：${ROSTER_BY_ID[id]?.name ?? id}「${trait!.trait}」，全队本局${ABILITY_CN[eff.key]} +${eff.value}。`);
+    }
+  }
   for (const c of combos) {
     preface.push(`铁哥们默契【待定】：${c.text}，相关节点 +6%。`);
   }

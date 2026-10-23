@@ -429,7 +429,8 @@ function scrimCandidate(state: GameState, present: Set<string>, segment: string,
   if (ids.length < 3) return null;
   const who = pick(rand, ids);
   const def: MemberDef = ROSTER_BY_ID[who];
-  const won = rand() < 0.5;
+  const member = state.roster.find((m) => m.id === who);
+  const won = (member?.scrim.last ?? (rand() < 0.5 ? 'win' : 'lose')) === 'win';
   const line = pick(rand, won ? def.winLines : def.loseLines);
   const head = won ? '组排这把赢了。' : '组排这把输了。';
   return {

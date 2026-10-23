@@ -1,5 +1,10 @@
-// 训练路线（设计文档 5.2）。改路线在休赛期花心得；每天属性成长还没接上。
+// 训练路线（设计文档 5.2）。改路线在休赛期花心得；成长公式在 sim/growth.ts。
 import type { AbilityKey } from './roster';
+
+/** 路线练成后的特性效果。数值是首版默认，平衡阶段再调。 */
+export type TraitEffect =
+  | { kind: 'stat'; key: AbilityKey; value: number; team?: boolean }
+  | { kind: 'fit'; value: number };
 
 export interface RouteDef {
   id: string;
@@ -7,16 +12,18 @@ export interface RouteDef {
   main: AbilityKey | null;
   sub: AbilityKey | null;
   trait: string;
+  traitEffect: TraitEffect;
+  traitNote: string;
 }
 
 export const ROUTES: RouteDef[] = [
-  { id: 'lane', name: '对线压制', main: 'lane', sub: 'mech', trait: '对线杀手' },
-  { id: 'late', name: '后期发育', main: 'mental', sub: 'fight', trait: '翻盘王' },
-  { id: 'roam', name: '游走节奏', main: 'roam', sub: 'sense', trait: '节奏发动机' },
-  { id: 'fight', name: '团战核心', main: 'fight', sub: 'mech', trait: '团战收割' },
-  { id: 'shot', name: '指挥大局', main: 'sense', sub: 'mental', trait: '指挥官' },
-  { id: 'one', name: '绝活专精', main: 'mech', sub: 'lane', trait: '绝活英雄' },
-  { id: 'flex', name: '万金油', main: null, sub: null, trait: '哪都能补' },
+  { id: 'lane', name: '对线压制', main: 'lane', sub: 'mech', trait: '对线杀手', traitEffect: { kind: 'stat', key: 'lane', value: 4 }, traitNote: '比赛中对线 +4' },
+  { id: 'late', name: '后期发育', main: 'mental', sub: 'fight', trait: '翻盘王', traitEffect: { kind: 'stat', key: 'mental', value: 4 }, traitNote: '比赛中心态 +4' },
+  { id: 'roam', name: '游走节奏', main: 'roam', sub: 'sense', trait: '节奏发动机', traitEffect: { kind: 'stat', key: 'roam', value: 4 }, traitNote: '比赛中游走 +4' },
+  { id: 'fight', name: '团战核心', main: 'fight', sub: 'mech', trait: '团战收割', traitEffect: { kind: 'stat', key: 'fight', value: 4 }, traitNote: '比赛中团战 +4' },
+  { id: 'shot', name: '指挥大局', main: 'sense', sub: 'mental', trait: '指挥官', traitEffect: { kind: 'stat', key: 'sense', value: 2, team: true }, traitNote: '全队比赛中意识 +2' },
+  { id: 'one', name: '绝活专精', main: 'mech', sub: 'lane', trait: '绝活英雄', traitEffect: { kind: 'stat', key: 'mech', value: 4 }, traitNote: '比赛中操作 +4' },
+  { id: 'flex', name: '万金油', main: null, sub: null, trait: '哪都能补', traitEffect: { kind: 'fit', value: 0.05 }, traitNote: '全位置适性 +0.05' },
 ];
 
 export const ROUTE_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r])) as Record<string, RouteDef>;
