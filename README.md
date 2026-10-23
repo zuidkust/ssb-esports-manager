@@ -1,68 +1,59 @@
-# SSB 电竞经理 / ssb-esports-manager
+# SSB 电竞经理
 
-以办公室里英雄联盟爱好者为原型的**可交互单机电竞经理**游戏。  
-第一亮点是人物互动与事件看板；第二是组队打比赛、升降级经营。
+六个朋友，一间网吧角落，一段慢慢打上去的赛季。
 
-> 正式客户端在 `game/`（网页试玩版 v0.4.0-pre，里程碑到 M4）。另有设计文档、样板原型与灵感素材。发布说明见 [`docs/RELEASE-NOTES-v0.4.0-pre.md`](docs/RELEASE-NOTES-v0.4.0-pre.md)。
+你是经理，也是老板。人不出镜，日子你看得见。最好玩的是他们怎么相处：摸鱼、互怼、甩锅、把话说开，都记在事件看板上。组队上场、把联赛打上去，是经营的那一半。
 
-## 项目状态
+## 从网吧角落开始
 
-- 平台：当前预发布是 HTML 网页版（单文件，双击 `game/dist/index.html`）。Electron 打包留到 M6，正式发行仍是 Windows 优先（后续 macOS）
-- 技术方向：Vite + Three.js + TypeScript，本地存档（网页版支持导出 / 导入），后期 Electron 打包
-- 视觉：3D 等距办公室（沿用 Claude Code 样板）
-- 最新设计文档：[`docs/SSB电竞经理-设计文档-v0.3.md`](docs/SSB电竞经理-设计文档-v0.3.md)
+开局就在**星空网吧**这一排机位，六个人：**阿鸡**、**当邓**、**狗粮**、**弟必**、**吊隆**、**撇干**。
 
-## 目录结构
+平日是日常养成。他们按自己的脾气点外卖、刷手机、午睡、闲聊、组排。你用老板动作偶尔插手：单独谈谈、当众夸一句、点名批评、请一杯喝的。话说重了，他们会别扭一阵。
 
-```
-game/                 正式客户端（网页版，Vite + Three.js + TS）
-docs/                 设计文档与调研（以 v0.3 为准）
-data/                 事件等数据
-tools/                事件生成等工具
-ref/                  参考图
-claude-v1/            Claude Code 交互样板 + 技术架构方案
-claude-v1-review/     样板审查报告与截图
-inspiration/电竞经理/ 灵感源《重生之我是SSB职业经理》与比赛引擎
-```
+比赛日忙一些。赛前排好首发和战术，晚上一起看直播。联赛有升降级，从网吧打到城市，再到国内。国内前两名在休赛周打世界赛。夺冠会迎来一场结局；点「继续经营」，这支队伍还在。
 
-## 试玩网页版
+## 里面长这样
 
-```bash
-cd game
-npm install
-npm run build   # 然后双击 game/dist/index.html
-```
+开始菜单。新的一局从这里进，也可以接着上次的存档。
 
-详见 [`game/README.md`](game/README.md)。
+![开始菜单](docs/readme-shots/00-title.png)
 
-## 快速看样板（旧）
+网吧角落。六个人坐在星空网吧，今天发生的事写在右边。
 
-样板 HTML（需已构建或直接打开说明见原型 README）：
+![网吧角落](docs/readme-shots/01-netcafe.png)
 
-- `claude-v1/迷你世界-决策文件包/样板-双击打开.html`
-- 原型源码：`claude-v1/迷你世界-决策文件包/prototype/`
+事件看板。摸鱼、甩锅、谁又去刷短视频，都记在这里。
+
+![事件看板](docs/readme-shots/03-events.png)
+
+世界赛冠军。打完这场，还可以选择继续经营。
+
+![世界赛冠军](docs/readme-shots/04-champion.png)
+
+## 怎么玩
+
+网页版，一个 HTML 就能开。
+
+- 下载预发布单文件：[v0.4.0-pre](https://github.com/zuidkust/ssb-esports-manager/releases/tag/v0.4.0-pre)（`SSB-esports-manager-v0.4.0-pre.html`，双击打开）
+- 或在仓库里自己构建后，双击 `game/dist/index.html`：
 
 ```bash
-cd "claude-v1/迷你世界-决策文件包/prototype"
-npm install
-npm run dev   # 以 prototype/README.md 为准
+cd game && npm run build
 ```
 
-## 核心设定摘要（已定）
+第一次构建前，先在 `game/` 里 `npm install`。
 
-- 玩家是经理兼老板，上帝视角
-- 比赛日忙碌；非比赛日像 QQ 宠物式养成，选手按性格自主行为
-- 联赛：网吧 → 城市 → 国内 → 世界赛资格；8 队双循环
-- 本体固定 6 人；场地随联赛升级解锁设施（后 6 位朋友以 DLC 形式加入）
-- 经济：现金 + 训练心得（开罗式双币）
-- 关系：交情只升不降，小心结可化解；赢球解心结
+空格暂停，`1` `2` `3` 改变流速。点人物看他最近在忙什么，顶部「经营」做老板的事。
 
-细节与待定项见设计文档 v0.3。
+## 给一起做的人
 
-## 协作说明
+```
+game/    网页版
+docs/    设计文档与人设
+data/    事件数据
+tools/   小工具
+```
 
-欢迎一起开发。改设计请先对齐 `docs/SSB电竞经理-设计文档-v0.3.md` 里的【已定】项；数值与人设等【待定】项先讨论再写进文档。
-
-## License
-
-未定。默认仅供本项目协作使用，请勿擅自商用人物素材。
+- 设计：[设计文档 v0.3](docs/SSB电竞经理-设计文档-v0.3.md)
+- 网页版说明：[game/README.md](game/README.md)
+- License：未定。人物素材请勿擅自商用。
