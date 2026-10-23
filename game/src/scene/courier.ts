@@ -26,6 +26,7 @@ const COURIER_DEF: MemberDef = {
   taste: { favorites: [], favoriteMul: 1, avoid: [], avoidTags: [], drinks: '', milkTea: true },
   phoneBias: {},
   roles: [],
+  defaultRoute: 'flex',
   look: { height: 1.04, girth: 0.96, glasses: false, shirt: 0xf5c400, pants: 0x1a1a1a, hair: 0x241c18, skin: 0xf0c8a0, shoes: 0x111111, hairStyle: 'short' },
 };
 

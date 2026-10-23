@@ -1,0 +1,4049 @@
+{
+  "version": 1,
+  "generatedFrom": "data/events.json",
+  "note": "由 game/scripts/build-event-library.mjs 生成。只含能映射到现行模型的事件；不要手改。",
+  "events": [
+    {
+      "id": "U_当邓不投了",
+      "name": "当邓不投了",
+      "category": "成长",
+      "level": "重大",
+      "weight": 6,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "当邓",
+          "kind": "fixed",
+          "id": "dangdeng"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dangdeng"
+          ]
+        },
+        {
+          "k": "persona",
+          "key": "逆风意志",
+          "op": ">=",
+          "v": 60,
+          "who": "当邓"
+        }
+      ],
+      "texts": [
+        "0:8 逆风，大家等当邓点投降，他说：\"不投，打。\"全屋愣住。",
+        "性格转变！当邓第一次主动拒绝投降，这一局打了 47 分钟。"
+      ],
+      "effects": [
+        {
+          "k": "persona",
+          "key": "逆风意志",
+          "d": 5,
+          "who": "dangdeng"
+        },
+        {
+          "k": "persona",
+          "key": "嘴硬",
+          "d": -3,
+          "who": "dangdeng"
+        },
+        {
+          "k": "bond",
+          "a": "全员",
+          "b": "dangdeng",
+          "d": 3
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "U_当邓逆风意志成长",
+      "name": "当邓逆风意志成长",
+      "category": "成长",
+      "level": "剧情",
+      "weight": 4,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "当邓",
+          "kind": "fixed",
+          "id": "dangdeng"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dangdeng"
+          ]
+        }
+      ],
+      "texts": [
+        "当邓连续第二次被否投降后翻盘，他开始怀疑自己投早了。",
+        "当邓：\"……也许下次可以晚 5 分钟投。\""
+      ],
+      "effects": [
+        {
+          "k": "persona",
+          "key": "逆风意志",
+          "d": 2,
+          "who": "dangdeng"
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "G_被否后翻盘"
+      ]
+    },
+    {
+      "id": "U_当邓意识进步",
+      "name": "当邓意识进步",
+      "category": "成长",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 4320,
+      "roles": [
+        {
+          "key": "当邓",
+          "kind": "fixed",
+          "id": "dangdeng"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dangdeng"
+          ]
+        },
+        {
+          "k": "ability",
+          "key": "sense",
+          "op": ">=",
+          "v": 50,
+          "who": "当邓"
+        }
+      ],
+      "texts": [
+        "当邓开始会提前蹲河道了，抓了三次全成功。",
+        "当邓打野节奏有长进，嘴也更硬了。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "sense",
+          "d": 0.3,
+          "who": "dangdeng"
+        },
+        {
+          "k": "persona",
+          "key": "嘴硬",
+          "d": 1,
+          "who": "dangdeng"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "U_弟必对线开窍",
+      "name": "弟必对线开窍",
+      "category": "成长",
+      "level": "重大",
+      "weight": 6,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "弟必",
+          "kind": "fixed",
+          "id": "dibi"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dibi"
+          ]
+        },
+        {
+          "k": "ability",
+          "key": "lane",
+          "op": ">=",
+          "v": 50,
+          "who": "弟必"
+        }
+      ],
+      "texts": [
+        "弟必这周第一次对线单杀对面，他自己都没反应过来。",
+        "弟必对线短板补上一截，全队最怕的\"前期弟必\"出现了。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 15,
+          "who": "dibi"
+        },
+        {
+          "k": "ability",
+          "key": "lane",
+          "d": 1,
+          "who": "dibi"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "U_弟必发育曲线",
+      "name": "弟必发育曲线",
+      "category": "成长",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 720,
+      "roles": [
+        {
+          "key": "弟必",
+          "kind": "fixed",
+          "id": "dibi"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dibi"
+          ]
+        },
+        {
+          "k": "ability",
+          "key": "lane",
+          "op": ">=",
+          "v": 75,
+          "who": "弟必"
+        }
+      ],
+      "texts": [
+        "弟必本局 25 分钟补刀 260，对面中单 140。",
+        "弟必偷发育教学版本更新：对面压根不知道他去哪了。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "lane",
+          "d": 0.3,
+          "who": "dibi"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "U_弟必前期抗压",
+      "name": "弟必前期抗压",
+      "category": "成长",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "弟必",
+          "kind": "fixed",
+          "id": "dibi"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dibi"
+          ]
+        },
+        {
+          "k": "ability",
+          "key": "lane",
+          "op": ">=",
+          "v": 42,
+          "who": "弟必"
+        }
+      ],
+      "texts": [
+        "弟必这把对线只死了一次，他自己说\"进步了\"。",
+        "弟必对线短板在缩小。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "lane",
+          "d": 0.4,
+          "who": "dibi"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "U_吊隆指挥升级",
+      "name": "吊隆指挥升级",
+      "category": "成长",
+      "level": "重大",
+      "weight": 6,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "吊隆",
+          "kind": "fixed",
+          "id": "diaolong"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "diaolong"
+          ]
+        },
+        {
+          "k": "ability",
+          "key": "fight",
+          "op": ">=",
+          "v": 80,
+          "who": "吊隆"
+        }
+      ],
+      "texts": [
+        "吊隆的指挥被大家默认为\"最终决定\"，组排里再没人反驳他的开龙判断。",
+        "指挥核心成型，组排胜率加成提升。"
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "U_发明流翻车",
+      "name": "发明流翻车",
+      "category": "成长",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "阿鸡",
+          "kind": "fixed",
+          "id": "aji"
+        },
+        {
+          "key": "当邓",
+          "kind": "fixed",
+          "id": "dangdeng"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "aji"
+          ]
+        },
+        {
+          "k": "present",
+          "ids": [
+            "dangdeng"
+          ]
+        }
+      ],
+      "texts": [
+        "解说：发明流本局输出 3000，其中 2000 打在小兵身上。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 1,
+          "who": "aji"
+        },
+        {
+          "k": "bondAll",
+          "who": "aji",
+          "d": 0
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "U_发明流新出装"
+      ]
+    },
+    {
+      "id": "U_发明流奇袭成功",
+      "name": "发明流奇袭成功",
+      "category": "成长",
+      "level": "重大",
+      "weight": 6,
+      "cooldownMin": 4320,
+      "roles": [
+        {
+          "key": "阿鸡",
+          "kind": "fixed",
+          "id": "aji"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "rand",
+          "p": 0.08
+        },
+        {
+          "k": "present",
+          "ids": [
+            "aji"
+          ]
+        }
+      ],
+      "texts": [
+        "阿鸡的怪出装居然赢了！全屋沉默三秒，当邓：\"运气。\""
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 20,
+          "who": "aji"
+        },
+        {
+          "k": "ability",
+          "key": "pool",
+          "d": 1,
+          "who": "aji"
+        },
+        {
+          "k": "persona",
+          "key": "创新欲",
+          "d": 2,
+          "who": "aji"
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "U_发明流新出装"
+      ]
+    },
+    {
+      "id": "U_发明流新出装",
+      "name": "发明流新出装",
+      "category": "成长",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "阿鸡",
+          "kind": "fixed",
+          "id": "aji"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "aji"
+          ]
+        },
+        {
+          "k": "persona",
+          "key": "创新欲",
+          "op": ">=",
+          "v": 80,
+          "who": "阿鸡"
+        }
+      ],
+      "texts": [
+        "阿鸡公布新发明：全暴击石头人，自称版本答案。",
+        "阿鸡实验室上新：输出装辅助，名称\"爱的抱抱\"。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "pool",
+          "d": 0.3,
+          "who": "aji"
+        }
+      ],
+      "chains": [
+        {
+          "id": "U_发明流翻车",
+          "pct": 60
+        },
+        {
+          "id": "U_发明流奇袭成功",
+          "pct": 8
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "U_复盘开窍",
+      "name": "复盘开窍",
+      "category": "成长",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 720,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "ability",
+          "key": "sense",
+          "op": "<",
+          "v": 55,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}看完复盘恍然大悟：\"原来那波该去大龙。\"",
+        "{主角}意识小幅提升，但明天可能忘。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "sense",
+          "d": 0.6,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "G_复盘会"
+      ]
+    },
+    {
+      "id": "U_狗粮英雄池拓展",
+      "name": "狗粮英雄池拓展",
+      "category": "成长",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 10080,
+      "roles": [
+        {
+          "key": "狗粮",
+          "kind": "fixed",
+          "id": "gouliang"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "gouliang"
+          ]
+        },
+        {
+          "k": "ability",
+          "key": "pool",
+          "op": "<",
+          "v": 50,
+          "who": "狗粮"
+        }
+      ],
+      "texts": [
+        "狗粮开始练第二个 AD 英雄，第一把就 MVP，他说\"稳定是天赋\"。",
+        "狗粮英雄池+1，稳定性不降。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "pool",
+          "d": 1,
+          "who": "gouliang"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "U_互相陪练",
+      "name": "互相陪练",
+      "category": "成长",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 720,
+      "roles": [
+        {
+          "key": "甲",
+          "kind": "any"
+        },
+        {
+          "key": "乙",
+          "kind": "other"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "bond",
+          "op": ">=",
+          "v": 50,
+          "a": "甲",
+          "b": "乙"
+        }
+      ],
+      "texts": [
+        "{甲}陪{乙}练对线 1v1，十把输了八把。",
+        "一对一陪练，{乙}对线+0.5。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "lane",
+          "d": 0.5,
+          "who": "乙"
+        },
+        {
+          "k": "bond",
+          "a": "甲",
+          "b": "乙",
+          "d": 2
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "U_看职业比赛学习",
+      "name": "看职业比赛学习",
+      "category": "成长",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 720,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "专注",
+          "op": ">=",
+          "v": 60,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}认真看了一场职业比赛录像，记了半页笔记。",
+        "{主角}今天学到了一个新的眼位。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "sense",
+          "d": 0.4,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_被单杀两次",
+      "name": "被单杀两次",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "ability",
+          "key": "lane",
+          "op": "<",
+          "v": 40,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}对线被单杀两次，闪现交在了很奇怪的地方。",
+        "{主角}：“他这伤害不对劲。”（对方是正常伤害）"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -8,
+          "who": "主角"
+        },
+        {
+          "k": "ability",
+          "key": "lane",
+          "d": 0.3,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_被否后翻盘",
+      "name": "被否后翻盘",
+      "category": "对局",
+      "level": "剧情",
+      "weight": 4,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "发起者",
+          "kind": "any"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "scrimResult",
+          "v": "win",
+          "who": "发起者"
+        }
+      ],
+      "texts": [
+        "投降被否 20 分钟后，这把真翻了。{发起者}：\"我是战术性投降，骗对面的。\"",
+        "翻盘！解说：本场 MVP 是那张反对票。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 12,
+          "who": "all"
+        },
+        {
+          "k": "persona",
+          "key": "逆风意志",
+          "d": 1,
+          "who": "发起者"
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "G_逆风投降票"
+      ]
+    },
+    {
+      "id": "G_补刀练习",
+      "name": "补刀练习",
+      "category": "对局",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 540,
+          "to": 660
+        },
+        {
+          "k": "stat",
+          "key": "专注",
+          "op": ">=",
+          "v": 60,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}开训练模式练补刀，十分钟 82 刀。",
+        "{主角}今天在补刀，有一种认真上班的错觉。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "mech",
+          "d": 0.5,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_超神时刻",
+      "name": "超神时刻",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "stat",
+          "key": "手感",
+          "op": ">=",
+          "v": 80,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}拿下超神，声音大到隔壁工位的人都转头。",
+        "{主角}超神！键盘敲得像在打鼓。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 12,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_大乱斗放松",
+      "name": "大乱斗放松",
+      "category": "对局",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "心情",
+          "op": "<",
+          "v": 40,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}说要\"调整心态\"，开了一把大乱斗。",
+        "{主角}在大乱斗里找回了快乐，但没涨任何属性。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 8,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_单排连胜三把",
+      "name": "单排连胜三把",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "scrimStreak",
+          "op": ">=",
+          "v": 3,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}单排三连胜，起身倒了杯水，走路都带风。",
+        "{主角}三连胜后宣布\"今天手感在线\"，全屋默默离他远了点，怕奶。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 10,
+          "who": "主角"
+        },
+        {
+          "k": "status",
+          "key": "手感",
+          "d": 5,
+          "who": "主角"
+        }
+      ],
+      "chains": [
+        {
+          "id": "G_连胜被奶",
+          "pct": 20
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "G_当邓顺风话痨",
+      "name": "当邓顺风话痨",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 60,
+      "roles": [
+        {
+          "key": "当邓",
+          "kind": "fixed",
+          "id": "dangdeng"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dangdeng"
+          ]
+        },
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "当邓"
+        },
+        {
+          "k": "scrimResult",
+          "v": "win",
+          "who": "当邓"
+        }
+      ],
+      "texts": [
+        "顺风局当邓话特别多：\"看我这波节奏，全图都是我的。\"",
+        "当邓顺风模式：一局说了 200 句，其中 150 句在夸自己。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 5,
+          "who": "dangdeng"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_弟必被打爆仍补刀",
+      "name": "弟必被打爆仍补刀",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "弟必",
+          "kind": "fixed",
+          "id": "dibi"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dibi"
+          ]
+        },
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "弟必"
+        },
+        {
+          "k": "ability",
+          "key": "lane",
+          "op": "<",
+          "v": 45,
+          "who": "弟必"
+        }
+      ],
+      "texts": [
+        "解说：他死了三次，但他的补刀没死。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "lane",
+          "d": 0.3,
+          "who": "dibi"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_弟必消失的中单",
+      "name": "弟必消失的中单",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "弟必",
+          "kind": "fixed",
+          "id": "dibi"
+        },
+        {
+          "key": "队友",
+          "kind": "other"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dibi"
+          ]
+        },
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "弟必"
+        }
+      ],
+      "texts": [
+        "{队友}：\"弟必呢？\"小地图上弟必在对面野区刷了 5 分钟野。",
+        "偷发育模式：弟必从地图上消失了。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "lane",
+          "d": 0.2,
+          "who": "dibi"
+        },
+        {
+          "k": "bond",
+          "a": "队友",
+          "b": "dibi",
+          "d": -1
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_复盘会",
+      "name": "复盘会",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "吊隆",
+          "kind": "fixed",
+          "id": "diaolong"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "after",
+          "segment": "team"
+        },
+        {
+          "k": "present",
+          "ids": [
+            "diaolong"
+          ]
+        }
+      ],
+      "texts": [
+        "吊隆拉着大家复盘录像，十分钟后变成\"这波谁的锅\"大会。",
+        "复盘第 3 分钟，暂停在阿鸡出装那一帧，所有人都笑了。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "sense",
+          "d": 0.4,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_狗粮稳如老狗",
+      "name": "狗粮稳如老狗",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "狗粮",
+          "kind": "fixed",
+          "id": "gouliang"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "gouliang"
+          ]
+        },
+        {
+          "k": "act",
+          "values": [
+            "team"
+          ],
+          "who": "狗粮"
+        },
+        {
+          "k": "scrimResult",
+          "v": "lose",
+          "who": "狗粮"
+        }
+      ],
+      "texts": [
+        "解说：输局 MVP，狗粮本色出演。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -2,
+          "who": "gouliang"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_挂机重连",
+      "name": "挂机重连",
+      "category": "对局",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "rand",
+          "p": 0.03
+        }
+      ],
+      "texts": [
+        "{主角}掉线，重连回来发现自己少了两座塔。",
+        "{主角}网卡了 90 秒，回来队友已经在打字。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -5,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_空大名场面",
+      "name": "空大名场面",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "stat",
+          "key": "手感",
+          "op": "<",
+          "v": 40,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}大招放空，技能砸在空气里，墙都比敌人先吃到伤害。",
+        "解说：这个大招，我们只能理解为是在给对面让路。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -5,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_连败后终结",
+      "name": "连败后终结",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "scrimResult",
+          "v": "win",
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}终于赢了一把，长出一口气，像刚交完报告。",
+        "连跪终结！{主角}：\"我回来了。\""
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 12,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "G_连跪红温"
+      ]
+    },
+    {
+      "id": "G_连跪红温",
+      "name": "连跪红温",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "scrimStreak",
+          "op": "<=",
+          "v": -3,
+          "who": "主角"
+        },
+        {
+          "k": "ability",
+          "key": "mental",
+          "op": "<",
+          "v": 60,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}三连跪，耳机摘了又戴，戴了又摘。",
+        "解说：{主角}已经红温，建议队友不要和他对视。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -15,
+          "who": "主角"
+        },
+        {
+          "k": "status",
+          "key": "专注",
+          "d": -10,
+          "who": "主角"
+        }
+      ],
+      "chains": [
+        {
+          "id": "M_赌气刷手机",
+          "pct": 20
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "G_连胜被奶",
+      "name": "连胜被奶",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "奶人者",
+          "kind": "other"
+        },
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "otherPersona",
+          "key": "话痨",
+          "op": ">=",
+          "v": 60
+        }
+      ],
+      "texts": [
+        "{奶人者}一句\"这把稳了\"，{主角}的连胜应声断裂。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -10,
+          "who": "主角"
+        },
+        {
+          "k": "bond",
+          "a": "主角",
+          "b": "奶人者",
+          "d": -3
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "G_单排连胜三把"
+      ]
+    },
+    {
+      "id": "G_龙魂争夺",
+      "name": "龙魂争夺",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 90,
+      "roles": [
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "team"
+          ],
+          "who": "all"
+        }
+      ],
+      "texts": [
+        "大龙团 5v5，吊隆喊开，打完 4 换 1，全屋鼓掌。",
+        "龙坑团，决胜一波，耳机里全是\"冲冲冲\"。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "fight",
+          "d": 0.3,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_逆风投降票",
+      "name": "逆风投降票",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 30,
+      "roles": [
+        {
+          "key": "发起者",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "发起者"
+        },
+        {
+          "k": "scrimResult",
+          "v": "lose",
+          "who": "发起者"
+        },
+        {
+          "k": "persona",
+          "key": "逆风意志",
+          "op": "<",
+          "v": 50,
+          "who": "发起者"
+        }
+      ],
+      "texts": [
+        "{发起者}发起投降，结果 2 赞 3 反。",
+        "投降票被否，{发起者}：\"行，那我们打到底，输了别怪我。\""
+      ],
+      "effects": [],
+      "chains": [
+        {
+          "id": "G_被否后翻盘",
+          "pct": 20
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "G_排位秒选同英雄",
+      "name": "排位秒选同英雄",
+      "category": "对局",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo"
+          ],
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}进对局发现四个人都锁了同一个位置，他默默选了辅助。",
+        "{主角}抢位失败，补位中。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "pool",
+          "d": 0.2,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_匹配到虚拟队老熟人",
+      "name": "匹配到虚拟队老熟人",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 720,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "rand",
+          "p": 0.05
+        }
+      ],
+      "texts": [
+        "{主角}排到了上周排位赛的对手打野，对方疑似认出了他。",
+        "冤家路窄：{主角}遇到对手战队成员，这把打得格外认真。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "专注",
+          "d": 10,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_双排上分",
+      "name": "双排上分",
+      "category": "对局",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "甲",
+          "kind": "any"
+        },
+        {
+          "key": "乙",
+          "kind": "other"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "duo"
+          ],
+          "who": "甲"
+        }
+      ],
+      "texts": [
+        "{甲}和{乙}双排，语音里全是\"我来了我来了\"。",
+        "{甲}{乙}双排两胜一负，配合渐入佳境。"
+      ],
+      "effects": [
+        {
+          "k": "bond",
+          "a": "甲",
+          "b": "乙",
+          "d": 2
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_送人头机器",
+      "name": "送人头机器",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "stat",
+          "key": "手感",
+          "op": "<",
+          "v": 30,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}第 11 次阵亡，屏幕灰了快一半时间。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -12,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_偷塔成功",
+      "name": "偷塔成功",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "scrimResult",
+          "v": "lose",
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}趁团战绕后偷掉水晶，全队从\"投吧\"直接变成\"牛啊\"。",
+        "解说：没人注意到他，包括他自己的队友。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 15,
+          "who": "主角"
+        },
+        {
+          "k": "ability",
+          "key": "sense",
+          "d": 0.5,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_团战一换五",
+      "name": "团战一换五",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "rand",
+          "p": 0.04
+        }
+      ],
+      "texts": [
+        "{主角}一个人换掉对面五个——准确说是对面五个换掉了他一个，他喊的是\"我开了，跟！\"",
+        "{主角}开团，回头一看队友都在回城。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -6,
+          "who": "主角"
+        },
+        {
+          "k": "bond",
+          "a": "主角",
+          "b": "全员",
+          "d": -2
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_五黑惨败",
+      "name": "五黑惨败",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 60,
+      "roles": [
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "team"
+          ],
+          "who": "all"
+        },
+        {
+          "k": "scrimResult",
+          "v": "lose",
+          "who": "all"
+        },
+        {
+          "k": "teamMood",
+          "op": "<",
+          "v": 50
+        }
+      ],
+      "texts": [
+        "组排被对面一个绝活亚索打穿，全屋沉默 40 秒，然后同时开口找锅。",
+        "解说：这把输得很干净，干净到大家只能互相看。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -8,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_五黑大胜",
+      "name": "五黑大胜",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 60,
+      "roles": [
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "team"
+          ],
+          "who": "all"
+        },
+        {
+          "k": "scrimResult",
+          "v": "win",
+          "who": "all"
+        }
+      ],
+      "texts": [
+        "组排一把碾压，24 分钟推掉水晶，吊隆复盘只用了一句：\"正常发挥。\"",
+        "五黑大胜，当邓：\"我早说了这个阵容能打。\"（他开局说的是\"必输\"）"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 8,
+          "who": "all"
+        },
+        {
+          "k": "ability",
+          "key": "fight",
+          "d": 0.5,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_五黑开黑",
+      "name": "五黑开黑",
+      "category": "对局",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 60,
+      "roles": [
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 810,
+          "to": 1020
+        },
+        {
+          "k": "presentCount",
+          "op": ">=",
+          "v": 5
+        }
+      ],
+      "texts": [
+        "下午场开黑，五个人同时戴上耳机，办公室瞬间安静。",
+        "组排开始，吊隆：\"语音都开好，别装死。\""
+      ],
+      "effects": [
+        {
+          "k": "insight",
+          "d": 1
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_五杀",
+      "name": "五杀",
+      "category": "对局",
+      "level": "重大",
+      "weight": 6,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "ability",
+          "key": "mech",
+          "op": ">=",
+          "v": 50,
+          "who": "主角"
+        },
+        {
+          "k": "rand",
+          "p": 0.01
+        }
+      ],
+      "texts": [
+        "五杀！{主角}站起来，椅子滑出去两米。",
+        "解说：PENTAKILL！{主角}本周最高光，录屏已经发群里第三遍。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 25,
+          "who": "主角"
+        },
+        {
+          "k": "status",
+          "key": "手感",
+          "d": 15,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_野区被反三次",
+      "name": "野区被反三次",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "打野者",
+          "kind": "jungle"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "hasRole",
+          "role": "jungle"
+        },
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "打野者"
+        }
+      ],
+      "texts": [
+        "{打野者}的野区被反了三次，开始怀疑对面打野住在他家。",
+        "{打野者}：\"他怎么知道我在哪？\"吊隆：\"因为你每次都一样。\""
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -8,
+          "who": "打野者"
+        },
+        {
+          "k": "ability",
+          "key": "sense",
+          "d": 0.3,
+          "who": "打野者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "G_遇到演员",
+      "name": "遇到演员",
+      "category": "对局",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 300,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo"
+          ],
+          "who": "主角"
+        },
+        {
+          "k": "rand",
+          "p": 0.08
+        }
+      ],
+      "texts": [
+        "{主角}遇到演员队友，一边打一边给全屋直播对方的骚操作。",
+        "{主角}：\"这人在演我，你们快来看！\"三个人围过去，没人在练。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -6,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_阿鸡的人字拖散步",
+      "name": "阿鸡的人字拖散步",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 360,
+      "roles": [
+        {
+          "key": "阿鸡",
+          "kind": "fixed",
+          "id": "aji"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "aji"
+          ]
+        }
+      ],
+      "texts": [
+        "阿鸡穿着人字拖在办公室巡回散步，啪嗒声伴奏全屋。",
+        "阿鸡\"饭后消食\"，绕工位走了三圈，顺便看了每个人的出装。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 3,
+          "who": "aji"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_版本研究",
+      "name": "版本研究",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "persona",
+          "key": "创新欲",
+          "op": ">=",
+          "v": 60,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}在\"版本研究\"，打开的是一个出装模拟器和三个视频网站。",
+        "{摸鱼者}研究了一小时，产出一个大家都看不懂的符文页。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "pool",
+          "d": 0.2,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [
+        {
+          "id": "U_发明流新出装",
+          "pct": 20
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "M_带薪如厕",
+      "name": "带薪如厕",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "persona",
+          "key": "摸鱼倾向",
+          "op": ">=",
+          "v": 30,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}去了厕所，22 分钟没回来。",
+        "{摸鱼者}带薪如厕中，手机电量 -8%。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 4,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_弟必偷偷练英雄",
+      "name": "弟必偷偷练英雄",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "弟必",
+          "kind": "fixed",
+          "id": "dibi"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dibi"
+          ]
+        },
+        {
+          "k": "time",
+          "from": 750,
+          "to": 810
+        }
+      ],
+      "texts": [
+        "午休时弟必悄悄练了两把新中单，没人发现。",
+        "弟必隐秘练习中，属于\"偷发育\"的生活版。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "pool",
+          "d": 0.3,
+          "who": "dibi"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_吊隆段子场",
+      "name": "吊隆段子场",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "吊隆",
+          "kind": "fixed",
+          "id": "diaolong"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "diaolong"
+          ]
+        },
+        {
+          "k": "teamMood",
+          "op": ">=",
+          "v": 55
+        }
+      ],
+      "texts": [
+        "吊隆讲了个关于阿鸡出装的段子，笑倒一片，阿鸡笑得最大声。",
+        "吊隆段子输出中，训练赛暂停 7 分钟。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 6,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_赌气刷手机",
+      "name": "赌气刷手机",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "心情",
+          "op": "<",
+          "v": 35,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}输完一把，往椅子上一靠，开始刷手机，不说话。",
+        "{摸鱼者}进入赌气模式，排位按钮已经十分钟没点了。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 3,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_狗粮如何评价外卖",
+      "name": "狗粮如何评价外卖",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "狗粮",
+          "kind": "fixed",
+          "id": "gouliang"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "gouliang"
+          ]
+        },
+        {
+          "k": "time",
+          "from": 690,
+          "to": 750
+        }
+      ],
+      "texts": [
+        "狗粮：\"如何评价这家新开的螺蛳粉？\"整个办公室的空气给出了答案。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 3,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_狗粮下午茶话会",
+      "name": "狗粮下午茶话会",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 360,
+      "roles": [
+        {
+          "key": "狗粮",
+          "kind": "fixed",
+          "id": "gouliang"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "gouliang"
+          ]
+        },
+        {
+          "k": "time",
+          "from": 900,
+          "to": 990
+        }
+      ],
+      "texts": [
+        "狗粮端着奶茶开讲：\"如何评价当邓的投降率？\"当邓当场站起来反驳。",
+        "狗粮下午茶话会开幕，议题三个，结论零个。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 5,
+          "who": "all"
+        },
+        {
+          "k": "bond",
+          "a": "dangdeng",
+          "b": "gouliang",
+          "d": -1
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_挂机看球",
+      "name": "挂机看球",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "persona",
+          "key": "摸鱼倾向",
+          "op": ">=",
+          "v": 40,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}一边排位一边偷看比赛直播，死了就切过去看。",
+        "{摸鱼者}：“我死了，正好看一下。”他死得有点频繁。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "专注",
+          "d": -8,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_假复盘真直播",
+      "name": "假复盘真直播",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 90,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "persona",
+          "key": "摸鱼倾向",
+          "op": ">=",
+          "v": 40,
+          "who": "摸鱼者"
+        },
+        {
+          "k": "stat",
+          "key": "专注",
+          "op": "<",
+          "v": 50,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}屏幕上开着\"复盘录像\"，副屏放的是别人的直播。",
+        "{摸鱼者}在\"学习职业选手思路\"，学习了 40 分钟，主播在吃饭。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "专注",
+          "d": -5,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_假装开会",
+      "name": "假装开会",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "甲",
+          "kind": "any"
+        },
+        {
+          "key": "乙",
+          "kind": "other"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "presentCount",
+          "op": ">=",
+          "v": 2
+        }
+      ],
+      "texts": [
+        "{甲}和{乙}去会议室\"讨论战术\"，半小时后出来，手里拿着两瓶可乐。",
+        "战术会议结束，产出：可乐两瓶。"
+      ],
+      "effects": [
+        {
+          "k": "bond",
+          "a": "甲",
+          "b": "乙",
+          "d": 2
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_假装看攻略",
+      "name": "假装看攻略",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "专注",
+          "op": "<",
+          "v": 40,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}打开攻略网站，滑到底部看评论区吵架。",
+        "{摸鱼者}看攻略看出了感情，评论区回复了三条。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "专注",
+          "d": -3,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_零食补给",
+      "name": "零食补给",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 180,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "饥饿",
+          "op": ">=",
+          "v": 60,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}去楼下便利店\"补给\"，回来带了一袋辣条。",
+        "补给完成，{摸鱼者}的键盘多了一层油光。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "饥饿",
+          "d": -15,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_摸鱼摸到睡着",
+      "name": "摸鱼摸到睡着",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "体力",
+          "op": "<",
+          "v": 25,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}刷手机刷着刷着，手机砸在了脸上。",
+        "{摸鱼者}被手机砸醒，假装在思考。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "体力",
+          "d": 5,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_奶茶漏单",
+      "name": "奶茶漏单",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "发起者",
+          "kind": "any"
+        },
+        {
+          "key": "漏单者",
+          "kind": "other"
+        }
+      ],
+      "conditions": [],
+      "texts": [
+        "奶茶到了，{漏单者}那杯没了。{漏单者}：\"如何评价？\"",
+        "漏单事故，{发起者}背锅，当场转账补了一杯。"
+      ],
+      "effects": [
+        {
+          "k": "bond",
+          "a": "漏单者",
+          "b": "发起者",
+          "d": -3
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "M_奶茶拼单"
+      ]
+    },
+    {
+      "id": "M_奶茶拼单",
+      "name": "奶茶拼单",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "发起者",
+          "kind": "any"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 840,
+          "to": 960
+        },
+        {
+          "k": "stat",
+          "key": "饥饿",
+          "op": ">=",
+          "v": 50,
+          "who": "发起者"
+        }
+      ],
+      "texts": [
+        "{发起者}发起奶茶拼单，五分钟内凑齐六杯，全屋停手点单。",
+        "奶茶群接龙：阿鸡点了全糖加三份珍珠，被吐槽\"出装也是这个思路\"。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 6,
+          "who": "all"
+        },
+        {
+          "k": "status",
+          "key": "饥饿",
+          "d": -20,
+          "who": "all"
+        }
+      ],
+      "chains": [
+        {
+          "id": "M_奶茶漏单",
+          "pct": 20
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "M_排队刷手机",
+      "name": "排队刷手机",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 60,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "team"
+          ],
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}排队时刷手机，进了游戏才发现英雄被自动秒选了。",
+        "{摸鱼者}：“谁给我选的提莫？”——是他自己的手。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -3,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_刷短视频外放",
+      "name": "刷短视频外放",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "persona",
+          "key": "摸鱼倾向",
+          "op": ">=",
+          "v": 40,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}手机外放短视频，旁边三个人的耳机同时摘了下来。",
+        "外放事故！{摸鱼者}手忙脚乱关音量，但\"家人们\"已经传遍全屋。"
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_玩别的游戏",
+      "name": "玩别的游戏",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "心情",
+          "op": "<",
+          "v": 45,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}偷偷开了一局别的游戏，切屏键按得飞快。",
+        "{摸鱼者}：“我在练反应速度。”屏幕上是消消乐。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 6,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_网购比价",
+      "name": "网购比价",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 360,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "心情",
+          "op": "<",
+          "v": 60,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}在比较三款机械键盘，比了一下午没下单。",
+        "{摸鱼者}：“这个轴体会提升我操作。”没人信。"
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_午饭后闭目养神",
+      "name": "午饭后闭目养神",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 750,
+          "to": 870
+        },
+        {
+          "k": "stat",
+          "key": "体力",
+          "op": "<",
+          "v": 50,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}说要\"闭目想战术\"，五分钟后传来鼾声。",
+        "{摸鱼者}在战术冥想，深度很深，呼吸很匀。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "体力",
+          "d": 15,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_小号炸鱼",
+      "name": "小号炸鱼",
+      "category": "摸鱼",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "心情",
+          "op": "<",
+          "v": 50,
+          "who": "摸鱼者"
+        },
+        {
+          "k": "persona",
+          "key": "摸鱼倾向",
+          "op": ">=",
+          "v": 40,
+          "who": "摸鱼者"
+        }
+      ],
+      "texts": [
+        "{摸鱼者}炸鱼成功，心情恢复，能力毫无增长。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 10,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_研究外卖",
+      "name": "研究外卖",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 660,
+          "to": 720
+        }
+      ],
+      "texts": [
+        "11 点刚过，{摸鱼者}已经在研究午饭吃什么了。",
+        "{摸鱼者}打开三个外卖软件，比满减比了 20 分钟。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "饥饿",
+          "d": 5,
+          "who": "摸鱼者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_早退五分钟",
+      "name": "早退五分钟",
+      "category": "摸鱼",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "摸鱼者",
+          "kind": "slacker"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 1010,
+          "to": 1020
+        }
+      ],
+      "texts": [
+        "{摸鱼者} 16:52 已经背好包，站在门口\"等电梯\"。",
+        "{摸鱼者}提前收工，理由是\"电梯高峰\"。"
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "M_桌游诱惑",
+      "name": "桌游诱惑",
+      "category": "摸鱼",
+      "level": "剧情",
+      "weight": 4,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "发起者",
+          "kind": "any"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 900,
+          "to": 1020
+        },
+        {
+          "k": "teamMood",
+          "op": ">=",
+          "v": 60
+        },
+        {
+          "k": "presentCount",
+          "op": ">=",
+          "v": 4
+        }
+      ],
+      "texts": [
+        "{发起者}从抽屉里掏出一副牌，下午场训练赛变成斗地主。",
+        "解说：今天下午的比赛项目改成了斗地主，阿鸡出牌依然不按常理。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 10,
+          "who": "all"
+        },
+        {
+          "k": "status",
+          "key": "专注",
+          "d": -20,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_熬夜后摸鱼",
+      "name": "熬夜后摸鱼",
+      "category": "生活",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "overtimeYesterday"
+        },
+        {
+          "k": "stat",
+          "key": "体力",
+          "op": "<",
+          "v": 40,
+          "who": "主角"
+        }
+      ],
+      "texts": [
+        "{主角}昨晚加班到 11 点，今天上午眼睛只睁开一半。",
+        "熬夜代价：{主角}专注-15。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "专注",
+          "d": -15,
+          "who": "主角"
+        }
+      ],
+      "chains": [
+        {
+          "id": "M_午饭后闭目养神",
+          "pct": 40
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "L_迟到",
+      "name": "迟到",
+      "category": "生活",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "迟到者",
+          "kind": "late"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 545,
+          "to": 600
+        }
+      ],
+      "texts": [
+        "{迟到者} 9:23 到岗，进门时所有人都在看他。",
+        "{迟到者}迟到，理由：电梯"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -3,
+          "who": "迟到者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_当邓早上带节奏",
+      "name": "当邓早上带节奏",
+      "category": "生活",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "当邓",
+          "kind": "fixed",
+          "id": "dangdeng"
+        },
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dangdeng"
+          ]
+        },
+        {
+          "k": "time",
+          "from": 540,
+          "to": 570
+        }
+      ],
+      "texts": [
+        "当邓一进门：\"今天谁再送，我就投。\"大家：\"你先坐下。\""
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_狗粮晚上溜号",
+      "name": "狗粮晚上溜号",
+      "category": "生活",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "狗粮",
+          "kind": "fixed",
+          "id": "gouliang"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "gouliang"
+          ]
+        },
+        {
+          "k": "time",
+          "from": 1020,
+          "to": 1030
+        }
+      ],
+      "texts": [
+        "17:01 狗粮已经消失，聊天框还停在\"如何评价今晚吃啥\"。",
+        "狗粮夜场缺席，本周第 4 次。"
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_加班冲分",
+      "name": "加班冲分",
+      "category": "生活",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "加班者",
+          "kind": "overtime"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 1020,
+          "to": 1260
+        },
+        {
+          "k": "persona",
+          "key": "胜负心",
+          "op": ">=",
+          "v": 60,
+          "who": "加班者"
+        }
+      ],
+      "texts": [
+        "下班了，{加班者}没走，说要\"再赢一把就走\"。现在是第五把。",
+        "夜场：办公室只剩{加班者}一盏屏幕亮着。"
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "mech",
+          "d": 0.3,
+          "who": "加班者"
+        },
+        {
+          "k": "status",
+          "key": "体力",
+          "d": -10,
+          "who": "加班者"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_键盘坏了",
+      "name": "键盘坏了",
+      "category": "生活",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 10080,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "rand",
+          "p": 0.01
+        }
+      ],
+      "texts": [
+        "{主角}的键盘 Q 键失灵，他用了一把不放 Q 的英雄。",
+        "装备故障：{主角}：\"这把不能怪我。\""
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "手感",
+          "d": -20,
+          "who": "主角"
+        }
+      ],
+      "chains": [
+        {
+          "id": "M_网购比价",
+          "pct": 50
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "L_快递到了",
+      "name": "快递到了",
+      "category": "生活",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "rand",
+          "p": 0.05
+        }
+      ],
+      "texts": [
+        "{主角}的快递到了，拆开是一个新鼠标垫，宣称能提升操作。",
+        "{主角}新装备上线：鼠标垫一张。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 5,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_撇干午饭吃两份",
+      "name": "撇干午饭吃两份",
+      "category": "生活",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "撇干",
+          "kind": "fixed",
+          "id": "piegan"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "piegan"
+          ]
+        },
+        {
+          "k": "time",
+          "from": 720,
+          "to": 780
+        }
+      ],
+      "texts": [
+        "撇干午饭点了两份饭，说下午要\"抗压\"。",
+        "撇干补给：抗压从吃饭开始。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "饥饿",
+          "d": -40,
+          "who": "piegan"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_停电",
+      "name": "停电",
+      "category": "生活",
+      "level": "剧情",
+      "weight": 4,
+      "cooldownMin": 43200,
+      "roles": [
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "rand",
+          "p": 0.002
+        }
+      ],
+      "texts": [
+        "停电了！屏幕全黑，正在打的那局全员掉线。",
+        "突发：停电，办公室陷入黑暗，阿鸡：\"这是老板。\""
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": -10,
+          "who": "all"
+        }
+      ],
+      "chains": [
+        {
+          "id": "M_桌游诱惑",
+          "pct": 60
+        }
+      ],
+      "flags": []
+    },
+    {
+      "id": "L_午饭选择困难",
+      "name": "午饭选择困难",
+      "category": "生活",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 705,
+          "to": 735
+        }
+      ],
+      "texts": [
+        "中午吃什么讨论了 25 分钟，最后又是楼下那家黄焖鸡。",
+        "午饭议题：六个提案，一个结果，和昨天一样。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "饥饿",
+          "d": -30,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_整理工位",
+      "name": "整理工位",
+      "category": "生活",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 10080,
+      "roles": [
+        {
+          "key": "主角",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "rand",
+          "p": 0.05
+        }
+      ],
+      "texts": [
+        "{主角}突然开始整理工位，扔掉了七个空饮料瓶。",
+        "{主角}工位大扫除，桌面面积+30%。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 3,
+          "who": "主角"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_周五心情好",
+      "name": "周五心情好",
+      "category": "生活",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 10080,
+      "roles": [
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "weekday",
+          "op": "=",
+          "v": 5
+        }
+      ],
+      "texts": [
+        "周五下午，办公室空气里有一种快下班的甜味。",
+        "周五加成：全员心情+5。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 5,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_周一综合征",
+      "name": "周一综合征",
+      "category": "生活",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 10080,
+      "roles": [
+        {
+          "key": "全员",
+          "kind": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "weekday",
+          "op": "=",
+          "v": 1
+        },
+        {
+          "k": "time",
+          "from": 540,
+          "to": 660
+        }
+      ],
+      "texts": [
+        "周一上午，六个人有四个在打哈欠。",
+        "周一效应：全员专注-10。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "专注",
+          "d": -10,
+          "who": "all"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "L_最后一个关灯",
+      "name": "最后一个关灯",
+      "category": "生活",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "关灯者",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "time",
+          "from": 1200,
+          "to": 1320
+        }
+      ],
+      "texts": [
+        "{关灯者}最后一个离开，顺手关了所有显示器。",
+        "今日收工：{关灯者}关灯，办公室入夜。"
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "R_安慰红温者",
+      "name": "安慰红温者",
+      "category": "甩锅与关系",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 360,
+      "roles": [
+        {
+          "key": "安慰者",
+          "kind": "other"
+        },
+        {
+          "key": "红温者",
+          "kind": "any"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "bond",
+          "op": ">=",
+          "v": 55,
+          "a": "安慰者",
+          "b": "红温者"
+        }
+      ],
+      "texts": [
+        "{安慰者}给{红温者}递了块巧克力：\"歇一把。\"",
+        "{安慰者}上演温情一幕，{红温者}心情回升。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 8,
+          "who": "红温者"
+        },
+        {
+          "k": "bond",
+          "a": "红温者",
+          "b": "安慰者",
+          "d": 3
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "G_连跪红温"
+      ]
+    },
+    {
+      "id": "R_背后夸人",
+      "name": "背后夸人",
+      "category": "甩锅与关系",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 720,
+      "roles": [
+        {
+          "key": "甲",
+          "kind": "any"
+        },
+        {
+          "key": "乙",
+          "kind": "other"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "bond",
+          "op": ">=",
+          "v": 60,
+          "a": "甲",
+          "b": "乙"
+        },
+        {
+          "k": "persona",
+          "key": "话痨",
+          "op": ">=",
+          "v": 50,
+          "who": "甲"
+        }
+      ],
+      "texts": [
+        "{甲}趁{乙}去厕所：\"其实他这周进步挺大。\"{乙}回来时大家都看着他笑。",
+        "难得的正向时刻，{乙}一头雾水。"
+      ],
+      "effects": [
+        {
+          "k": "bond",
+          "a": "乙",
+          "b": "甲",
+          "d": 3
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "R_当邓批阿鸡出装",
+      "name": "当邓批阿鸡出装",
+      "category": "甩锅与关系",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "当邓",
+          "kind": "fixed",
+          "id": "dangdeng"
+        },
+        {
+          "key": "阿鸡",
+          "kind": "fixed",
+          "id": "aji"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "dangdeng"
+          ]
+        },
+        {
+          "k": "present",
+          "ids": [
+            "aji"
+          ]
+        }
+      ],
+      "texts": [
+        "当邓看了一眼阿鸡的出装：\"你这能赢我直播吃键盘。\"",
+        "当邓 vs 阿鸡：赛前就下了定论。"
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": [
+        "U_发明流新出装"
+      ]
+    },
+    {
+      "id": "R_吊隆甩锅阿鸡",
+      "name": "吊隆甩锅阿鸡",
+      "category": "甩锅与关系",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "吊隆",
+          "kind": "fixed",
+          "id": "diaolong"
+        },
+        {
+          "key": "阿鸡",
+          "kind": "fixed",
+          "id": "aji"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "diaolong"
+          ]
+        },
+        {
+          "k": "scrimResult",
+          "v": "lose",
+          "who": "吊隆"
+        },
+        {
+          "k": "present",
+          "ids": [
+            "aji"
+          ]
+        }
+      ],
+      "texts": [
+        "吊隆复盘：\"第 14 分钟，阿鸡在对面野区做什么？\"阿鸡：“探索未知。”",
+        "吊隆战术甩锅：精准到秒。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 1,
+          "who": "aji"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "R_赌约兑现",
+      "name": "赌约兑现",
+      "category": "甩锅与关系",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 240,
+      "roles": [
+        {
+          "key": "赢家",
+          "kind": "any"
+        },
+        {
+          "key": "输家",
+          "kind": "other"
+        }
+      ],
+      "conditions": [],
+      "texts": [
+        "{输家}愿赌服输，奶茶送到{赢家}桌上，附言\"下次一定\"。",
+        "{赢家}喝着赢来的奶茶，喝出了胜利的味道。"
+      ],
+      "effects": [
+        {
+          "k": "bond",
+          "a": "赢家",
+          "b": "输家",
+          "d": 1
+        }
+      ],
+      "chains": [],
+      "flags": [
+        "R_打赌"
+      ]
+    },
+    {
+      "id": "R_互相学英雄",
+      "name": "互相学英雄",
+      "category": "甩锅与关系",
+      "level": "日常",
+      "weight": 2,
+      "cooldownMin": 720,
+      "roles": [
+        {
+          "key": "师",
+          "kind": "any"
+        },
+        {
+          "key": "徒",
+          "kind": "other"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "bond",
+          "op": ">=",
+          "v": 60,
+          "a": "师",
+          "b": "徒"
+        }
+      ],
+      "texts": [
+        "{徒}向{师}请教，师傅：\"你先别出那件装备。\""
+      ],
+      "effects": [
+        {
+          "k": "ability",
+          "key": "pool",
+          "d": 0.5,
+          "who": "徒"
+        },
+        {
+          "k": "bond",
+          "a": "师",
+          "b": "徒",
+          "d": 2
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "R_冷战",
+      "name": "冷战",
+      "category": "甩锅与关系",
+      "level": "剧情",
+      "weight": 4,
+      "cooldownMin": 1440,
+      "roles": [
+        {
+          "key": "甲",
+          "kind": "any"
+        },
+        {
+          "key": "乙",
+          "kind": "other"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "bond",
+          "op": "<",
+          "v": 30,
+          "a": "甲",
+          "b": "乙"
+        }
+      ],
+      "texts": [
+        "{甲}和{乙}今天一句话没说，组排时语音只说位置。",
+        "冷战进行中：两人中间的工位成了非军事区。"
+      ],
+      "effects": [],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "R_撇干指点阿鸡",
+      "name": "撇干指点阿鸡",
+      "category": "甩锅与关系",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "撇干",
+          "kind": "fixed",
+          "id": "piegan"
+        },
+        {
+          "key": "阿鸡",
+          "kind": "fixed",
+          "id": "aji"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "present",
+          "ids": [
+            "piegan"
+          ]
+        },
+        {
+          "k": "present",
+          "ids": [
+            "aji"
+          ]
+        }
+      ],
+      "texts": [
+        "撇干刚被单杀两次，转头：\"阿鸡你这出装就不对，你得先出鞋。\"阿鸡：“我出了啊，人字拖。”",
+        "撇干指导课开课，学员阿鸡，听课状态：乐。"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 2,
+          "who": "aji"
+        },
+        {
+          "k": "bond",
+          "a": "aji",
+          "b": "piegan",
+          "d": 1
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "R_甩锅给阿鸡",
+      "name": "甩锅给阿鸡",
+      "category": "甩锅与关系",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 30,
+      "roles": [
+        {
+          "key": "甩锅者",
+          "kind": "any"
+        },
+        {
+          "key": "阿鸡",
+          "kind": "fixed",
+          "id": "aji"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "act",
+          "values": [
+            "solo",
+            "duo",
+            "team"
+          ],
+          "who": "甩锅者"
+        },
+        {
+          "k": "scrimResult",
+          "v": "lose",
+          "who": "甩锅者"
+        },
+        {
+          "k": "present",
+          "ids": [
+            "aji"
+          ]
+        }
+      ],
+      "texts": [
+        "{甩锅者}：\"这把输就输在阿鸡那双鞋上。\"阿鸡：\"那我下把出两双。\"",
+        "经典复刻：输了，看向阿鸡。阿鸡：“我的锅我的锅，下把再发明一个。”"
+      ],
+      "effects": [
+        {
+          "k": "status",
+          "key": "心情",
+          "d": 2,
+          "who": "aji"
+        }
+      ],
+      "chains": [],
+      "flags": []
+    },
+    {
+      "id": "R_阴阳怪气",
+      "name": "阴阳怪气",
+      "category": "甩锅与关系",
+      "level": "有趣",
+      "weight": 3,
+      "cooldownMin": 120,
+      "roles": [
+        {
+          "key": "阴阳者",
+          "kind": "other"
+        },
+        {
+          "key": "目标",
+          "kind": "other"
+        }
+      ],
+      "conditions": [
+        {
+          "k": "stat",
+          "key": "心情",
+          "op": "<",
+          "v": 40,
+          "who": "阴阳者"
+        },
+        {
+          "k": "persona",
+          "key": "话痨",
+          "op": ">=",
+          "v": 50,
+          "who": "阴阳者"
+        }
+      ],
+      "texts": [
+        "{阴阳者}：\"哇，{目标}这波真是神之一手呢。\"",
+        "{阴阳者}发动阴阳怪气，伤害不高，侮辱性极强。"
+      ],
+      "effects": [
+        {
+          "k": "bond",
+          "a": "目标",
+          "b": "阴阳者",
+          "d": -2
+        }
+      ],
+      "chains": [],
+      "flags": []
+    }
+  ]
+}

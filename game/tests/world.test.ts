@@ -3,6 +3,7 @@ import { createNewGame, type GameState } from '../src/save/state';
 import { allFacilitiesUpTo } from '../src/data/facilities';
 import { World } from '../src/sim/world';
 import { DAY_START, DAY_END } from '../src/core/clock';
+import { LIBRARY_EVENTS } from '../src/sim/events/library';
 
 function simulateDay(seed: number, day: number, setup?: (s: GameState) => void) {
   const s = createNewGame(seed);
@@ -233,5 +234,50 @@ describe('下午组排：五黑只要 5 个人', () => {
     expect(benched.size).toBeGreaterThanOrEqual(5); // 6 局，每局换一个人
     for (const k of kinds) expect(['spectate', 'eat', 'slack_phone', 'slack_stream']).toContain(k);
     expect(s.eventLog.some((e) => e.text.includes('这把轮空'))).toBe(true);
+  });
+});
+
+describe('训练成长接入日常', () => {
+  it('跨天结算前一天成长，摸鱼分钟写进存档并在新一天清零', () => {
+    const s = createNewGame(7);
+    const w = new World(s);
+    for (let t = DAY_START; t < DAY_END; t++) {
+      s.clock.minute = t;
+      w.update(t, 1, false);
+    }
+    const slack = w.members.find((m) => m.id === 'aji')!.slackMin;
+    expect(slack).toBeGreaterThanOrEqual(0);
+    s.clock.day = 2;
+    s.clock.minute = DAY_START;
+    w.startDay(2, true);
+    const m = s.roster.find((x) => x.id === 'aji')!;
+    expect(Object.keys(m.lastGain).length).toBeGreaterThan(0);
+    expect(m.abilityCarry).toBeTruthy();
+    expect(m.routeTraitReady).toBe(true);
+    expect(w.members.find((x) => x.id === 'aji')!.slackMin).toBe(0);
+  });
+});
+
+describe('事件库接入日常', () => {
+  const libraryTexts = new Set(LIBRARY_EVENTS.flatMap((e) => e.texts));
+
+  it('同一种子同一天看板可复现，且会出现库事件', () => {
+    const run = (seed: number) => {
+      const s = createNewGame(seed);
+      s.clock.day = 3;
+      const w = new World(s);
+      for (let t = DAY_START; t < DAY_END; t++) {
+        s.clock.minute = t;
+        w.update(t, 1, false);
+      }
+      return s;
+    };
+    const a = run(3);
+    const b = run(3);
+    expect(a.eventLog.map((e) => e.text)).toEqual(b.eventLog.map((e) => e.text));
+    const lib = a.eventLog.filter((e) => libraryTexts.has(e.text));
+    expect(lib.length).toBeGreaterThan(0);
+    for (const e of a.eventLog) expect(e.text).not.toMatch(/\{[^}]+\}/);
+    expect(a.eventLog.length).toBeLessThanOrEqual(160);
   });
 });

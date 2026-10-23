@@ -1,8 +1,10 @@
-// 人物卡片：此刻在干嘛、状态、能力（7 属性）、性格、交情
-import { ABILITY_CN, ABILITY_KEYS, PERSONA_KEYS, POSITION_CN, ROSTER_BY_ID, comboOf } from '../data/roster';
+// 人物卡片：此刻在干嘛、状态、训练路线、能力（7 属性）、性格、交情
+import { ABILITY_CN, ABILITY_KEYS, PERSONA_KEYS, POSITION_CN, ROSTER_BY_ID, comboOf, type AbilityKey } from '../data/roster';
+import { routeFit } from '../data/routes';
 import { fmtHM } from '../core/clock';
 import { visibleLogText } from './board';
 import { STATUS_KEYS } from '../save/state';
+import { activeTraitRoute, routeOf } from '../sim/growth';
 import type { World } from '../sim/world';
 
 const STATUS_COLOR: Record<string, string> = { 体力: '#5dd39e', 心情: '#f0a35e', 专注: '#5a8dee', 手感: '#e9c46a', 饥饿: '#ff7b6b', 疲劳: '#9aa3b5', 压力: '#c77dff' };
@@ -49,6 +51,16 @@ export class Card {
     const offal = d.taste.avoidTags.length ? `，不吃${d.taste.avoidTags.join('、')}` : '';
     const combo = comboOf(d.id);
     const partner = combo ? ROSTER_BY_ID[combo.a === d.id ? combo.b : combo.a]?.name : '';
+    const route = routeOf(st);
+    const fit = route ? routeFit(st.ability, st.persona, route) : null;
+    const trait = activeTraitRoute(st);
+    const main = route?.main ?? null;
+    const mainVal = main ? st.ability[main] : 0;
+    const progress = main ? Math.min(100, (mainVal / 70) * 100) : 0;
+    const lastText = (Object.entries(st.lastGain ?? {}) as [AbilityKey, number][])
+      .filter(([, v]) => v >= 0.05)
+      .map(([k, v]) => `${ABILITY_CN[k]} +${v.toFixed(1)}`)
+      .join(' · ');
     const html = `
       <div class="card-head">
         <div class="avatar" style="background:linear-gradient(135deg, ${hex(d.look.shirt)}, #1d2333)">${d.name[0]}</div>
@@ -62,6 +74,15 @@ export class Card {
       <div class="card-now"><small>此刻在干嘛</small>${m.activity.label}</div>
       <div class="card-sec"><h4>状态 <span>今天摸鱼 ${Math.round(m.slackMin)} 分钟</span></h4>
         ${STATUS_KEYS.map((k) => this.bar(k, st.status[k], STATUS_COLOR[k])).join('')}</div>
+      <div class="card-sec"><h4>训练 <span>${route ? `适配 ${fit}` : '还没定路线'}</span></h4>
+        ${route
+          ? `<div>路线「${route.name}」${st.routeGrindUntil >= world.state.clock.day ? ` · 磨合到第 ${st.routeGrindUntil} 天` : ''}</div>
+             <div>主属性 ${main ? ABILITY_CN[main] : '—'}${main && mainVal >= 70 && !st.routeTrait ? ' · 已到 70，等一场比赛开窍' : ''}</div>
+             <div class="bar"><span>开窍线</span><div class="track"><div class="fill" style="width:${Math.max(2, progress)}%;background:linear-gradient(90deg,#f0a35e,#ffd08a)"></div></div><span class="num">${main ? Math.round(mainVal) : '—'}</span></div>
+             ${st.routeTrait ? `<div>已开窍：特性「${st.routeTrait}」${trait ? ` · ${trait.traitNote}` : ''}</div>` : ''}
+             <div>昨日：${lastText || '没有明显增长'}</div>`
+          : '<div>休赛期可以选一条路线。每天按路线成长。</div>'}
+      </div>
       <div class="card-sec"><h4>人设</h4>
         <div>招牌 ${d.heroes.join('、')}${d.heroNote ? `。${d.heroNote}` : ''}</div>
         ${d.draft?.neverPicks.length ? `<div>不选 ${d.draft.neverPicks.join('、')}。队伍想要开团上单，尤其${d.draft.teamWants.join('、')}，他不拿。</div>` : ''}
@@ -70,7 +91,7 @@ export class Card {
         <div>怎么哄 ${d.cheer}</div>
         ${combo ? `<div>和${partner}的${combo.lane}连招 ${combo.name}</div>` : ''}
       </div>
-      <div class="card-sec"><h4>能力 <span>人设初值</span></h4>
+      <div class="card-sec"><h4>能力 <span>当前能力</span></h4>
         ${ABILITY_KEYS.map((k) => this.bar(ABILITY_CN[k], st.ability[k], 'linear-gradient(90deg,#5a8dee,#8fb3ff)')).join('')}</div>
       <div class="card-sec"><h4>性格</h4>
         <div class="persona">${PERSONA_KEYS.map((k) => `<span>${k}<em>${Math.round(st.persona[k])}</em></span>`).join('')}</div></div>

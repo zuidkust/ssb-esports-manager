@@ -10,6 +10,7 @@ import type { GameState, WorldCupState } from '../save/state';
 import { noteMatch } from './economy';
 import { autoLineup } from './lineup';
 import { opponentPlayers, playOurMatch } from './matchprep';
+import { maybeUnlockTraits, traitUnlockText } from './growth';
 
 export const WORLD_ROUND_CN = ['八强', '半决赛', '决赛'] as const;
 
@@ -270,6 +271,9 @@ export function commitWorldRound(state: GameState, roundIndex: number, playerWon
     } else if (roundIndex === 2) {
       finishCup(state, logs);
     }
+  }
+  for (const u of maybeUnlockTraits(state, slots, `world:${state.season.calendarSeason}:${roundIndex}`)) {
+    logs.push(traitUnlockText(u));
   }
   return logs;
 }

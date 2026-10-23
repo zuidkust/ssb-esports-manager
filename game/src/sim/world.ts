@@ -1,7 +1,7 @@
 // 日常模拟（M1）：每人按当日计划和性格决定“此刻在干嘛”，状态随时间漂移，关键节点写一条日常动态
 // 自主行为只用当前场地里有的物件（data/facilities.ts）：网吧角落没有冰箱，就不会有人去开冰箱
 // 事件引擎（M2）会在这一层之上挑选和结算事件
-import { dayInfo, MATCH_MINUTE, opponentForRound, PREMATCH_MINUTE } from '../core/calendar';
+import { dayInfo, MATCH_MINUTE, nextMatch, opponentForRound, PREMATCH_MINUTE } from '../core/calendar';
 import { DAY_START } from '../core/clock';
 import { availableFacilities, VENUE_CN, type FacilityId } from '../data/facilities';
 import { actionPointMax, isPayday } from '../data/economy';
@@ -15,6 +15,10 @@ import { tryPersonaEvent } from './personaEvents';
 import type { GameState, LogEntry, MemberState, StatusKey } from '../save/state';
 import { performAction } from './actions';
 import { grantDailyInsight, runPayday } from './economy';
+import { applyDailyGrowth } from './growth';
+import { updateScrims } from './scrim';
+import { tryLibraryEvent } from './events/engine';
+import type { EventContext, EventMember } from './events/types';
 import { expireKnots } from './relations';
 import { enterDay, roundSettled } from './league';
 import { isMatchDay } from './worldcup';
@@ -53,8 +57,14 @@ const PLAYING: ActivityKind[] = ['training', 'solo', 'duo', 'team', 'match'];
 
 export class Member {
   activity: Activity = { kind: 'absent', label: '还没到' };
-  slackMin = 0; // 今天摸鱼分钟
   constructor(public def: MemberDef, public state: MemberState) {}
+  /** 今天摸鱼分钟存在存档里，读档后当天成长/心得不会少算 */
+  get slackMin(): number {
+    return this.state.slackMin ?? 0;
+  }
+  set slackMin(v: number) {
+    this.state.slackMin = v;
+  }
   get id() {
     return this.def.id;
   }
@@ -96,6 +106,7 @@ export class World {
     for (const m of this.members) m.state = state.roster.find((r) => r.id === m.id)!;
     this.planDay = -1;
     this.lastSeg = null;
+    this.prevSegment = null;
     this.refreshVenue();
   }
 
@@ -145,6 +156,15 @@ export class World {
   startDay(day: number, fresh: boolean) {
     for (const text of enterDay(this.state, day, fresh)) this.logAt('剧情', text, [], DAY_START);
     if (fresh && day > 1) {
+      const slack = Object.fromEntries(this.members.map((m) => [m.id, m.slackMin]));
+      const growth = applyDailyGrowth(this.state, day - 1, slack);
+      const ready = Object.entries(growth)
+        .filter(([, r]) => r.ready)
+        .map(([id]) => id);
+      if (ready.length) {
+        const names = ready.map((id) => this.byId[id]?.name ?? id);
+        this.logAt('剧情', `${names.join('、')} 的主属性练到 70 了，之后每场比赛都有机会开窍。`, ready, DAY_START);
+      }
       const gained = grantDailyInsight(this.state, this.members.map((m) => m.slackMin), day - 1);
       expireKnots(this.state, day);
       if (gained > 0) this.logAt('日常', `昨天的训练记进心得：+${gained}。`, [], DAY_START);
@@ -221,6 +241,7 @@ export class World {
         if (m.slacking && !m.activity.bench) m.slackMin += advanced; // 轮空不算摸鱼
       }
     }
+    if (advanced > 0) updateScrims(this.state, this.members, minute);
     if (!jumped) {
       this.segmentLines(minute, advanced);
       this.personaTick(minute);
@@ -520,10 +541,13 @@ export class World {
   }
 
   private lastSeg: string | null = null;
+  /** 上一个已经离开的时段，给“复盘会”这类 after 条件用 */
+  private prevSegment: string | null = null;
   private segmentLines(t: number, advanced: number) {
     const seg = this.segment(t);
     if (seg.id === this.lastSeg) return;
     const prevSeg = this.lastSeg;
+    this.prevSegment = prevSeg;
     this.lastSeg = seg.id;
     if (prevSeg == null || advanced <= 0) return;
     const opp = this.opponentToday();
@@ -550,7 +574,55 @@ export class World {
     this.lastPersonaBlock = block;
     const present = this.members.filter((m) => m.present).map((m) => m.id);
     const fired = tryPersonaEvent(this.state, present, this.segment(minute).id, this.state.clock.day, minute);
-    if (fired) this.log(fired.level, fired.text, fired.ids);
+    if (fired) {
+      this.log(fired.level, fired.text, fired.ids);
+      return;
+    }
+    const lib = tryLibraryEvent(this.state, this.libraryContext(minute));
+    if (lib) this.log(lib.level, lib.text, lib.ids);
+  }
+
+  private libraryContext(minute: number): EventContext {
+    const day = this.state.clock.day;
+    const members: EventMember[] = this.members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      position: m.def.position,
+      present: m.present,
+      slacking: m.slacking,
+      sleeping: m.activity.kind === 'nap_desk' || m.activity.kind === 'nap_sofa',
+      early: !this.plans[m.id]?.late,
+      late: !!this.plans[m.id]?.late,
+      bench: !this.starters.includes(m.id),
+      activity: m.activity.kind,
+      ability: m.state.ability,
+      persona: m.state.persona,
+      status: m.state.status,
+      scrim: m.state.scrim,
+    }));
+    const present = members.filter((m) => m.present);
+    const nm = nextMatch(day, minute);
+    const nextMatchDays = nm ? nm.inDays : null;
+    const nextMatchHours = nm
+      ? nm.inDays === 0
+        ? (MATCH_MINUTE - minute) / 60
+        : nm.inDays * 24 + (MATCH_MINUTE - minute) / 60
+      : null;
+    return {
+      day,
+      minute,
+      segment: this.segment(minute).id,
+      lastSegment: this.prevSegment,
+      members,
+      present,
+      starters: this.starters.slice(),
+      relations: this.state.relations,
+      overtimeYesterday: this.state.flags.overtimeDay === day - 1,
+      nextMatchDays,
+      nextMatchHours,
+      events: this.state.events,
+      rand: seeded(this.state.seed, 'library', day, Math.floor(minute / 20)),
+    };
   }
 
   log(level: LogEntry['level'], text: string, ids: string[]) {

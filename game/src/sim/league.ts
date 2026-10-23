@@ -10,6 +10,7 @@ import { emptySeason, emptyTable, type GameState } from '../save/state';
 import { noteMatch, noteSeasonRank, cutSponsorsAfterMove } from './economy';
 import { autoLineup } from './lineup';
 import { playCpuGame, playOurMatch } from './matchprep';
+import { maybeUnlockTraits, traitUnlockText } from './growth';
 import { autoFinishWorldCup, createWorldCup, playerWorldPending } from './worldcup';
 
 export function winsNeeded(tier: Tier): number {
@@ -281,6 +282,7 @@ export function commitRound(state: GameState, round: number, playerWon: boolean,
   if (!playerWon && opp.id === 'class32') logs.push('被三年级二班教育了一顿。');
   const rng = mulberry32(hashString([state.seed, 'mood', state.season.calendarSeason, round].join('|')));
   logs.push(...seriesMood(state, playerWon, slots, rng));
+  for (const u of maybeUnlockTraits(state, slots, `league:${state.season.calendarSeason}:${round}`)) logs.push(traitUnlockText(u));
   state.season.round = round;
   const row = ourRank(state);
   logs.push(`第 ${round} 轮结束，目前第 ${row.rank} 名（${row.w} 胜 ${row.l} 负）。`);
