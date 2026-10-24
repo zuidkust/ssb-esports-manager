@@ -38,6 +38,7 @@ export interface Venue {
   doorPivot: THREE.Group;
   clock: { hourHand: THREE.Mesh; minHand: THREE.Mesh };
   glowMat: THREE.MeshStandardMaterial;
+  floorMat?: THREE.MeshStandardMaterial;
   fridgeDoor?: THREE.Group;
   update?(dt: number, nowMs: number): void; // 场景自带的小动画（网吧里的路人）
 }

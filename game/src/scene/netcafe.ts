@@ -195,7 +195,7 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
   scene.add(root);
   const { x0, x1, z0, z1, h } = ROOM;
   const W = x1 - x0, D = z1 - z0;
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x9fb0a6, map: plasterTexture(), roughness: 0.95 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xa7aea6, map: plasterTexture(), roughness: 0.92 });
   const wainscot = mat(0x3d4b47, { roughness: 0.75 });
   const wallTop = mat(0xe6e0d2, { roughness: 0.9 });
   const trim = mat(0x2d3235, { roughness: 0.6 });
@@ -204,7 +204,8 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
   const glowMat = buildPlinth(root);
 
   // ── 地砖 ──
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: tileTexture(), roughness: 0.4, color: 0xffffff }));
+  const floorMat = new THREE.MeshStandardMaterial({ map: tileTexture(), roughness: 0.5, metalness: 0.08, color: 0xffffff });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   root.add(floor);
@@ -410,7 +411,7 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
   };
 
   return {
-    level: 0, root, desks, spots, lamps: [], sky, doorPivot, clock, glowMat,
+    level: 0, root, desks, spots, lamps: [], sky, doorPivot, clock, glowMat, floorMat,
     nav: NETCAFE_NAV, door: 'D', exit: new THREE.Vector3(-5.85, 0, -5.7),
     update(dt, now) {
       for (const c of npcs) c.update(dt, now);

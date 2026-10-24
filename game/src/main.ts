@@ -15,6 +15,7 @@ import { createNewGame, needsLineupConfirm, type GameState } from './save/state'
 import { World } from './sim/world';
 import { Director } from './scene/director';
 import { Lighting } from './scene/lighting';
+import { parseRenderMode } from './scene/pixelPass';
 import { detectQuality, Stage } from './scene/stage';
 import { buildVenue, venueKey, type Venue } from './scene/venue';
 import { ROSTER } from './data/roster';
@@ -50,8 +51,24 @@ const saves = new SaveManager(platform.store);
 // ───────── 场景 ─────────
 const quality = detectQuality(params.get('q'));
 const stage = new Stage($('stage'), quality);
+const renderPref = parseRenderMode(params);
+stage.setRenderMode(renderPref.mode);
+stage.setPixelSize(renderPref.pixelSize);
 stage.sidePanel = innerWidth > 1180 ? 400 : 336;
 stage.resize();
+function syncPixelBtn() {
+  const btn = $('pixelBtn');
+  const on = stage.renderMode === 'pixel';
+  btn.textContent = on ? 'PIXEL' : 'RAW 3D';
+  btn.classList.toggle('on', on);
+  btn.classList.toggle('raw', !on);
+  btn.title = on ? '当前：像素管线，点击看原始 3D' : '当前：原始 3D，点击回到像素管线';
+}
+syncPixelBtn();
+$('pixelBtn').addEventListener('click', () => {
+  stage.setRenderMode(stage.renderMode === 'pixel' ? 'raw' : 'pixel');
+  syncPixelBtn();
+});
 let state: GameState = createNewGame();
 const world = new World(state);
 let clock = new GameClock(state.clock);
@@ -855,6 +872,8 @@ if (params.get('debug') === '1') {
       $('modalBody').scrollTop = bodyTop;
       $('modal').scrollTop = outerTop;
     },
+    getPixelSize: () => stage.pixelSize,
+    setPixelSize: (size) => stage.setPixelSize(size),
   });
   syncGod = () => god.sync();
 }

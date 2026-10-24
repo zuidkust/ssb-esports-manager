@@ -1,4 +1,4 @@
-// 渲染舞台：渲染器、镜头、后期辉光、CSS2D 标签层、点击拾取
+// 渲染舞台：正交等距镜头、像素管线 / 原始 3D、CSS2D 标签层、点击拾取
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
@@ -7,6 +7,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { PixelPipeline, verticalFrustum, worldUnitsPerPixel, snapOffset, type PixelSize, type RenderMode } from './pixelPass';
 
 export interface Quality {
   name: 'high' | 'medium' | 'low';
@@ -17,7 +18,10 @@ export interface Quality {
   screenLights: boolean;
 }
 
-// 画质档位：桌面高画质；小屏中画质；帧率持续过低时自动降到低画质
+export type { PixelSize, RenderMode };
+
+// 画质档位：桌面高画质；小屏中画质；帧率持续过低时自动降到低画质。
+// 三档都走像素管线。降档只关辉光、降低像素比，不把画面退回模糊全分辨率。
 export function detectQuality(forced?: string | null): Quality {
   const small = matchMedia('(max-width: 760px), (pointer: coarse)').matches;
   const tiers: Record<Quality['name'], Quality> = {
@@ -28,31 +32,44 @@ export function detectQuality(forced?: string | null): Quality {
   return tiers[forced as Quality['name']] || (small ? tiers.medium : tiers.high);
 }
 
+const ISO_DIR = new THREE.Vector3(1, 0.82, 1).normalize();
+
 export class Stage {
   renderer: THREE.WebGLRenderer;
   labels: CSS2DRenderer;
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(26, 1, 0.5, 200);
+  camera: THREE.OrthographicCamera;
   controls: OrbitControls;
   composer: EffectComposer | null = null;
   bloom: UnrealBloomPass | null = null;
+  pixel: PixelPipeline;
+  renderMode: RenderMode = 'pixel';
+  pixelSize: PixelSize = 3;
   pickables: THREE.Object3D[] = [];
   onPick: ((id: string | null) => void) | null = null;
   focusTarget: THREE.Vector3 | null = null;
   sidePanel = 0; // 右侧面板宽度：投影中心左移半个面板，让房间落在可见区域正中
   private raycaster = new THREE.Raycaster();
+  private bloomOn: boolean;
+  private degraded = false;
+  private frustum = 14;
+  private savedPos = new THREE.Vector3();
+  private snapRight = new THREE.Vector3();
+  private snapUp = new THREE.Vector3();
+  private snapView = new THREE.Vector3();
 
   constructor(private container: HTMLElement, public quality: Quality) {
-    const r = (this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: false }));
+    this.bloomOn = quality.bloom;
+    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.5, 120);
+    const r = (this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }));
     r.setPixelRatio(quality.dpr);
     r.shadowMap.enabled = quality.shadows;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.type = THREE.BasicShadowMap;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 1.0;
     r.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(r.domElement);
 
-    // 环境光照：给木头、金属、屏幕一点柔和的反射，比纯色补光更有层次
     const pmrem = new THREE.PMREMGenerator(r);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.35;
@@ -71,14 +88,11 @@ export class Stage {
     c.maxAzimuthAngle = Math.PI / 4 + 0.75;
     c.screenSpacePanning = true;
     c.zoomToCursor = true;
+    c.minZoom = 0.62;
+    c.maxZoom = 3.6;
 
-    if (quality.bloom) {
-      this.composer = new EffectComposer(r);
-      this.composer.addPass(new RenderPass(this.scene, this.camera));
-      this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.4, 0.55, 0.82);
-      this.composer.addPass(this.bloom);
-      this.composer.addPass(new OutputPass());
-    }
+    this.pixel = new PixelPipeline();
+    this.rebuildComposer();
 
     this.bindPick();
     this.resize();
@@ -86,16 +100,25 @@ export class Stage {
     this.resetView();
   }
 
-  // 默认等距视角：从东南方向斜上方俯视，竖屏时拉远以装下整个房间
+  setRenderMode(mode: RenderMode) {
+    this.renderMode = mode;
+  }
+
+  setPixelSize(size: PixelSize) {
+    this.pixelSize = size;
+    this.pixel.setPixelSize(size);
+    this.resize();
+  }
+
+  // 默认等距视角：东南斜上，约 32° 俯角、45° 方位。竖屏靠放大视锥把房间装下。
   resetView() {
-    const w = this.container.clientWidth, h = this.container.clientHeight;
-    const aspect = w / Math.max(1, h);
-    const dist = aspect < 0.8 ? (64 / Math.max(aspect, 0.45)) * 0.56 : aspect < 1.3 ? 46 : 33;
-    const dir = new THREE.Vector3(1, 0.98, 1.12).normalize();
-    this.controls.target.set(aspect < 0.8 ? -0.2 : 0.4, 0.4, aspect < 0.8 ? 0.2 : -0.2);
-    this.camera.position.copy(this.controls.target).addScaledVector(dir, dist);
-    this.controls.minDistance = 12;
-    this.controls.maxDistance = Math.max(80, dist * 1.4);
+    const dist = 42;
+    this.controls.target.set(0, 0.55, -0.35);
+    this.camera.position.copy(this.controls.target).addScaledVector(ISO_DIR, dist);
+    this.camera.zoom = 1;
+    this.camera.near = 0.5;
+    this.camera.far = 120;
+    this.camera.updateProjectionMatrix();
     this.controls.update();
   }
 
@@ -103,19 +126,45 @@ export class Stage {
     const w = this.container.clientWidth, h = this.container.clientHeight;
     this.renderer.setSize(w, h);
     this.labels.setSize(w, h);
-    this.camera.aspect = w / Math.max(1, h);
     const side = w > 760 ? this.sidePanel : 0;
-    if (side) this.camera.setViewOffset(w, h, side / 2, 0, w, h);
-    else this.camera.clearViewOffset();
-    this.camera.updateProjectionMatrix();
-    this.composer?.setSize(w, h);
+    const aspect = w / Math.max(1, h);
+    const visibleAspect = Math.max(1, w - side) / Math.max(1, h);
+    this.frustum = verticalFrustum(visibleAspect);
+    const cam = this.camera;
+    cam.left = -this.frustum * aspect / 2;
+    cam.right = this.frustum * aspect / 2;
+    cam.top = this.frustum / 2;
+    cam.bottom = -this.frustum / 2;
+    if (side) cam.setViewOffset(w, h, side / 2, 0, w, h);
+    else cam.clearViewOffset();
+    cam.updateProjectionMatrix();
+    this.pixel.setSize(w, h, this.renderer.getPixelRatio());
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
   }
 
   degrade() {
-    this.composer = null;
+    this.degraded = true;
+    this.bloomOn = false;
     this.bloom = null;
     this.renderer.setPixelRatio(1);
+    this.rebuildComposer();
     this.resize();
+  }
+
+  private rebuildComposer() {
+    this.composer?.dispose();
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    if (this.bloomOn && !this.degraded) {
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.4, 0.55, 0.82);
+      this.composer.addPass(this.bloom);
+    } else {
+      this.bloom = null;
+    }
+    this.composer.addPass(new OutputPass());
   }
 
   private bindPick() {
@@ -137,6 +186,20 @@ export class Stage {
     this.focusTarget = pos.clone().setY(0.8);
   }
 
+  private snapCamera() {
+    const cam = this.camera;
+    cam.updateMatrixWorld();
+    const step = worldUnitsPerPixel((cam.top - cam.bottom) / cam.zoom, this.pixel.lowHeight);
+    this.snapView.set(0, 0, 0).applyMatrix4(cam.matrixWorldInverse);
+    const dx = snapOffset(this.snapView.x, step);
+    const dy = snapOffset(this.snapView.y, step);
+    this.snapRight.setFromMatrixColumn(cam.matrixWorld, 0);
+    this.snapUp.setFromMatrixColumn(cam.matrixWorld, 1);
+    cam.position.addScaledVector(this.snapRight, -dx);
+    cam.position.addScaledVector(this.snapUp, -dy);
+    cam.updateMatrixWorld();
+  }
+
   render(dt: number, night: number) {
     if (this.focusTarget) {
       const t = this.controls.target;
@@ -146,14 +209,24 @@ export class Stage {
       if (delta.length() < 0.002) this.focusTarget = null;
     }
     this.controls.update();
-    this.renderer.toneMappingExposure = 1.0 + night * 0.25;
+    const exposure = 1.0 + night * 0.25;
+    this.renderer.toneMappingExposure = exposure;
     this.scene.environmentIntensity = 0.35 * (1 - night * 0.75);
     if (this.bloom) {
       this.bloom.strength = 0.2 + night * 0.6;
       this.bloom.threshold = 0.88 - night * 0.25;
     }
-    if (this.composer) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
-    this.labels.render(this.scene, this.camera);
+    if (this.renderMode === 'pixel') {
+      this.savedPos.copy(this.camera.position);
+      this.snapCamera();
+      this.pixel.render(this.renderer, this.scene, this.camera, exposure);
+      this.labels.render(this.scene, this.camera);
+      this.camera.position.copy(this.savedPos);
+      this.camera.updateMatrixWorld();
+    } else {
+      if (this.composer && this.bloom) this.composer.render();
+      else this.renderer.render(this.scene, this.camera);
+      this.labels.render(this.scene, this.camera);
+    }
   }
 }

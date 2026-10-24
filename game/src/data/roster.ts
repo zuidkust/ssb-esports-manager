@@ -1,6 +1,6 @@
 // 开局 6 人。文案和数值以 docs/人设稿-开局6人.md 为准。
 // 7 属性：人设稿第 8 节的强 / 弱 / 未强调，落成可打的初值，微调仍【待定】。
-// 外形沿用已有模型（眼镜、胖瘦、高矮、阿鸡的人字拖），人设稿没有改外观。
+// 外形是方块手办：头身比约 2.5。配色和特征块见 character.ts。
 
 export type Position = 'top' | 'jungle' | 'mid' | 'adc' | 'support';
 export const POSITIONS: Position[] = ['top', 'jungle', 'mid', 'adc', 'support'];
@@ -23,7 +23,15 @@ export interface Look {
   hair: number;
   skin: number;
   shoes?: number;
-  hairStyle: 'messy' | 'short' | 'side' | 'buzz';
+  hairStyle: 'messy' | 'flat' | 'bangs' | 'side' | 'buzz' | 'fluffy' | 'short';
+  /** 粗黑框。低分下框边至少两像素 */
+  frame?: 'thick';
+  /** 发光青镜片 */
+  lens?: 'glow';
+  /** 熬夜眼下暗青块 */
+  eyeBags?: boolean;
+  /** 挂脖红耳罩 */
+  earmuffs?: boolean;
 }
 
 export interface Taste {
@@ -127,7 +135,7 @@ export const ROSTER: MemberDef[] = [
     taste: noFav('可乐', false, { avoid: ['milktea'] }),
     phoneBias: { douyin: 1.4, mobilegame: 1.8 },
     roles: ['开心果', '背锅常客'],
-    look: { height: 1.0, girth: 1.10, glasses: true, flipflops: true, shirt: 0xff8a2b, pants: 0x3d4f66, hair: 0x2b2420, skin: 0xf0c8a0, shoes: 0xe8833a, hairStyle: 'messy' },
+    look: { height: 1.0, girth: 1.10, glasses: true, flipflops: true, frame: 'thick', shirt: 0xff8a2b, pants: 0x3d4f66, hair: 0x2b2420, skin: 0xf0c8a0, shoes: 0xff8a2b, hairStyle: 'messy' },
     defaultRoute: 'late',
   },
   {
@@ -164,7 +172,7 @@ export const ROSTER: MemberDef[] = [
     taste: burger('红牛、东鹏，也喝无糖'),
     phoneBias: { douyin: 1.15, bilibili: 2.2, wechat: 2.4 },
     roles: ['指挥'],
-    look: { height: 0.84, girth: 0.86, glasses: true, shirt: 0x2f8a4a, pants: 0x1e2430, hair: 0x1d1a18, skin: 0xeec39c, shoes: 0x1a1a1e, hairStyle: 'short' },
+    look: { height: 0.84, girth: 0.86, glasses: true, lens: 'glow', shirt: 0x2f8a4a, pants: 0x1e2430, hair: 0x1d1a18, skin: 0xeec39c, shoes: 0x1a1a1e, hairStyle: 'flat' },
     defaultRoute: 'roam',
   },
   {
@@ -201,7 +209,7 @@ export const ROSTER: MemberDef[] = [
     taste: burger('无糖、茶、白开水'),
     phoneBias: { douyin: 1.35, wechat: 2.3 },
     roles: ['队伍保障'],
-    look: { height: 0.9, girth: 0.90, glasses: true, shirt: 0x4a8ad4, pants: 0x2a2e3a, hair: 0x2a2420, skin: 0xf2caa6, shoes: 0xf0f0ee, hairStyle: 'short' },
+    look: { height: 0.9, girth: 0.90, glasses: true, shirt: 0x4a8ad4, pants: 0x2a2e3a, hair: 0x2a2420, skin: 0xf2caa6, shoes: 0xffffff, hairStyle: 'bangs' },
     defaultRoute: 'fight',
   },
   {
@@ -313,7 +321,7 @@ export const ROSTER: MemberDef[] = [
     taste: noFav('可乐', true),
     phoneBias: { douyin: 1.1, bilibili: 2, wechat: 1.8, xiaohongshu: 2.6 },
     roles: ['甩锅', '也会背锅'],
-    look: { height: 0.98, girth: 1.18, glasses: false, shirt: 0xc43a3a, pants: 0x22252c, hair: 0x2a211c, skin: 0xedc29b, shoes: 0xe9e9e9, hairStyle: 'short' },
+    look: { height: 0.98, girth: 1.18, glasses: false, eyeBags: true, earmuffs: true, shirt: 0xc43a3a, pants: 0x22252c, hair: 0x2a211c, skin: 0xedc29b, shoes: 0xe9e9e9, hairStyle: 'fluffy' },
     defaultRoute: 'one',
   },
 ];
