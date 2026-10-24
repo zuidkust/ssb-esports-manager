@@ -7,7 +7,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { PixelPipeline, verticalFrustum, worldUnitsPerPixel, snapOffset, type PixelSize, type RenderMode } from './pixelPass';
+import { effectivePixelSize, FX_LAYER, PixelPipeline, verticalFrustum, worldUnitsPerPixel, snapOffset, type PixelSize, type RenderMode } from './pixelPass';
 
 export interface Quality {
   name: 'high' | 'medium' | 'low';
@@ -44,7 +44,7 @@ export class Stage {
   bloom: UnrealBloomPass | null = null;
   pixel: PixelPipeline;
   renderMode: RenderMode = 'pixel';
-  pixelSize: PixelSize = 3;
+  pixelSize: PixelSize = 4;
   pickables: THREE.Object3D[] = [];
   onPick: ((id: string | null) => void) | null = null;
   focusTarget: THREE.Vector3 | null = null;
@@ -52,7 +52,10 @@ export class Stage {
   private raycaster = new THREE.Raycaster();
   private bloomOn: boolean;
   private degraded = false;
-  private frustum = 14;
+  private frustum = 17;
+  private backdrop: THREE.CanvasTexture;
+  private backdropCanvas = document.createElement('canvas');
+  private backdropKey = '';
   private savedPos = new THREE.Vector3();
   private snapRight = new THREE.Vector3();
   private snapUp = new THREE.Vector3();
@@ -61,6 +64,7 @@ export class Stage {
   constructor(private container: HTMLElement, public quality: Quality) {
     this.bloomOn = quality.bloom;
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.5, 120);
+    this.camera.layers.enable(FX_LAYER);
     const r = (this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }));
     r.setPixelRatio(quality.dpr);
     r.shadowMap.enabled = quality.shadows;
@@ -72,7 +76,7 @@ export class Stage {
 
     const pmrem = new THREE.PMREMGenerator(r);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.35;
+    this.scene.environmentIntensity = 0.12;
     pmrem.dispose();
 
     this.labels = new CSS2DRenderer();
@@ -92,12 +96,33 @@ export class Stage {
     c.maxZoom = 3.6;
 
     this.pixel = new PixelPipeline();
+    this.backdropCanvas.width = 2;
+    this.backdropCanvas.height = 256;
+    this.backdrop = new THREE.CanvasTexture(this.backdropCanvas);
+    this.backdrop.colorSpace = THREE.SRGBColorSpace;
+    this.setBackdrop(new THREE.Color(0xcfd3d2), new THREE.Color(0xeceeed));
     this.rebuildComposer();
 
     this.bindPick();
     this.resize();
     addEventListener('resize', () => this.resize());
     this.resetView();
+  }
+
+  /** 背景渐变（sRGB 颜色）：像素模式在合成里画，原始 3D 用一张竖向渐变贴图。 */
+  setBackdrop(top: THREE.Color, bottom: THREE.Color) {
+    const key = top.getHexString() + bottom.getHexString();
+    if (key === this.backdropKey) return;
+    this.backdropKey = key;
+    this.pixel.setBackdrop(top, bottom);
+    const g = this.backdropCanvas.getContext('2d')!;
+    const grad = g.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#' + top.getHexString());
+    grad.addColorStop(1, '#' + bottom.getHexString());
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 2, 256);
+    this.backdrop.needsUpdate = true;
+    this.scene.background = this.backdrop;
   }
 
   setRenderMode(mode: RenderMode) {
@@ -113,7 +138,8 @@ export class Stage {
   // 默认等距视角：东南斜上，约 32° 俯角、45° 方位。竖屏靠放大视锥把房间装下。
   resetView() {
     const dist = 42;
-    this.controls.target.set(0, 0.55, -0.35);
+    // 视线中心抬高到房间上方：后排树冠和岛底岩石都能进画面
+    this.controls.target.set(0.3, 1.7, -0.3);
     this.camera.position.copy(this.controls.target).addScaledVector(ISO_DIR, dist);
     this.camera.zoom = 1;
     this.camera.near = 0.5;
@@ -138,7 +164,7 @@ export class Stage {
     if (side) cam.setViewOffset(w, h, side / 2, 0, w, h);
     else cam.clearViewOffset();
     cam.updateProjectionMatrix();
-    this.pixel.setSize(w, h, this.renderer.getPixelRatio());
+    this.pixel.setSize(w, h, effectivePixelSize(this.pixelSize, Math.max(1, w - side)));
     if (this.composer) {
       this.composer.setPixelRatio(this.renderer.getPixelRatio());
       this.composer.setSize(w, h);
@@ -211,7 +237,7 @@ export class Stage {
     this.controls.update();
     const exposure = 1.0 + night * 0.25;
     this.renderer.toneMappingExposure = exposure;
-    this.scene.environmentIntensity = 0.35 * (1 - night * 0.75);
+    this.scene.environmentIntensity = 0.12 * (1 - night * 0.75);
     if (this.bloom) {
       this.bloom.strength = 0.2 + night * 0.6;
       this.bloom.threshold = 0.88 - night * 0.25;

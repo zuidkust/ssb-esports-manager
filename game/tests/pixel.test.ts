@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ROSTER } from '../src/data/roster';
-import { lowResSize, parseRenderMode, snapOffset, verticalFrustum, worldUnitsPerPixel } from '../src/scene/pixelPass';
+import { effectivePixelSize, lowResSize, parseRenderMode, snapOffset, verticalFrustum, worldUnitsPerPixel } from '../src/scene/pixelPass';
 
 describe('像素管线参数', () => {
-  it('默认是 PIXEL，粒度为 3', () => {
-    expect(parseRenderMode('')).toEqual({ mode: 'pixel', pixelSize: 3 });
-    expect(parseRenderMode('t=14:30&skip=1')).toEqual({ mode: 'pixel', pixelSize: 3 });
+  it('默认是 PIXEL，粒度为 4（CSS 像素）', () => {
+    expect(parseRenderMode('')).toEqual({ mode: 'pixel', pixelSize: 4 });
+    expect(parseRenderMode('t=14:30&skip=1')).toEqual({ mode: 'pixel', pixelSize: 4 });
   });
 
   it('raw3d 和 render=raw 进入原始 3D', () => {
@@ -14,17 +14,26 @@ describe('像素管线参数', () => {
     expect(parseRenderMode('render=raw&pixel=4')).toEqual({ mode: 'raw', pixelSize: 4 });
   });
 
-  it('只接受 2 / 3 / 4 三档像素', () => {
-    expect(parseRenderMode('pixel=2').pixelSize).toBe(2);
-    expect(parseRenderMode('pixel=4').pixelSize).toBe(4);
-    expect(parseRenderMode('pixel=8').pixelSize).toBe(3);
-    expect(parseRenderMode('pixel=0').pixelSize).toBe(3);
+  it('只接受 3 / 4 / 5 三档像素', () => {
+    expect(parseRenderMode('pixel=3').pixelSize).toBe(3);
+    expect(parseRenderMode('pixel=5').pixelSize).toBe(5);
+    expect(parseRenderMode('pixel=2').pixelSize).toBe(4);
+    expect(parseRenderMode('pixel=8').pixelSize).toBe(4);
+    expect(parseRenderMode('pixel=0').pixelSize).toBe(4);
   });
 
-  it('竖屏放大视锥，横屏保持基准 14', () => {
-    expect(verticalFrustum(1.6)).toBe(14);
-    expect(verticalFrustum(1.15)).toBeCloseTo(17.2 / 1.15, 5);
-    expect(verticalFrustum(0.5)).toBeCloseTo(17.2 / 0.5, 5);
+  it('窄屏自动收小粒度，保证约 200 列低分像素；桌面按用户选的', () => {
+    expect(effectivePixelSize(4, 1200)).toBe(4);
+    expect(effectivePixelSize(5, 1200)).toBe(5);
+    expect(effectivePixelSize(4, 700)).toBe(3);
+    expect(effectivePixelSize(4, 430)).toBe(2);
+    expect(effectivePixelSize(3, 200)).toBe(2);
+  });
+
+  it('横屏视锥 17.5 装下整块漂浮街区，竖屏按宽度放大', () => {
+    expect(verticalFrustum(1.6)).toBe(17.5);
+    expect(verticalFrustum(1.33)).toBeCloseTo(24.5 / 1.33, 5);
+    expect(verticalFrustum(0.5)).toBeCloseTo(24.5 / 0.5, 5);
   });
 
   it('低分辨率按像素粒度取整', () => {
@@ -41,7 +50,7 @@ describe('像素管线参数', () => {
   });
 });
 
-describe('方块手办配色', () => {
+describe('六人造型特征（衫色、发型、眼镜、体型）', () => {
   const look = Object.fromEntries(ROSTER.map((m) => [m.id, m.look]));
 
   it('六人队服和特征对得上', () => {

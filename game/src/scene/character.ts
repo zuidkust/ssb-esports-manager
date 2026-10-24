@@ -1,19 +1,16 @@
-// 方块手办：头身比约 2.5，关节仍是原来的 15 个空 Group，姿态用关节角度插值
-// 头用指定倒角盒；五官只留竖长豆豆眼。躯干四肢都是方柱，特征块放大到低分下能认出来
+// 低多边形人物（画风对标《Corner Pitch》的小球员）：真人比例，头身约 1:5.6
+// 方块拼装、平直着色：短袖 T 恤 + 短裤 + 露小腿 + 白袜 + 鞋。低分下约 20 个像素高，靠衫色和发型认人。
+// 关节仍是原来的空 Group（hips/spine/neck/head、sh/el、hp/kn），15 个姿态用关节角度插值。
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { MemberDef } from '../data/roster';
+import { mergeStatic } from './merge';
 import { mat } from './office';
 
-const HEAD_W = 0.34;
-const HEAD_H = 0.34;
-const HEAD_D = 0.32;
-const NECK_H = 0.04;
-const TORSO_H = 0.2;
-const THIGH_H = 0.145;
-const SHIN_H = 0.125;
-const TARGET_HEIGHT = 1.7;
+const SEAT_H = 0.5;
+const HEAD_W = 0.23;
+const HEAD_H = 0.26;
+const HEAD_D = 0.24;
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -36,6 +33,24 @@ function block(w: number, h: number, d: number, material: THREE.Material, parent
   m.position.set(x, y, z);
   m.castShadow = true;
   m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+
+// 上宽下窄的躯干块：底面按 bottom 比例收窄（肩宽、腰窄）
+function taper(w: number, h: number, d: number, bottom: number, material: THREE.Material, parent: THREE.Object3D, y: number) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    if (p.getY(i) < 0) {
+      p.setX(i, p.getX(i) * bottom);
+      p.setZ(i, p.getZ(i) * (0.5 + bottom * 0.5));
+    }
+  }
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, material);
+  m.position.y = y + h / 2;
+  m.castShadow = m.receiveShadow = true;
   parent.add(m);
   return m;
 }
@@ -70,7 +85,7 @@ export class Character {
   onArrive: (() => void) | null = null;
   onSlam: (() => void) | null = null;
   private legLen: number;
-  private seatH: number;
+  private seatH = SEAT_H;
   private t = Math.random() * 10;
   private phase = Math.random() * 10;
   private cur: Pose | null = null;
@@ -83,132 +98,127 @@ export class Character {
     const L = def.look;
     const s = L.height;
     const g = L.girth;
-    const legLen = (this.legLen = THIGH_H + SHIN_H);
-    const crown = legLen + TORSO_H + NECK_H + HEAD_H - 0.012;
-    const fit = (TARGET_HEIGHT * s) / crown;
-    this.seatH = 0.5 / fit;
+    const sg = Math.sqrt(g);
+    const legLen = (this.legLen = 0.84 * s);
+    const torsoLen = 0.3 * s;
     this.root.userData.memberId = def.id;
-    this.body.scale.setScalar(fit);
+    this.root.userData.noMerge = true;
     this.root.add(this.body);
 
-    const shirt = mat(L.shirt, { roughness: 0.72 });
-    const shirtDark = mat(new THREE.Color(L.shirt).multiplyScalar(0.72).getHex(), { roughness: 0.72 });
-    const pants = mat(L.pants, { roughness: 0.78 });
+    const shirt = mat(L.shirt, { roughness: 0.85 });
+    const shirtDark = mat(new THREE.Color(L.shirt).multiplyScalar(0.74).getHex(), { roughness: 0.85 });
+    const pants = mat(L.pants, { roughness: 0.85 });
     const skin = mat(L.skin, { roughness: 0.7 });
-    const hair = mat(L.hair, { roughness: 0.8 });
-    const dark = mat(0x141414, { roughness: 0.4 });
-    const eyeMat = mat(0x16181c, { roughness: 0.35 });
+    const hair = mat(L.hair, { roughness: 0.85 });
+    const dark = mat(0x18191c, { roughness: 0.5 });
+    const sock = mat(0xf2f2ee, { roughness: 0.8 });
 
-    const torsoW = 0.26 * g;
-    const torsoD = 0.15 * (0.82 + 0.18 * Math.min(g, 1.3));
-    const limb = 0.055 * Math.sqrt(g);
-
+    // 胯：短裤裤腰
     this.hips.position.y = legLen;
     this.body.add(this.hips);
-    block(0.2 * g, 0.07, 0.12 * Math.min(g, 1.2), pants, this.hips, 0, -0.02, 0);
-    block(0.22 * g, 0.028, 0.132, dark, this.hips, 0, 0.02, 0);
+    block(0.31 * g, 0.17, 0.2 * sg, pants, this.hips, 0, 0.02, 0);
 
-    this.spine.position.y = 0;
+    // 躯干：上宽下窄的 T 恤 + 下摆深色一圈；胖的多一块肚子
+    this.spine.position.y = 0.04;
     this.hips.add(this.spine);
-    block(torsoW, TORSO_H, torsoD, shirt, this.spine, 0, TORSO_H / 2, 0);
-    block(torsoW * 0.72, 0.028, torsoD * 0.4, shirtDark, this.spine, 0, TORSO_H - 0.01, torsoD * 0.42);
-    block(0.045, 0.045, 0.012, mat(0xe9c46a, { roughness: 0.4, metalness: 0.35 }), this.spine, torsoW * 0.22, TORSO_H * 0.62, torsoD * 0.52);
-    if (g >= 1.08) block(torsoW * 0.72, TORSO_H * 0.42, torsoD * 0.45, shirt, this.spine, 0, TORSO_H * 0.38, torsoD * 0.42);
+    const shoulderW = 0.37 * g;
+    const torsoD = 0.2 * sg;
+    const torsoH = torsoLen + 0.17;
+    taper(shoulderW, torsoH, torsoD, 0.82, shirt, this.spine, 0.0);
+    block(shoulderW * 0.83, 0.05, torsoD * 0.93, shirtDark, this.spine, 0, 0.03, 0);
+    if (g > 1.12) block(shoulderW * 0.7, torsoH * 0.42, 0.08, shirt, this.spine, 0, torsoH * 0.32, torsoD / 2 + 0.02);
+    // 胸口白色小队标（视频球衣的号码块）
+    block(0.06, 0.06, 0.01, mat(0xf4f4f0, { roughness: 0.6 }), this.spine, shoulderW * 0.2, torsoH * 0.72, torsoD / 2 + 0.006);
 
-    this.neck.position.y = TORSO_H;
+    // 脖子 + 头
+    this.neck.position.y = torsoH + 0.01;
     this.spine.add(this.neck);
-    block(0.09, NECK_H, 0.09, skin, this.neck, 0, NECK_H / 2, 0);
-
-    this.head.position.y = NECK_H + HEAD_H / 2 - 0.012;
+    block(0.1, 0.07, 0.1, skin, this.neck, 0, 0.02, 0);
+    this.head.position.y = 0.05 + HEAD_H / 2;
     this.neck.add(this.head);
-    const headGeo = new RoundedBoxGeometry(HEAD_W, HEAD_H, HEAD_D, 1, 0.04);
-    const headM = new THREE.Mesh(headGeo, skin);
-    headM.castShadow = true;
-    headM.receiveShadow = true;
-    this.head.add(headM);
-
+    block(HEAD_W, HEAD_H, HEAD_D, skin, this.head);
     const faceZ = HEAD_D / 2;
     for (const sx of [-1, 1] as const) {
       const eye = new THREE.Group();
-      // 整块豆豆眼都露在脸前面，避免倒角头把眼睛吃进去，低分下只剩一条缝
-      eye.position.set(sx * 0.072, 0.02, faceZ + 0.016);
+      eye.position.set(sx * 0.055, 0.005, faceZ + 0.004);
       this.head.add(eye);
-      block(0.038, 0.065, 0.015, eyeMat, eye, 0, 0, 0);
+      block(0.034, 0.05, 0.01, mat(0x15171b, { roughness: 0.4 }), eye);
       this.eyes.push(eye);
-      if (!L.earmuffs) block(0.04, 0.07, 0.03, skin, this.head, sx * (HEAD_W / 2 + 0.01), -0.01, 0);
+      block(0.03, 0.06, 0.05, skin, this.head, sx * (HEAD_W / 2 + 0.012), -0.005, 0);
     }
     if (L.eyeBags) {
       const bag = mat(0x2a6270, { roughness: 0.7 });
-      for (const sx of [-1, 1] as const) block(0.07, 0.032, 0.02, bag, this.head, sx * 0.072, -0.028, faceZ + 0.02);
+      for (const sx of [-1, 1] as const) block(0.05, 0.022, 0.01, bag, this.head, sx * 0.055, -0.035, faceZ + 0.004);
     }
-
     this.addHair(L.hairStyle, hair);
-    if (L.glasses) this.addGlasses(L.lens === 'glow', def.id === 'aji' || L.frame === 'thick', faceZ);
+    if (L.glasses) this.addGlasses(L.lens === 'glow', L.frame === 'thick', faceZ);
     if (L.earmuffs) this.addEarmuffs();
     this.addHeadset(dark, L.shirt);
 
-    const shoulderY = TORSO_H * 0.82;
-    const upperLen = 0.16;
-    const foreLen = 0.14;
+    // 手臂：短袖露小臂；肘以下是小臂 + 手
+    const arm = 0.085 * sg;
     for (const sx of [-1, 1] as const) {
       const sh = new THREE.Group();
-      sh.position.set(sx * (torsoW / 2 + limb * 0.15), shoulderY, 0);
+      sh.position.set(sx * (shoulderW / 2 + arm * 0.45), torsoLen + 0.12, 0);
       this.spine.add(sh);
-      block(limb * 1.15, upperLen * 0.42, limb * 1.15, shirt, sh, 0, -upperLen * 0.2, 0);
-      block(limb, upperLen, limb, skin, sh, 0, -upperLen / 2, 0);
+      block(arm + 0.025, 0.14 * s, arm + 0.025, shirt, sh, 0, -0.05 * s, 0);
+      block(arm, 0.27 * s, arm, skin, sh, 0, -0.135 * s, 0);
       const el = new THREE.Group();
-      el.position.y = -upperLen;
+      el.position.y = -0.27 * s;
       sh.add(el);
-      block(limb * 0.92, foreLen, limb * 0.92, skin, el, 0, -foreLen / 2, 0);
-      block(limb * 1.15, 0.05, limb * 0.9, skin, el, 0, -foreLen - 0.01, 0);
+      block(arm * 0.9, 0.22 * s, arm * 0.9, skin, el, 0, -0.11 * s, 0);
+      block(arm * 0.95, 0.08, arm * 0.75, skin, el, 0, -0.24 * s, 0);
       this.arms.push({ sh, el });
     }
 
     this.phoneScreen = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x6fa8ff, emissiveIntensity: 0.9 });
-    this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.1, 0.012), [dark, dark, dark, dark, this.phoneScreen, dark]);
-    this.phone.position.set(0, -foreLen - 0.02, 0.04);
-    this.phone.rotation.x = -0.35;
+    this.phone = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.13, 0.014), [dark, dark, dark, dark, this.phoneScreen, dark]);
+    this.phone.position.set(0, -0.28 * s, 0.04);
+    this.phone.rotation.x = -0.3;
     this.phone.visible = false;
     this.phone.castShadow = true;
     this.arms[1].el.add(this.phone);
 
-    this.cup = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.07, 0.045), mat(0xf3e2c7, { roughness: 0.45 }));
-    this.cup.position.set(0, -foreLen - 0.01, 0.045);
+    this.cup = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.07), mat(0xf3e2c7, { roughness: 0.45 }));
+    this.cup.position.set(0, -0.28 * s, 0.05);
     this.cup.visible = false;
     this.cup.castShadow = true;
     this.arms[1].el.add(this.cup);
 
+    // 腿：短裤盖住大腿上段，小腿露肤，白袜 + 鞋（或人字拖）
+    const leg = 0.11 * sg;
     for (const sx of [-1, 1] as const) {
       const hp = new THREE.Group();
-      hp.position.set(sx * 0.07 * g, 0, 0);
+      hp.position.set(sx * 0.085 * g, 0, 0);
       this.hips.add(hp);
-      block(limb * 1.25, THIGH_H, limb * 1.25, pants, hp, 0, -THIGH_H / 2, 0);
+      block(leg + 0.03, 0.26 * s, leg + 0.03, pants, hp, 0, -0.1 * s, 0);
+      block(leg, 0.42 * s, leg, skin, hp, 0, -0.21 * s, 0);
       const kn = new THREE.Group();
-      kn.position.y = -THIGH_H;
+      kn.position.y = -0.42 * s;
       hp.add(kn);
-      block(limb * 1.05, SHIN_H, limb * 1.05, skin, kn, 0, -SHIN_H / 2, 0);
+      block(leg * 0.88, 0.4 * s, leg * 0.88, skin, kn, 0, -0.2 * s, 0);
       const foot = new THREE.Group();
-      foot.position.y = -SHIN_H;
+      foot.position.y = -0.42 * s;
       kn.add(foot);
       if (L.flipflops) {
-        const flop = L.shoes ?? L.shirt;
-        const soleMat = mat(flop, { roughness: 0.55 });
-        block(0.11, 0.022, 0.2, soleMat, foot, 0, 0.012, 0.04);
-        block(0.08, 0.035, 0.14, skin, foot, 0, 0.038, 0.03);
-        block(0.085, 0.02, 0.04, soleMat, foot, 0, 0.05, 0.07);
+        const sole = mat(L.shoes ?? L.shirt, { roughness: 0.55 });
+        block(0.11, 0.025, 0.25, sole, foot, 0, 0.012, 0.05);
+        block(0.09, 0.05, 0.2, skin, foot, 0, 0.045, 0.045);
+        block(0.095, 0.02, 0.04, sole, foot, 0, 0.07, 0.08);
       } else {
-        const shoeMat = mat(L.shoes ?? 0xe9e9e9, { roughness: 0.5 });
-        block(0.12, 0.055, 0.2, shoeMat, foot, 0, 0.04, 0.045);
-        block(0.125, 0.022, 0.21, mat(0xf4f4f2, { roughness: 0.6 }), foot, 0, 0.012, 0.045);
+        block(leg * 0.92, 0.09, leg * 0.92, sock, foot, 0, 0.1, 0);
+        block(0.11, 0.08, 0.25, mat(L.shoes ?? 0xe9e9e9, { roughness: 0.55 }), foot, 0, 0.04, 0.045);
+        block(0.115, 0.02, 0.26, mat(0xf4f4f2, { roughness: 0.6 }), foot, 0, 0.01, 0.045);
       }
       this.legs.push({ hp, kn });
     }
 
+    const crown = legLen + 0.04 + torsoH + 0.06 + HEAD_H + 0.05;
     const hit = (this.hit = new THREE.Mesh(
-      new THREE.BoxGeometry(0.46 * g, crown, 0.36),
+      new THREE.BoxGeometry(0.5 * g, crown, 0.4),
       new THREE.MeshBasicMaterial({ visible: false }),
     ));
-    hit.position.y = (crown * fit) / 2;
+    hit.position.y = crown / 2;
     hit.userData.memberId = def.id;
     this.root.add(hit);
 
@@ -218,12 +228,12 @@ export class Character {
     tag.dataset.memberId = def.id;
     this.tagStatus = tag.querySelector('.st')!;
     const tagObj = new CSS2DObject(tag);
-    tagObj.position.set(0, crown * fit + 0.1, 0);
+    tagObj.position.set(0, crown + 0.12, 0);
     this.root.add(tagObj);
     const bubble = (this.bubbleEl = document.createElement('div'));
     bubble.className = 'bubble';
     const bubbleObj = new CSS2DObject(bubble);
-    bubbleObj.position.set(0, crown * fit + 0.34, 0);
+    bubbleObj.position.set(0, crown + 0.36, 0);
     this.root.add(bubbleObj);
 
     this.root.traverse((o) => {
@@ -232,94 +242,89 @@ export class Character {
         o.castShadow = true;
       }
     });
+    // 每个关节组内按材质合批（关节照常转动）；拾取柱、杯子要单独开关，不合
+    hit.userData.noMerge = true;
+    this.cup.userData.noMerge = true;
+    mergeStatic(this.root);
   }
 
+  // 头发：头顶盖 + 后脑勺一块，再按发型加刘海 / 发撮
   private addHair(style: MemberDef['look']['hairStyle'], hairMat: THREE.Material) {
-    const cap = (w: number, h: number, d: number, y: number, z = -0.01) => block(w, h, d, hairMat, this.head, 0, y, z);
+    const top = HEAD_H / 2;
+    const b = (w: number, h: number, d: number, x: number, y: number, z: number) => block(w, h, d, hairMat, this.head, x, y, z);
+    const capAndBack = (thick: number, back = true) => {
+      b(HEAD_W + 0.02, thick, HEAD_D + 0.02, 0, top + thick / 2 - 0.02, -0.005);
+      if (back) b(HEAD_W + 0.02, HEAD_H * 0.62, 0.04, 0, top - HEAD_H * 0.3, -HEAD_D / 2 - 0.01);
+    };
     if (style === 'buzz') {
-      cap(0.32, 0.055, 0.3, 0.15);
+      capAndBack(0.035);
       return;
     }
     if (style === 'messy') {
-      cap(0.36, 0.1, 0.32, 0.16, -0.01);
+      capAndBack(0.07);
       const tufts: [number, number, number, number, number][] = [
-        [-0.1, 0.22, 0.02, 0.35, 0.2],
-        [0.09, 0.24, 0.03, -0.4, -0.15],
-        [0.0, 0.25, -0.02, 0.1, 0],
-        [-0.13, 0.16, -0.04, 0.55, 0.3],
-        [0.13, 0.17, -0.03, -0.5, -0.2],
-        [0.02, 0.2, 0.08, 0.15, -0.4],
+        [-0.07, 0.06, 0.03, 0.4, 0.2], [0.06, 0.07, 0.0, -0.45, -0.1], [0.0, 0.08, -0.06, 0.1, -0.3], [-0.1, 0.03, -0.07, 0.6, 0], [0.09, 0.03, 0.08, -0.5, 0.4],
       ];
-      for (const [x, y, z, rz, rx] of tufts) {
-        const tuft = block(0.08, 0.14, 0.07, hairMat, this.head, x, y, z);
-        tuft.rotation.set(rx, 0, rz);
-      }
+      for (const [x, y, z, rz, rx] of tufts) b(0.07, 0.09, 0.06, x, top + y, z).rotation.set(rx, 0, rz);
       return;
     }
     if (style === 'flat') {
-      cap(0.33, 0.06, 0.3, 0.16);
-      for (const x of [-0.08, 0, 0.08]) {
-        const spike = block(0.05, 0.055, 0.11, hairMat, this.head, x, 0.15, 0.12);
-        spike.rotation.x = -0.65;
-      }
+      capAndBack(0.05);
+      b(HEAD_W + 0.02, 0.05, 0.05, 0, top - 0.02, HEAD_D / 2 + 0.01).rotation.x = -0.3;
       return;
     }
     if (style === 'bangs') {
-      cap(0.33, 0.08, 0.3, 0.15);
-      const bang = block(0.22, 0.07, 0.08, hairMat, this.head, 0.05, 0.07, 0.15);
-      bang.rotation.set(0.15, 0, -0.28);
+      capAndBack(0.06);
+      b(HEAD_W + 0.02, 0.07, 0.04, 0, top - 0.04, HEAD_D / 2 + 0.005);
       return;
     }
     if (style === 'side') {
-      cap(0.34, 0.1, 0.31, 0.15);
-      const bang = block(0.26, 0.12, 0.1, hairMat, this.head, -0.04, 0.05, 0.14);
-      bang.rotation.z = 0.32;
+      capAndBack(0.07);
+      const bang = b(HEAD_W * 0.8, 0.08, 0.05, -0.03, top - 0.03, HEAD_D / 2 + 0.01);
+      bang.rotation.z = 0.25;
       return;
     }
     if (style === 'fluffy') {
-      cap(0.4, 0.16, 0.36, 0.16);
-      block(0.14, 0.12, 0.14, hairMat, this.head, -0.15, 0.08, 0.02);
-      block(0.14, 0.12, 0.14, hairMat, this.head, 0.15, 0.08, 0.02);
+      capAndBack(0.1);
+      b(0.06, 0.12, HEAD_D * 0.8, -HEAD_W / 2 - 0.03, top - 0.04, -0.01);
+      b(0.06, 0.12, HEAD_D * 0.8, HEAD_W / 2 + 0.03, top - 0.04, -0.01);
       return;
     }
-    cap(0.32, 0.09, 0.3, 0.15);
+    capAndBack(0.06);
   }
 
   private addGlasses(glow: boolean, thick: boolean, faceZ: number) {
-    const bar = thick ? 0.062 : 0.048;
-    const frame = mat(0x111114, { roughness: 0.35, metalness: 0.25 });
+    const frame = mat(0x111114, { roughness: 0.35 });
     const lens = glow
-      ? new THREE.MeshStandardMaterial({ color: 0xb8fff8, emissive: 0x5ff0ff, emissiveIntensity: 1.8, roughness: 0.18, metalness: 0.05 })
-      : new THREE.MeshStandardMaterial({ color: 0xd5e2f0, transparent: true, opacity: 0.16, roughness: 0.08, metalness: 0.1, depthWrite: false });
-    const ow = 0.13;
-    const oh = 0.1;
+      ? new THREE.MeshStandardMaterial({ color: 0xb8fff8, emissive: 0x5ff0ff, emissiveIntensity: 1.6, roughness: 0.2 })
+      : mat(0x9fb6cc, { roughness: 0.15, metalness: 0.2 });
+    const h = thick ? 0.07 : 0.055;
+    block(HEAD_W + 0.01, 0.022, 0.016, frame, this.head, 0, 0.005 + h / 2, faceZ + 0.008);
     for (const sx of [-1, 1] as const) {
-      const x = sx * 0.072;
-      block(ow, bar, 0.02, frame, this.head, x, 0.02 + oh / 2 - bar / 2, faceZ + 0.012);
-      block(ow, bar, 0.02, frame, this.head, x, 0.02 - oh / 2 + bar / 2, faceZ + 0.012);
-      block(bar, oh, 0.02, frame, this.head, x - sx * (ow / 2 - bar / 2), 0.02, faceZ + 0.012);
-      block(bar, oh, 0.02, frame, this.head, x + sx * (ow / 2 - bar / 2), 0.02, faceZ + 0.012);
-      const glass = block(ow - bar * 1.4, oh - bar * 1.4, 0.012, lens, this.head, x, 0.02, faceZ + 0.02);
-      glass.renderOrder = 2;
-      block(0.02, bar, 0.12, frame, this.head, sx * (HEAD_W / 2 + 0.004), 0.03, 0.04);
+      block(0.075, h, 0.012, lens, this.head, sx * 0.055, 0.005, faceZ + 0.01);
+      block(0.012, h, 0.016, frame, this.head, sx * (0.055 + 0.04), 0.005, faceZ + 0.008);
+      block(0.015, 0.02, HEAD_D * 0.8, frame, this.head, sx * (HEAD_W / 2 + 0.006), 0.02, 0);
     }
-    block(0.05, bar * 0.8, 0.016, frame, this.head, 0, 0.03, faceZ + 0.014);
+    if (thick) block(HEAD_W + 0.01, 0.022, 0.016, frame, this.head, 0, 0.005 - h / 2, faceZ + 0.008);
   }
 
+  // 挂脖红耳罩
   private addEarmuffs() {
-    const red = mat(0xe23b3b, { roughness: 0.45 });
-    block(0.3, 0.04, 0.04, red, this.neck, 0, 0.02, 0);
-    for (const sx of [-1, 1] as const) block(0.1, 0.1, 0.08, red, this.neck, sx * 0.16, 0.04, 0.01);
+    const red = mat(0xe23b3b, { roughness: 0.5 });
+    block(0.22, 0.035, 0.035, red, this.neck, 0, 0.0, -0.06);
+    for (const sx of [-1, 1] as const) block(0.07, 0.08, 0.08, red, this.neck, sx * 0.12, 0.0, 0.0);
   }
 
   private addHeadset(dark: THREE.Material, shirt: number) {
-    const cupMat = mat(shirt, { roughness: 0.45 });
-    block(0.3, 0.035, 0.035, dark, this.headset, 0, HEAD_H * 0.34, 0);
-    block(0.035, 0.12, 0.035, dark, this.headset, -0.15, HEAD_H * 0.16, 0);
-    block(0.035, 0.12, 0.035, dark, this.headset, 0.15, HEAD_H * 0.16, 0);
-    for (const sx of [-1, 1] as const) block(0.09, 0.12, 0.08, cupMat, this.headset, sx * 0.18, 0.0, 0);
-    const mic = block(0.016, 0.09, 0.016, dark, this.headset, -0.16, -0.08, 0.06);
-    mic.rotation.x = 0.7;
+    const cupMat = mat(shirt, { roughness: 0.5 });
+    const top = HEAD_H / 2;
+    block(HEAD_W + 0.06, 0.03, 0.04, dark, this.headset, 0, top + 0.05, 0);
+    for (const sx of [-1, 1] as const) {
+      block(0.03, 0.14, 0.04, dark, this.headset, sx * (HEAD_W / 2 + 0.03), top - 0.03, 0);
+      block(0.05, 0.1, 0.09, cupMat, this.headset, sx * (HEAD_W / 2 + 0.035), -0.01, 0);
+    }
+    const mic = block(0.015, 0.015, 0.11, dark, this.headset, -HEAD_W / 2 - 0.03, -0.06, 0.07);
+    mic.rotation.y = 0.3;
     this.headset.visible = false;
     this.head.add(this.headset);
   }

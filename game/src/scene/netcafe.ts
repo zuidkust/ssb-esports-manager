@@ -5,9 +5,11 @@ import * as THREE from 'three';
 import type { FacilityId } from '../data/facilities';
 import { ROSTER, type Look, type MemberDef } from '../data/roster';
 import { Character, type PoseName } from './character';
+import { buildBlock } from './diorama';
+import { mergeStatic } from './merge';
 import { NavGraph } from './nav';
 import {
-  box, buildDoor, buildPlinth, cyl, DESK_OWNERS, facingTo, lathe, mat, plant, rbox, ROOM, shadow, wallClock, waterCooler, type Desk,
+  box, buildDoor, cyl, DESK_OWNERS, facingTo, lathe, mat, plant, rbox, ROOM, shadow, wallClock, waterCooler, type Desk,
 } from './office';
 import { neonTexture, plasterTexture, screenTexture, signTexture, SkyTexture, tileTexture, type ScreenKind } from './textures';
 import { deliveryStandZ, netcafeMeetingSpots } from './spots';
@@ -195,13 +197,15 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
   scene.add(root);
   const { x0, x1, z0, z1, h } = ROOM;
   const W = x1 - x0, D = z1 - z0;
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xa7aea6, map: plasterTexture(), roughness: 0.92 });
-  const wainscot = mat(0x3d4b47, { roughness: 0.75 });
-  const wallTop = mat(0xe6e0d2, { roughness: 0.9 });
+  // 老网吧配色：奶油色墙面 + 深青墙裙（在绿草地、红砖楼中间跳出来）
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xe8dcc2, map: plasterTexture(), roughness: 0.92, flatShading: true });
+  const wainscot = mat(0x2c6a66, { roughness: 0.75 });
+  const wallTop = mat(0xf4efe2, { roughness: 0.9 });
   const trim = mat(0x2d3235, { roughness: 0.6 });
   const frame = mat(0x3a3e44, { roughness: 0.45, metalness: 0.4 });
 
-  const glowMat = buildPlinth(root);
+  const outdoor = buildBlock(root, 1);
+  const glowMat = outdoor.glow;
 
   // ── 地砖 ──
   const floorMat = new THREE.MeshStandardMaterial({ map: tileTexture(), roughness: 0.5, metalness: 0.08, color: 0xffffff });
@@ -226,10 +230,10 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
   box(root, T, h, D + T, wallMat, x0 - T / 2, 0, -T / 2);
   rbox(root, W + 2 * T, 0.5, T, wallMat, 0, 0, z1 + T / 2, 0.02);
   rbox(root, T, 0.5, D + T, wallMat, x1 + T / 2, 0, 0, 0.02);
-  box(root, W + 2 * T, 0.03, T + 0.02, wallTop, 0, h, wz);
-  box(root, T + 0.02, 0.03, D + T, wallTop, x0 - T / 2, h, -T / 2);
-  rbox(root, W + 2 * T + 0.02, 0.04, T + 0.04, wallTop, 0, 0.5, z1 + T / 2, 0.015);
-  rbox(root, T + 0.04, 0.04, D + T + 0.02, wallTop, x1 + T / 2, 0.5, 0, 0.015);
+  box(root, W + 2 * T, 0.06, T, wallTop, 0, h - 0.03, wz);
+  box(root, T, 0.06, D + T, wallTop, x0 - T / 2, h - 0.03, -T / 2);
+  box(root, W + 2 * T, 0.06, T, wallTop, 0, 0.47, z1 + T / 2);
+  box(root, T, 0.06, D + T, wallTop, x1 + T / 2, 0.47, 0);
   box(root, door.x0 - x0, 1.0, 0.02, wainscot, (x0 + door.x0) / 2, 0, z0 + 0.011);
   box(root, x1 - door.x1, 1.0, 0.02, wainscot, (door.x1 + x1) / 2, 0, z0 + 0.011);
   box(root, 0.02, 1.0, D, wainscot, x0 + 0.011, 0, 0);
@@ -410,8 +414,9 @@ export function buildNetcafe(scene: THREE.Scene, members: MemberDef[], fac: Read
     sub: { at: new THREE.Vector3(0.6, 0, -2.45), approach: 'A3', facing: Math.PI },
   };
 
+  mergeStatic(root);
   return {
-    level: 0, root, desks, spots, lamps: [], sky, doorPivot, clock, glowMat, floorMat,
+    level: 0, root, desks, spots, lamps: [], sky, doorPivot, clock, glowMat, outdoor, floorMat,
     nav: NETCAFE_NAV, door: 'D', exit: new THREE.Vector3(-5.85, 0, -5.7),
     update(dt, now) {
       for (const c of npcs) c.update(dt, now);

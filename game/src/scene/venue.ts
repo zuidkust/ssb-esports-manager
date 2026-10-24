@@ -3,6 +3,7 @@
 import type * as THREE from 'three';
 import { venueLook, venueScene, type FacilityId } from '../data/facilities';
 import type { MemberDef } from '../data/roster';
+import type { Outdoor } from './diorama';
 import type { NavGraph } from './nav';
 import { buildNetcafe } from './netcafe';
 import { buildOffice, type Desk, type Lamp } from './office';
@@ -38,6 +39,7 @@ export interface Venue {
   doorPivot: THREE.Group;
   clock: { hourHand: THREE.Mesh; minHand: THREE.Mesh };
   glowMat: THREE.MeshStandardMaterial;
+  outdoor: Outdoor; // 漂浮街区：路灯、砖楼窗户、招牌
   floorMat?: THREE.MeshStandardMaterial;
   fridgeDoor?: THREE.Group;
   update?(dt: number, nowMs: number): void; // 场景自带的小动画（网吧里的路人）

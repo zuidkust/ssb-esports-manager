@@ -472,3 +472,25 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .route-picks small { color: var(--muted); margin-left: 4px; }
 .row.tight { margin: 0; gap: 4px; }
 .row.tight .btn { flex: none; padding: 6px 8px; }
+
+/* ───────── 像素街区画风（对标《Corner Pitch》）─────────
+   场景背景换成浅灰，HUD 不再直接压在场景上：品牌、时钟各自垫一块深色方块；面板改小圆角 + 硬投影 */
+:root { --radius: 6px; }
+.panel { box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.28); }
+.brand, .clock {
+  background: rgba(16, 20, 30, 0.88); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px; padding: 6px 12px 6px 6px; box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.25);
+}
+.clock { padding: 6px 12px; text-shadow: none; }
+.chip, .res-item { box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.22); }
+.logo { border-radius: 3px; box-shadow: none; }
+/* 上面「M1 新增」里的 #topbar { right: 420px } 写在媒体查询之后，把窄屏的 right 也盖掉了，手机上顶栏被挤成一条。这里按宽度补回来 */
+@media (max-width: 1180px) and (min-width: 761px) { #topbar { right: 350px; } }
+@media (max-width: 760px) {
+  #topbar { right: 12px; }
+  .brand, .clock { padding: 4px 8px 4px 4px; }
+  .clock { padding: 4px 8px; }
+  #timebar { left: 8px; right: 8px; gap: 4px; padding: 6px; }
+  #timebar .speeds button { padding: 6px 7px; font-size: 11px; }
+  .tb-btn.wide, #pixelBtn { padding: 0 7px; font-size: 11px; white-space: nowrap; }
+}

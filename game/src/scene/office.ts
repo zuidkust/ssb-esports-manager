@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { FacilityId, OfficeLook } from '../data/facilities';
 import type { MemberDef } from '../data/roster';
+import { buildBlock } from './diorama';
+import { mergeStatic } from './merge';
 import { OFFICE_NAV } from './nav';
 import { deliveryStandZ, officeMeetingSpots } from './spots';
 import type { Spot, Venue } from './venue';
@@ -32,7 +34,7 @@ type MatOpts = THREE.MeshStandardMaterialParameters;
 const matCache = new Map<string, THREE.MeshStandardMaterial>();
 export function mat(color: number, opts: MatOpts = {}): THREE.MeshStandardMaterial {
   const key = `${color}|${JSON.stringify(opts)}`;
-  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.02, ...opts }));
+  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.02, flatShading: true, ...opts }));
   return matCache.get(key)!;
 }
 
@@ -62,59 +64,46 @@ export function box(parent: THREE.Object3D, w: number, h: number, d: number, mat
   return m;
 }
 
-// 以“底面高度”定位的圆角盒子（家具）
-const rboxCache = new Map<string, RoundedBoxGeometry>();
+// 以“底面高度”定位的家具盒子。像素画面里一个低分像素约 6 cm：小于它的圆角看不出来，直接用直角盒；
+// 大圆角（沙发、靠垫）只切一刀倒角，保持低多边形的硬朗块面
+const rboxCache = new Map<string, THREE.BufferGeometry>();
 export function rbox(parent: THREE.Object3D, w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number, r = 0.03, rotY = 0) {
   const radius = Math.min(r, Math.min(w, h, d) / 2 - 0.001);
   const key = [w, h, d, radius].map((v) => v.toFixed(3)).join(',');
-  if (!rboxCache.has(key)) rboxCache.set(key, new RoundedBoxGeometry(w, h, d, 3, Math.max(0.001, radius)));
+  if (!rboxCache.has(key)) rboxCache.set(key, radius < 0.06 ? new THREE.BoxGeometry(w, h, d) : new RoundedBoxGeometry(w, h, d, 1, radius));
   const m = addMesh(parent, rboxCache.get(key)!, material, x, y + h / 2, z);
   m.rotation.y = rotY;
   return m;
 }
 
-export function cyl(parent: THREE.Object3D, rTop: number, rBot: number, h: number, material: THREE.Material, x: number, y: number, z: number, seg = 20) {
-  return addMesh(parent, new THREE.CylinderGeometry(rTop, rBot, h, seg), material, x, y + h / 2, z);
+// 圆柱、车削体最多 8 段：低多边形的棱面在像素画面里读成明暗两三块
+export function cyl(parent: THREE.Object3D, rTop: number, rBot: number, h: number, material: THREE.Material, x: number, y: number, z: number, seg = 8) {
+  return addMesh(parent, new THREE.CylinderGeometry(rTop, rBot, h, Math.min(seg, 8)), material, x, y + h / 2, z);
 }
 
 // 车削体：points 为 (半径, 高度) 轮廓
-export function lathe(parent: THREE.Object3D, pts: [number, number][], material: THREE.Material, x: number, y: number, z: number, seg = 24) {
-  const geo = new THREE.LatheGeometry(pts.map(([r, h]) => new THREE.Vector2(r, h)), seg);
+export function lathe(parent: THREE.Object3D, pts: [number, number][], material: THREE.Material, x: number, y: number, z: number, seg = 8) {
+  const geo = new THREE.LatheGeometry(pts.map(([r, h]) => new THREE.Vector2(r, h)), Math.min(seg, 8));
   return addMesh(parent, geo, material, x, y, z);
 }
 
-// 绿植：带沿的花盆 + 椭圆叶片，叶色深浅交错
+// 绿植：带沿的花盆 + 一簇二十面体叶团（平直着色，亮面 / 暗面各一块，和视频里的灌木一个画法）
+export const LEAF_GREENS = [0x3a8235, 0x4f9a3a, 0x2c6a2e];
 export function plant(parent: THREE.Object3D, x: number, z: number, scale = 1, potColor = 0xe9e2d6, seed = 1) {
   const g = new THREE.Group();
   const pot = mat(potColor, { roughness: 0.6 });
-  lathe(g, [[0, 0], [0.15, 0], [0.18, 0.05], [0.2, 0.38], [0.225, 0.4], [0.225, 0.44], [0.2, 0.44], [0.19, 0.42], [0, 0.42]], pot, 0, 0, 0, 28);
-  cyl(g, 0.19, 0.19, 0.02, mat(0x3b2a1e, { roughness: 1 }), 0, 0.41, 0, 20);
-  const greens = [mat(0x3f7a45, { roughness: 0.65 }), mat(0x2f6238, { roughness: 0.65 }), mat(0x58904f, { roughness: 0.65 })];
-  const stem = mat(0x4d6b35);
-  const leafGeo = new THREE.SphereGeometry(0.16, 12, 8);
+  lathe(g, [[0, 0], [0.15, 0], [0.2, 0.38], [0.225, 0.4], [0.225, 0.44], [0, 0.44]], pot, 0, 0, 0);
   let s = seed * 9301 + 49297;
   const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
-  for (let i = 0; i < 11; i++) {
-    const a = (i / 11) * Math.PI * 2 + rnd() * 0.4;
-    const tilt = 0.45 + rnd() * 0.5;
-    const len = 0.55 + rnd() * 0.45;
-    const pivot = new THREE.Group();
-    pivot.position.set(0, 0.42, 0);
-    pivot.rotation.set(0, a, 0);
-    g.add(pivot);
-    const arm = new THREE.Group();
-    arm.rotation.x = tilt;
-    pivot.add(arm);
-    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.012, len, 5), stem);
-    st.position.y = len / 2;
-    arm.add(st);
-    const leaf = new THREE.Mesh(leafGeo, greens[i % 3]);
-    leaf.position.y = len + 0.08;
-    leaf.scale.set(0.75, 1.25, 0.16);
-    leaf.rotation.x = 0.5;
-    leaf.castShadow = true;
-    arm.add(leaf);
-  }
+  const stem = mat(0x5a4630, { roughness: 1 });
+  cyl(g, 0.025, 0.035, 0.35, stem, 0, 0.4, 0, 5);
+  const blobs: [number, number, number, number][] = [[0, 0.95, 0, 0.3], [-0.16, 0.78, 0.08, 0.22], [0.17, 0.8, -0.05, 0.22], [0.02, 1.18, -0.02, 0.18], [0.05, 0.74, 0.18, 0.17]];
+  blobs.forEach(([bx, by, bz, r], i) => {
+    const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(r * (0.9 + rnd() * 0.25), 0), mat(LEAF_GREENS[(i + seed) % 3], { roughness: 0.85 }));
+    leaf.position.set(bx, by, bz);
+    leaf.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
+    g.add(leaf);
+  });
   g.position.set(x, 0, z);
   g.scale.setScalar(scale);
   parent.add(shadow(g));
@@ -353,6 +342,7 @@ export function wallClock(parent: THREE.Object3D, x: number, y: number, z: numbe
   const minHand = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.2, 0.01), handMat);
   minHand.geometry.translate(0, 0.1, 0);
   minHand.position.set(x, y, z + 0.022);
+  hourHand.userData.noMerge = minHand.userData.noMerge = true;
   parent.add(hourHand, minHand);
   return { hourHand, minHand };
 }
@@ -373,31 +363,6 @@ export function waterCooler(parent: THREE.Object3D, x: number, z: number) {
 // 一排排队位：第一个人站在 at[0]，都朝向 focus
 export function facingTo(at: THREE.Vector3, fx: number, fz: number) {
   return Math.atan2(fx - at.x, fz - at.z);
-}
-
-// 底座（深色）+ 发光描边 + 侧面字；返回描边的发光材质（灯光层随昼夜调亮度）
-export function buildPlinth(root: THREE.Object3D): THREE.MeshStandardMaterial {
-  const { x1, z1 } = ROOM;
-  const W = ROOM.x1 - ROOM.x0, D = ROOM.z1 - ROOM.z0;
-  const plinth = new THREE.Mesh(new RoundedBoxGeometry(W + 0.7, 0.7, D + 0.7, 3, 0.06), mat(0x171a21, { roughness: 0.6 }));
-  plinth.position.set(0, -0.47, 0);
-  plinth.receiveShadow = true;
-  root.add(plinth);
-  const glowMat = new THREE.MeshStandardMaterial({ color: 0xe8a060, emissive: 0xe8a060, emissiveIntensity: 1.2 });
-  const t1 = new THREE.Mesh(new THREE.BoxGeometry(W + 0.6, 0.015, 0.015), glowMat);
-  t1.position.set(0, -0.13, z1 + 0.355);
-  root.add(t1);
-  const t2 = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.015, D + 0.6), glowMat);
-  t2.position.set(x1 + 0.355, -0.13, 0);
-  root.add(t2);
-  const lbl = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.7), new THREE.MeshBasicMaterial({ map: plinthLabel('SSB电竞经理'), transparent: true }));
-  lbl.position.set(-2.2, -0.48, z1 + 0.352);
-  root.add(lbl);
-  const lbl2 = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.7), new THREE.MeshBasicMaterial({ map: plinthLabel('SSB ESPORTS MANAGER', 52), transparent: true }));
-  lbl2.position.set(x1 + 0.352, -0.48, 1.5);
-  lbl2.rotation.y = Math.PI / 2;
-  root.add(lbl2);
-  return glowMat;
 }
 
 // 后墙左侧的门（向内开）；返回门轴，导演层按有没有人经过开关门
@@ -437,9 +402,8 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: Reado
   const trim = mat(0x3a2a20, { roughness: 0.6 });
   const frame = mat(0x2b2e34, { roughness: 0.45, metalness: 0.3 });
 
-  const glowMat = buildPlinth(root);
-  glowMat.color.setHex(theme.glow);
-  glowMat.emissive.setHex(theme.glow);
+  const outdoor = buildBlock(root, 11);
+  const glowMat = outdoor.glow;
   if (theme.sign) {
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(2.2, 0.38),
@@ -472,11 +436,11 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: Reado
   box(root, T, h, D + T, wallMat, x0 - T / 2, 0, -T / 2);
   rbox(root, W + 2 * T, 0.5, T, wallMat, 0, 0, z1 + T / 2, 0.02);
   rbox(root, T, 0.5, D + T, wallMat, x1 + T / 2, 0, 0, 0.02);
-  // 墙顶封边（剖面感）
-  box(root, W + 2 * T, 0.03, T + 0.02, wallTop, 0, h, wz);
-  box(root, T + 0.02, 0.03, D + T, wallTop, x0 - T / 2, h, -T / 2);
-  rbox(root, W + 2 * T + 0.02, 0.04, T + 0.04, wallTop, 0, 0.5, z1 + T / 2, 0.015);
-  rbox(root, T + 0.04, 0.04, D + T + 0.02, wallTop, x1 + T / 2, 0.5, 0, 0.015);
+  // 墙顶封边（剖面感）：和墙一样宽，不留亚像素的小台阶（低分下会变成黑白点线）
+  box(root, W + 2 * T, 0.06, T, wallTop, 0, h - 0.03, wz);
+  box(root, T, 0.06, D + T, wallTop, x0 - T / 2, h - 0.03, -T / 2);
+  box(root, W + 2 * T, 0.06, T, wallTop, 0, 0.47, z1 + T / 2);
+  box(root, T, 0.06, D + T, wallTop, x1 + T / 2, 0.47, 0);
   // 踢脚线 + 腰线
   box(root, W, 0.1, 0.025, trim, 0, 0, z0 + 0.012);
   box(root, 0.025, 0.1, D, trim, x0 + 0.012, 0, 0);
@@ -735,8 +699,9 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: Reado
     sub: { at: new THREE.Vector3(-0.45, 0, 0.75), approach: 'B1', facing: Math.PI },
   };
 
+  mergeStatic(root);
   return {
-    level: 1, root, desks, spots, lamps, sky, wb, doorPivot, clock, glowMat, floorMat, fridgeDoor,
+    level: 1, root, desks, spots, lamps, sky, wb, doorPivot, clock, glowMat, outdoor, floorMat, fridgeDoor,
     nav: OFFICE_NAV, door: 'D', exit: new THREE.Vector3(-5.85, 0, -5.7),
   };
 }

@@ -17,6 +17,7 @@ import { Director } from './scene/director';
 import { Lighting } from './scene/lighting';
 import { parseRenderMode } from './scene/pixelPass';
 import { detectQuality, Stage } from './scene/stage';
+import { rainAmount, Weather } from './scene/weather';
 import { buildVenue, venueKey, type Venue } from './scene/venue';
 import { ROSTER } from './data/roster';
 import { Board } from './ui/board';
@@ -76,6 +77,10 @@ let venue: Venue = buildVenue(stage.scene, state.venueLevel, ROSTER, world.facil
 let venueId = venueKey(state.venueLevel, world.facilities);
 const lighting = new Lighting(stage.scene, venue, quality);
 const director = new Director(stage, venue, world);
+const weather = new Weather(stage.scene);
+weather.setVenue(venue);
+// ?rain=1 强制下雨，?rain=0 强制晴天；不带参数按天数决定
+let rainForce: number | null = params.get('rain') == null ? null : Math.max(0, Math.min(1, Number(params.get('rain')) || 0));
 
 // 场景按场地等级选，设施按已购买显示；场地或设施变了就重建场景（人物保留）
 function syncVenue() {
@@ -86,7 +91,9 @@ function syncVenue() {
   venueId = id;
   lighting.office = venue;
   director.setVenue(venue);
+  weather.setVenue(venue);
   director.snapAll();
+  weather.snap();
 }
 const board = new Board((id) => select(id, true));
 const card = new Card(() => select(null));
@@ -121,6 +128,7 @@ function startGame(s: GameState, note?: string) {
   syncVenue();
   world.update(clock.minute, 0, true);
   director.snapAll();
+  weather.snap();
   board.set(s.eventLog);
   select(null);
   if (note) toast(note);
@@ -181,7 +189,9 @@ function frame(t: number) {
     sinceAutosave = 0;
   }
 
-  lighting.update({ sun: sunPosition(clock.minute), present: world.presentCount() });
+  weather.update(visualDt, rainForce ?? rainAmount(clock.day, clock.minute), lighting.night);
+  lighting.update({ sun: sunPosition(clock.minute), present: world.presentCount(), rain: weather.rain });
+  stage.setBackdrop(lighting.bgTop, lighting.bgBottom);
   $('nightHint').classList.toggle('hidden', !clock.night || !live);
   director.update(visualDt * (live ? clock.moveScale : 1), clock.minute, lighting.night);
   stage.render(visualDt, lighting.night);
@@ -538,6 +548,7 @@ function showManage(pick?: [string, string]) {
       syncVenue();
       world.update(clock.minute, 0, true);
       director.snapAll();
+      weather.snap();
     },
     onClose: () => {
       modalClosable = true;
@@ -578,6 +589,7 @@ function seasonHooks() {
       syncVenue();
       world.update(clock.minute, 0, true);
       director.snapAll();
+      weather.snap();
     },
     refresh: () => showOffseason(),
     openBracket: () => {
@@ -675,6 +687,7 @@ function showPrematch(holdId: string, intermission: boolean) {
       closeModal();
       world.update(clock.minute, 0, true);
       director.snapAll();
+      weather.snap();
     },
   });
 }
@@ -759,6 +772,7 @@ function finishWatchedGame(holdId: string, won: boolean, slots: string[]) {
     closeModal();
     world.update(clock.minute, 0, true);
     director.snapAll();
+    weather.snap();
     board.set(state.eventLog);
     persist('auto');
     if (worldFix) {
@@ -828,6 +842,7 @@ function setVenue(level: number, facilities: string[]) {
   syncVenue();
   world.update(clock.minute, 0, true);
   director.snapAll();
+  weather.snap();
 }
 
 // 测试面板只在 ?debug=1 时挂上。没有这个参数就不会创建节点。
@@ -847,6 +862,7 @@ if (params.get('debug') === '1') {
       syncVenue();
       world.update(clock.minute, 0, true);
       director.snapAll();
+      weather.snap();
     },
     dismissBlocking() {
       if (!modalOpen) return;
@@ -880,6 +896,7 @@ if (params.get('debug') === '1') {
 
 (window as unknown as { __ssb: unknown }).__ssb = {
   world, get clock() { return clock; }, get state() { return state; }, get venue() { return venue; }, saves, director, stage, select, setVenue, SLOTS,
+  weather, setRain(v: number | null) { rainForce = v; },
   act: (id: string, targets: string[] = []) => world.act(id, targets),
   buy(id: string) {
     const r = buyFacility(state, id);
@@ -888,6 +905,7 @@ if (params.get('debug') === '1') {
       syncVenue();
       world.update(clock.minute, 0, true);
       director.snapAll();
+      weather.snap();
     }
     return r;
   },

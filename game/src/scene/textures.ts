@@ -57,21 +57,18 @@ export function floorTexture() {
   return toTexture(c, { repeat: [2.1, 2.1] });
 }
 
-// 墙面：大块灰泥色块，没有细碎噪点
+// 墙面：近白底 + 稀疏的浅色斑点（乘材质颜色），像素尺度，不出大色块
 export function plasterTexture() {
-  const c = canvas(256, 256);
+  const c = canvas(32, 32);
   const g = c.getContext('2d')!;
-  const cell = 64;
-  for (let y = 0; y < 256; y += cell) {
-    for (let x = 0; x < 256; x += cell) {
-      const n = ((x / cell) * 3 + (y / cell) * 5) % 4;
-      const v = 214 + n * 8;
-      const col = desat(v, v - 3, v - 8, 0.4);
-      g.fillStyle = `rgb(${col.join(',')})`;
-      g.fillRect(x, y, cell, cell);
-    }
+  g.fillStyle = '#f2f2f2';
+  g.fillRect(0, 0, 32, 32);
+  const r = mulberry32(5);
+  for (let n = 0; n < 70; n++) {
+    g.fillStyle = r() < 0.6 ? '#e3e3e3' : '#fafafa';
+    g.fillRect(Math.floor(r() * 32), Math.floor(r() * 32), 1, 1);
   }
-  return toTexture(c, { repeat: [2, 1.2] });
+  return toTexture(c, { repeat: [6, 1.4] });
 }
 
 // 胡桃木竖条格栅
@@ -383,27 +380,28 @@ export function posterTexture(): THREE.CanvasTexture {
   return t;
 }
 
-// 网吧地砖：大块双色棋盘格，砖缝发黑，没有污渍噪点
+// 网吧地砖：像素尺度（一块砖 10 贴素 ≈ 0.7 米），米白砖 + 深一点的砖缝 + 少量斑点，偶尔一块旧砖
 export function tileTexture() {
-  const c = canvas(512, 512);
+  const c = canvas(40, 40);
   const g = c.getContext('2d')!;
-  const n = 4;
-  const s = 512 / n;
-  const a = desat(188, 182, 170, 0.4);
-  const b = desat(158, 154, 146, 0.4);
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      const col = (i + j) % 2 ? a : b;
-      g.fillStyle = `rgb(${col.join(',')})`;
-      g.fillRect(i * s, j * s, s, s);
+  const r = mulberry32(7);
+  const tones = ['#d6ccb4', '#d0c5ab', '#dad1bb', '#c4b89c'];
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      g.fillStyle = tones[r() < 0.18 ? 3 : Math.floor(r() * 3)];
+      g.fillRect(i * 10, j * 10, 10, 10);
     }
   }
-  g.fillStyle = 'rgb(68,62,56)';
-  for (let i = 0; i <= n; i++) {
-    g.fillRect(i * s - 4, 0, 8, 512);
-    g.fillRect(0, i * s - 4, 512, 8);
+  for (let n = 0; n < 90; n++) {
+    g.fillStyle = r() < 0.5 ? '#bfb398' : '#e2dac6';
+    g.fillRect(Math.floor(r() * 40), Math.floor(r() * 40), 1, 1);
   }
-  return toTexture(c, { repeat: [3.4, 2.5] });
+  g.fillStyle = '#9d927c';
+  for (let i = 0; i < 40; i += 10) {
+    g.fillRect(i, 0, 1, 40);
+    g.fillRect(0, i, 40, 1);
+  }
+  return toTexture(c, { repeat: [14 / 2.8, 10 / 2.8] });
 }
 
 export interface SignSpec {
@@ -483,4 +481,78 @@ export function neonTexture(text: string, color: string, sub?: string): THREE.Ca
   const t = pixelate(new THREE.CanvasTexture(c));
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+// ── 漂浮街区用的像素贴图：一个贴素 ≈ 一个低分像素（约 7 cm），世界坐标 UV，每 4.5 米重复一次 ──
+export const TEXEL_TILE_M = 4.5;
+
+function speckle(size: number, base: string, specks: [string, number][], seed: number) {
+  const c = canvas(size, size);
+  const g = c.getContext('2d')!;
+  g.fillStyle = base;
+  g.fillRect(0, 0, size, size);
+  const r = mulberry32(seed);
+  for (const [col, density] of specks) {
+    g.fillStyle = col;
+    const n = Math.round(size * size * density);
+    for (let i = 0; i < n; i++) g.fillRect(Math.floor(r() * size), Math.floor(r() * size), 1, 1);
+  }
+  return { c, g, r };
+}
+
+// 草皮：亮绿底 + 深浅草点 + 零星土黄点（视频里路边草地的样子）
+export function grassTexture() {
+  const { c, g, r } = speckle(64, '#4a8a36', [['#3d7a2f', 0.16], ['#5a9a40', 0.12], ['#2f6629', 0.04], ['#9a6a34', 0.014]], 11);
+  // 大块深浅草斑：视频里草地不是一整片匀色
+  for (let i = 0; i < 9; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(40,90,36,0.45)' : 'rgba(110,160,70,0.3)';
+    const x = Math.floor(r() * 60), y = Math.floor(r() * 60), w = 3 + Math.floor(r() * 6), h = 2 + Math.floor(r() * 4);
+    g.fillRect(x, y, w, h);
+  }
+  return toTexture(c);
+}
+
+// 人行道：浅灰方砖 + 砖缝 + 少量污点
+export function pavingTexture() {
+  const { c, g, r } = speckle(64, '#b8bbba', [['#a9adac', 0.12], ['#c6c8c6', 0.08], ['#8e9292', 0.02]], 12);
+  g.fillStyle = '#8f9393';
+  for (let i = 0; i < 64; i += 16) {
+    g.fillRect(i, 0, 1, 64);
+    g.fillRect(0, i, 64, 1);
+  }
+  for (let i = 0; i < 6; i++) {
+    g.fillStyle = 'rgba(70,72,74,0.5)';
+    g.fillRect(Math.floor(r() * 62), Math.floor(r() * 62), 2, 1);
+  }
+  return toTexture(c);
+}
+
+// 柏油路：深灰 + 颗粒
+export function asphaltTexture() {
+  const { c } = speckle(64, '#3d4044', [['#45494d', 0.18], ['#34373a', 0.12], ['#5a5e62', 0.02]], 13);
+  return toTexture(c);
+}
+
+// 红砖墙：每块砖 4×2 贴素，砖缝浅；窗户另外建模
+export function brickTexture() {
+  const c = canvas(64, 64);
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#8a8178';
+  g.fillRect(0, 0, 64, 64);
+  const r = mulberry32(14);
+  const tones = ['#9c4a35', '#a5543c', '#8e4130', '#b05f43'];
+  for (let y = 0; y < 64; y += 3) {
+    const off = (y / 3) % 2 ? 2 : 0;
+    for (let x = -off; x < 64; x += 5) {
+      g.fillStyle = tones[Math.floor(r() * tones.length)];
+      g.fillRect(x, y, 4, 2);
+    }
+  }
+  return toTexture(c);
+}
+
+// 土层、岩石侧面：横向分层的颗粒
+export function soilTexture() {
+  const { c } = speckle(64, '#6e4526', [['#5d3a20', 0.18], ['#7f5230', 0.1], ['#4a2e19', 0.04]], 15);
+  return toTexture(c);
 }

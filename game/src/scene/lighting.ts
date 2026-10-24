@@ -14,10 +14,12 @@ function mix3(night: THREE.Color, dusk: THREE.Color, day: THREE.Color, n: number
   return base.lerp(dusk, d * 0.85);
 }
 
-const PALETTE: Record<'sky' | 'ground' | 'bg', [THREE.Color, THREE.Color, THREE.Color]> & { winTop: string[]; winBottom: string[] } = {
-  sky: [C(0x1c2a52), C(0xf0a070), C(0xc3dcff)],
-  ground: [C(0x0e0d12), C(0x5a3a2a), C(0x7a6450)],
-  bg: [C(0x070a12), C(0x2b1f2a), C(0x252c3a)],
+// bgTop / bgBottom：画面背景（漂浮街区后面那片浅灰），视频里昼夜都保持浅灰，只是夜里稍暗、黄昏偏暖
+const PALETTE: Record<'sky' | 'ground' | 'bgTop' | 'bgBottom', [THREE.Color, THREE.Color, THREE.Color]> & { winTop: string[]; winBottom: string[] } = {
+  sky: [C(0x23345e), C(0xf0a070), C(0xc3dcff)],
+  ground: [C(0x0e0d12), C(0x5a3a2a), C(0x5f7a48)],
+  bgTop: [C(0xb4b9bf), C(0xd3cbc6), C(0xcfd3d2)],
+  bgBottom: [C(0xd9dce0), C(0xece5df), C(0xeceeed)],
   winTop: ['#060a1a', '#e8875a', '#7fb8f5'],
   winBottom: ['#162448', '#ffcf94', '#dcefff'],
 };
@@ -30,7 +32,9 @@ export class Lighting {
   warm: THREE.PointLight;
   night = 0;
   day = 1;
-  constructor(private scene: THREE.Scene, public office: Venue, quality: Quality) {
+  bgTop = new THREE.Color(0xcfd3d2);
+  bgBottom = new THREE.Color(0xeceeed);
+  constructor(scene: THREE.Scene, public office: Venue, quality: Quality) {
     this.hemi = new THREE.HemisphereLight(0xc3dcff, 0x7a6450, 0.6);
     scene.add(this.hemi);
 
@@ -39,7 +43,7 @@ export class Lighting {
     const sz = quality.shadowSize;
     this.sun.shadow.mapSize.set(sz, sz);
     const cam = this.sun.shadow.camera;
-    cam.left = -11; cam.right = 11; cam.top = 11; cam.bottom = -11; cam.near = 1; cam.far = 70;
+    cam.left = -14; cam.right = 14; cam.top = 14; cam.bottom = -14; cam.near = 1; cam.far = 80;
     this.sun.shadow.bias = -0.001;
     this.sun.shadow.normalBias = 0.02;
     this.sun.shadow.radius = 0;
@@ -47,13 +51,7 @@ export class Lighting {
 
     this.moon = new THREE.DirectionalLight(0x7d93d8, 0);
     this.moon.position.set(-8, 16, 10);
-    this.moon.castShadow = quality.shadows;
-    this.moon.shadow.mapSize.set(sz, sz);
-    const moonCam = this.moon.shadow.camera;
-    moonCam.left = -12; moonCam.right = 12; moonCam.top = 12; moonCam.bottom = -12; moonCam.near = 1; moonCam.far = 40;
-    this.moon.shadow.bias = -0.001;
-    this.moon.shadow.normalBias = 0.02;
-    this.moon.shadow.radius = 0;
+    // 月光不投影：夜里的实时阴影交给路灯（视频的“夜场泛光灯 · 实时阴影”）
     scene.add(this.moon, this.moon.target);
 
     // 办公室顶灯（没有天花板，用一盏不投影的上方柔光代替）
@@ -68,7 +66,8 @@ export class Lighting {
   }
 
   // info: { sun:{elevation, azimuth}, present: 在场人数 }
-  update(info: { sun: { elevation: number; azimuth: number }; present: number }) {
+  update(info: { sun: { elevation: number; azimuth: number }; present: number; rain?: number }) {
+    const rain = info.rain ?? 0;
     const el = info.sun.elevation;
     const az = info.sun.azimuth;
     const day = smooth(-0.1, 0.18, el); // 白天程度
@@ -77,23 +76,25 @@ export class Lighting {
     this.day = day;
     this.night = night;
 
-    // 太阳方向：方位角从正北顺时针；场景里 -z 为北，+x 为东
+    // 太阳方向：方位角从正北顺时针。为了让影子一整天都落在镜头看得见的一侧（视频里的硬影子），
+    // 太阳轨迹在场景里转 90°：早上从右后方（-z）、中午从右前方高处（+x）、傍晚从左前方（+z）斜照
     const ce = Math.cos(Math.max(el, 0.05));
-    const dir = new THREE.Vector3(Math.sin(az) * ce, Math.sin(Math.max(el, 0.05)), -Math.cos(az) * ce).normalize();
+    const dir = new THREE.Vector3(-Math.cos(az) * ce, Math.sin(Math.max(el, 0.05)), -Math.sin(az) * ce).normalize();
     this.sun.position.copy(dir.multiplyScalar(30));
     this.sun.target.position.set(0, 0, 0);
     const low = 1 - smooth(0.05, 0.6, el);
     this.sun.color.copy(C(0xfff4e6).lerp(C(0xff9448), low * 0.9));
-    this.sun.intensity = smooth(-0.03, 0.12, el) * (1.6 + 1.6 * Math.min(1, Math.sin(Math.max(el, 0)) * 1.6));
+    // 太阳偏强、天光偏弱：块面明暗分明，影子压得住（视频白天的对比度）
+    this.sun.intensity = smooth(-0.03, 0.12, el) * (2.6 + 1.6 * Math.min(1, Math.sin(Math.max(el, 0)) * 1.6)) * (1 - rain * 0.75);
 
-    this.hemi.color.copy(mix3(...PALETTE.sky, day, dusk));
+    this.hemi.color.copy(mix3(...PALETTE.sky, day, dusk)).lerp(C(0x8d99a8), rain * 0.6);
     this.hemi.groundColor.copy(mix3(...PALETTE.ground, day, dusk));
-    this.hemi.intensity = 0.12 + day * 0.7 + dusk * 0.16;
+    this.hemi.intensity = 0.14 + day * 0.3 + dusk * 0.14;
     this.moon.intensity = night * 0.55;
 
     const present = info.present > 0;
     const lightsOn = present;
-    this.ceiling.intensity = lightsOn ? 0.18 + night * 0.3 : 0;
+    this.ceiling.intensity = lightsOn ? 0.08 + night * 0.3 : 0;
     this.warm.intensity = lightsOn ? night * 3.2 : 0;
     const lampOn = present && el < 0.22;
     for (const l of this.office.lamps) {
@@ -101,7 +102,22 @@ export class Lighting {
       l.shadeMat.emissiveIntensity = lampOn ? 1.4 : 0;
     }
 
-    this.scene.background = mix3(...PALETTE.bg, day, dusk);
+    // 下雨：背景压暗成阴天灰
+    this.bgTop.copy(mix3(...PALETTE.bgTop, day, dusk)).lerp(C(0x9ba3ab), rain * 0.7);
+    this.bgBottom.copy(mix3(...PALETTE.bgBottom, day, dusk)).lerp(C(0xc3c8cd), rain * 0.7);
+
+    // 街区：路灯、砖楼窗户、竖招牌（傍晚开灯）
+    const out = this.office.outdoor;
+    const streetOn = Math.max(smooth(0.12, -0.02, el), rain * 0.8);
+    for (const l of out.lamps) {
+      l.intensity = streetOn * 70;
+      // 灯灭时不再重画它的阴影贴图（省一整轮阴影绘制）；太阳同理
+      l.shadow.autoUpdate = l.intensity > 0.01;
+    }
+    this.sun.shadow.autoUpdate = this.sun.intensity > 0.01;
+    out.glow.emissiveIntensity = 0.15 + streetOn * 2.4;
+    out.windows.emissiveIntensity = night * 1.5 + dusk * 0.5;
+    out.neon.emissiveIntensity = 0.3 + streetOn * 1.8;
 
     // 窗外：颜色量化后再重画，避免每帧重绘 Canvas
     const q = (x: number) => Math.round(x * 20) / 20;
