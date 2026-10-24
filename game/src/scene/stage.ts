@@ -44,7 +44,7 @@ export class Stage {
   bloom: UnrealBloomPass | null = null;
   pixel: PixelPipeline;
   renderMode: RenderMode = 'pixel';
-  pixelSize: PixelSize = 4;
+  pixelSize: PixelSize = 2;
   pickables: THREE.Object3D[] = [];
   onPick: ((id: string | null) => void) | null = null;
   focusTarget: THREE.Vector3 | null = null;

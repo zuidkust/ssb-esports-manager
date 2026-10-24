@@ -6,7 +6,7 @@ import * as THREE from 'three';
 /** 特效图层（雨丝、水花）：只进颜色 pass，不进法线 pass。和 weather.ts 的 FX_LAYER 一致。 */
 export const FX_LAYER = 1;
 
-export type PixelSize = 3 | 4 | 5;
+export type PixelSize = 2 | 3 | 4 | 5;
 export type RenderMode = 'pixel' | 'raw';
 
 // 漂浮街区（房间 + 四周人行道）在等距镜头下的可见范围（世界单位，按视平面量）
@@ -40,7 +40,7 @@ export function snapOffset(viewCoord: number, step: number): number {
 
 /**
  * 实际用的像素粒度：窄屏（手机）上按 CSS 像素算会太糊，保证可见区域至少约 200 列低分像素；
- * 桌面上就是用户选的 3 / 4 / 5。
+ * 桌面上就是用户选的 2 / 3 / 4 / 5。
  */
 export function effectivePixelSize(chosen: number, visibleCssWidth: number): number {
   return Math.max(2, Math.min(chosen, Math.floor(visibleCssWidth / 200)));
@@ -48,10 +48,10 @@ export function effectivePixelSize(chosen: number, visibleCssWidth: number): num
 
 export function parsePixelSize(value: string | null): PixelSize {
   const n = Number(value);
-  return n === 3 || n === 4 || n === 5 ? n : 4;
+  return n === 2 || n === 3 || n === 4 || n === 5 ? n : 2;
 }
 
-/** `?raw3d=1` / `?render=raw` 启动即 RAW；`?pixel=3|4|5` 指定粒度（CSS 像素）。默认 PIXEL、粒度 4。 */
+/** `?raw3d=1` / `?render=raw` 启动即 RAW；`?pixel=2|3|4|5` 指定粒度（CSS 像素）。默认 PIXEL、粒度 2。 */
 export function parseRenderMode(search: string | URLSearchParams): { mode: RenderMode; pixelSize: PixelSize } {
   const params = typeof search === 'string' ? new URLSearchParams(search) : search;
   const raw = params.get('raw3d') === '1' || params.get('render') === 'raw';
@@ -191,7 +191,7 @@ function makeTarget(width: number, height: number, withDepth: boolean): THREE.We
 }
 
 export class PixelPipeline {
-  pixelSize: PixelSize = 4;
+  pixelSize: PixelSize = 2;
   lowWidth = 2;
   lowHeight = 2;
   private beauty: THREE.WebGLRenderTarget;

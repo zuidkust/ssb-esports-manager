@@ -380,26 +380,26 @@ export function posterTexture(): THREE.CanvasTexture {
   return t;
 }
 
-// 网吧地砖：像素尺度（一块砖 10 贴素 ≈ 0.7 米），米白砖 + 深一点的砖缝 + 少量斑点，偶尔一块旧砖
+// 网吧地砖：一块砖 20 贴素 ≈ 0.7 米（贴素约 3.5 cm），米白砖 + 深一点的砖缝 + 少量斑点，偶尔一块旧砖
 export function tileTexture() {
-  const c = canvas(40, 40);
+  const c = canvas(80, 80);
   const g = c.getContext('2d')!;
   const r = mulberry32(7);
   const tones = ['#d6ccb4', '#d0c5ab', '#dad1bb', '#c4b89c'];
   for (let i = 0; i < 4; i++) {
     for (let j = 0; j < 4; j++) {
       g.fillStyle = tones[r() < 0.18 ? 3 : Math.floor(r() * 3)];
-      g.fillRect(i * 10, j * 10, 10, 10);
+      g.fillRect(i * 20, j * 20, 20, 20);
     }
   }
-  for (let n = 0; n < 90; n++) {
+  for (let n = 0; n < 360; n++) {
     g.fillStyle = r() < 0.5 ? '#bfb398' : '#e2dac6';
-    g.fillRect(Math.floor(r() * 40), Math.floor(r() * 40), 1, 1);
+    g.fillRect(Math.floor(r() * 80), Math.floor(r() * 80), 1, 1);
   }
   g.fillStyle = '#9d927c';
-  for (let i = 0; i < 40; i += 10) {
-    g.fillRect(i, 0, 1, 40);
-    g.fillRect(0, i, 40, 1);
+  for (let i = 0; i < 80; i += 20) {
+    g.fillRect(i, 0, 1, 80);
+    g.fillRect(0, i, 80, 1);
   }
   return toTexture(c, { repeat: [14 / 2.8, 10 / 2.8] });
 }
@@ -483,7 +483,7 @@ export function neonTexture(text: string, color: string, sub?: string): THREE.Ca
   return t;
 }
 
-// ── 漂浮街区用的像素贴图：一个贴素 ≈ 一个低分像素（约 7 cm），世界坐标 UV，每 4.5 米重复一次 ──
+// ── 漂浮街区用的像素贴图：128 贴素对应 4.5 米，一个贴素约 3.5 cm ≈ 默认粒度下的一个低分像素；世界坐标 UV ──
 export const TEXEL_TILE_M = 4.5;
 
 function speckle(size: number, base: string, specks: [string, number][], seed: number) {
@@ -502,11 +502,11 @@ function speckle(size: number, base: string, specks: [string, number][], seed: n
 
 // 草皮：亮绿底 + 深浅草点 + 零星土黄点（视频里路边草地的样子）
 export function grassTexture() {
-  const { c, g, r } = speckle(64, '#4a8a36', [['#3d7a2f', 0.16], ['#5a9a40', 0.12], ['#2f6629', 0.04], ['#9a6a34', 0.014]], 11);
+  const { c, g, r } = speckle(128, '#4a8a36', [['#3d7a2f', 0.16], ['#5a9a40', 0.12], ['#2f6629', 0.04], ['#9a6a34', 0.014]], 11);
   // 大块深浅草斑：视频里草地不是一整片匀色
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 36; i++) {
     g.fillStyle = r() < 0.5 ? 'rgba(40,90,36,0.45)' : 'rgba(110,160,70,0.3)';
-    const x = Math.floor(r() * 60), y = Math.floor(r() * 60), w = 3 + Math.floor(r() * 6), h = 2 + Math.floor(r() * 4);
+    const x = Math.floor(r() * 120), y = Math.floor(r() * 120), w = 6 + Math.floor(r() * 12), h = 4 + Math.floor(r() * 8);
     g.fillRect(x, y, w, h);
   }
   return toTexture(c);
@@ -514,38 +514,38 @@ export function grassTexture() {
 
 // 人行道：浅灰方砖 + 砖缝 + 少量污点
 export function pavingTexture() {
-  const { c, g, r } = speckle(64, '#b8bbba', [['#a9adac', 0.12], ['#c6c8c6', 0.08], ['#8e9292', 0.02]], 12);
+  const { c, g, r } = speckle(128, '#b8bbba', [['#a9adac', 0.12], ['#c6c8c6', 0.08], ['#8e9292', 0.02]], 12);
   g.fillStyle = '#8f9393';
-  for (let i = 0; i < 64; i += 16) {
-    g.fillRect(i, 0, 1, 64);
-    g.fillRect(0, i, 64, 1);
+  for (let i = 0; i < 128; i += 32) {
+    g.fillRect(i, 0, 1, 128);
+    g.fillRect(0, i, 128, 1);
   }
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 24; i++) {
     g.fillStyle = 'rgba(70,72,74,0.5)';
-    g.fillRect(Math.floor(r() * 62), Math.floor(r() * 62), 2, 1);
+    g.fillRect(Math.floor(r() * 124), Math.floor(r() * 124), 3, 2);
   }
   return toTexture(c);
 }
 
 // 柏油路：深灰 + 颗粒
 export function asphaltTexture() {
-  const { c } = speckle(64, '#3d4044', [['#45494d', 0.18], ['#34373a', 0.12], ['#5a5e62', 0.02]], 13);
+  const { c } = speckle(128, '#3d4044', [['#45494d', 0.18], ['#34373a', 0.12], ['#5a5e62', 0.02]], 13);
   return toTexture(c);
 }
 
-// 红砖墙：每块砖 4×2 贴素，砖缝浅；窗户另外建模
+// 红砖墙：每块砖 7×2 贴素（约 25×7 cm），1 贴素砖缝；窗户另外建模
 export function brickTexture() {
-  const c = canvas(64, 64);
+  const c = canvas(128, 128);
   const g = c.getContext('2d')!;
   g.fillStyle = '#8a8178';
-  g.fillRect(0, 0, 64, 64);
+  g.fillRect(0, 0, 128, 128);
   const r = mulberry32(14);
   const tones = ['#9c4a35', '#a5543c', '#8e4130', '#b05f43'];
-  for (let y = 0; y < 64; y += 3) {
-    const off = (y / 3) % 2 ? 2 : 0;
-    for (let x = -off; x < 64; x += 5) {
+  for (let y = 0; y < 128; y += 3) {
+    const off = (y / 3) % 2 ? 4 : 0;
+    for (let x = -off; x < 128; x += 8) {
       g.fillStyle = tones[Math.floor(r() * tones.length)];
-      g.fillRect(x, y, 4, 2);
+      g.fillRect(x, y, 7, 2);
     }
   }
   return toTexture(c);
@@ -553,6 +553,6 @@ export function brickTexture() {
 
 // 土层、岩石侧面：横向分层的颗粒
 export function soilTexture() {
-  const { c } = speckle(64, '#6e4526', [['#5d3a20', 0.18], ['#7f5230', 0.1], ['#4a2e19', 0.04]], 15);
+  const { c } = speckle(128, '#6e4526', [['#5d3a20', 0.18], ['#7f5230', 0.1], ['#4a2e19', 0.04]], 15);
   return toTexture(c);
 }

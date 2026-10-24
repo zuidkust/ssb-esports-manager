@@ -3,9 +3,9 @@ import { ROSTER } from '../src/data/roster';
 import { effectivePixelSize, lowResSize, parseRenderMode, snapOffset, verticalFrustum, worldUnitsPerPixel } from '../src/scene/pixelPass';
 
 describe('像素管线参数', () => {
-  it('默认是 PIXEL，粒度为 4（CSS 像素）', () => {
-    expect(parseRenderMode('')).toEqual({ mode: 'pixel', pixelSize: 4 });
-    expect(parseRenderMode('t=14:30&skip=1')).toEqual({ mode: 'pixel', pixelSize: 4 });
+  it('默认是 PIXEL，粒度为 2（CSS 像素）', () => {
+    expect(parseRenderMode('')).toEqual({ mode: 'pixel', pixelSize: 2 });
+    expect(parseRenderMode('t=14:30&skip=1')).toEqual({ mode: 'pixel', pixelSize: 2 });
   });
 
   it('raw3d 和 render=raw 进入原始 3D', () => {
@@ -14,12 +14,13 @@ describe('像素管线参数', () => {
     expect(parseRenderMode('render=raw&pixel=4')).toEqual({ mode: 'raw', pixelSize: 4 });
   });
 
-  it('只接受 3 / 4 / 5 三档像素', () => {
+  it('只接受 2 / 3 / 4 / 5 四档像素', () => {
+    expect(parseRenderMode('pixel=2').pixelSize).toBe(2);
     expect(parseRenderMode('pixel=3').pixelSize).toBe(3);
     expect(parseRenderMode('pixel=5').pixelSize).toBe(5);
-    expect(parseRenderMode('pixel=2').pixelSize).toBe(4);
-    expect(parseRenderMode('pixel=8').pixelSize).toBe(4);
-    expect(parseRenderMode('pixel=0').pixelSize).toBe(4);
+    expect(parseRenderMode('pixel=1').pixelSize).toBe(2);
+    expect(parseRenderMode('pixel=8').pixelSize).toBe(2);
+    expect(parseRenderMode('pixel=0').pixelSize).toBe(2);
   });
 
   it('窄屏自动收小粒度，保证约 200 列低分像素；桌面按用户选的', () => {

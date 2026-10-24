@@ -36,8 +36,8 @@ export interface GodHooks {
   showOffseason: () => void;
   showBracket: () => void;
   refreshCheatModal: () => void;
-  getPixelSize: () => 3 | 4 | 5;
-  setPixelSize: (size: 3 | 4 | 5) => void;
+  getPixelSize: () => 2 | 3 | 4 | 5;
+  setPixelSize: (size: 2 | 3 | 4 | 5) => void;
 }
 
 export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
@@ -112,6 +112,7 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
       </div>
       <div class="god-row">
         <span>像素粒度</span>
+        <button type="button" data-px="2">2</button>
         <button type="button" data-px="3">3</button>
         <button type="button" data-px="4">4</button>
         <button type="button" data-px="5">5</button>
@@ -297,7 +298,7 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
   root.querySelectorAll<HTMLButtonElement>('[data-px]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const size = Number(btn.dataset.px);
-      if (size !== 3 && size !== 4 && size !== 5) return;
+      if (size !== 2 && size !== 3 && size !== 4 && size !== 5) return;
       hooks.setPixelSize(size);
       sync();
     });

@@ -63,7 +63,7 @@ export class Weather {
     this.drops.layers.set(FX_LAYER);
     this.drops.count = 0;
     const splashMat = new THREE.MeshBasicMaterial({ color: 0xeef3f8, transparent: true, opacity: 0.85, depthWrite: false });
-    this.splashes = new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.05, 0.14), splashMat, SPLASHES);
+    this.splashes = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.04, 0.1), splashMat, SPLASHES);
     this.splashes.frustumCulled = false;
     this.splashes.layers.set(FX_LAYER);
     this.splashes.count = SPLASHES;
