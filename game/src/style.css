@@ -133,22 +133,24 @@ button { font-family: inherit; }
 
 /* ── 头顶昵称与气泡 ── */
 .name-tag {
-  display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 6px; border-radius: 999px;
-  background: rgba(12, 16, 26, 0.78); border: 1px solid rgba(255, 255, 255, 0.12); font-size: 12px; color: #fff;
-  white-space: nowrap; pointer-events: auto; cursor: pointer; transform: translateY(-4px); user-select: none;
+  display: inline-flex; align-items: center; gap: 3px; padding: 0 4px 0 3px; border-radius: 1px;
+  background: rgba(12, 16, 24, 0.92); border: 2px solid #141820; box-shadow: 2px 2px 0 #000;
+  font-size: 10px; line-height: 14px; color: #fff;
+  white-space: nowrap; pointer-events: auto; cursor: pointer; user-select: none;
 }
-.name-tag .dot { width: 8px; height: 8px; border-radius: 50%; }
-.name-tag b { font-weight: 600; }
-.name-tag i { font-style: normal; font-size: 12px; }
-.name-tag.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(240, 163, 94, 0.35); }
+.name-tag .dot { width: 6px; height: 6px; border-radius: 1px; }
+.name-tag b { font-weight: 700; letter-spacing: 0.2px; }
+.name-tag i { font-style: normal; font-size: 10px; }
+.name-tag.selected { border-color: var(--accent); box-shadow: 2px 2px 0 #000, 0 0 0 1px var(--accent); }
 .bubble {
-  max-width: 220px; padding: 6px 10px; border-radius: 12px; background: #fffdf8; color: #2b2116; font-size: 12.5px; line-height: 1.4;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); opacity: 0; transform: translateY(6px) scale(0.92); transition: opacity 0.25s, transform 0.25s;
-  pointer-events: none; position: relative; white-space: normal; text-align: center; font-weight: 500;
+  max-width: 148px; padding: 3px 6px; border-radius: 1px; background: #fffdf8; color: #2b2116; font-size: 11px; line-height: 1.35;
+  border: 2px solid #1a120c; box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+  opacity: 0; transform: translateY(4px); transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none; position: relative; white-space: normal; text-align: center; font-weight: 650;
 }
-.bubble::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 10px; height: 10px; background: #fffdf8; transform: translateX(-50%) rotate(45deg); }
+.bubble::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 8px; height: 8px; background: #fffdf8; border-right: 2px solid #1a120c; border-bottom: 2px solid #1a120c; transform: translateX(-50%) rotate(45deg); }
 .bubble.show { opacity: 1; transform: none; }
-.bubble.emoji { font-size: 20px; padding: 4px 8px; background: rgba(255, 253, 248, 0.95); }
+.bubble.emoji { font-size: 16px; padding: 2px 5px; background: #fffdf8; }
 
 /* ── 人物卡片 ── */
 #card {
@@ -295,8 +297,8 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
     display: grid; place-items: center; position: absolute; right: 12px; bottom: 190px; width: 44px; height: 44px; border-radius: 50%;
     background: var(--panel); border: 1px solid var(--line); font-size: 19px; z-index: 31; backdrop-filter: blur(10px); cursor: pointer;
   }
-  .name-tag { font-size: 10.5px; padding: 2px 6px 2px 5px; }
-  .bubble { font-size: 11.5px; max-width: 150px; }
+  .name-tag { font-size: 9px; padding: 0 3px; line-height: 12px; }
+  .bubble { font-size: 10px; max-width: 120px; }
 }
 
 /* ───────── M1 新增 ───────── */
@@ -310,6 +312,11 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .tb-btn.wide { padding: 0 12px; font-size: 12.5px; }
 .tb-btn:hover { background: rgba(255,255,255,0.13); }
 .tb-btn.on { background: rgba(240,163,94,0.25); border-color: rgba(240,163,94,0.6); }
+#pixelBtn {
+  font-weight: 800; letter-spacing: 0.4px; border-radius: 2px; border-width: 2px;
+  background: #141824; color: #f4efe4; border-color: #f0a35e; box-shadow: 2px 2px 0 #000;
+}
+#pixelBtn.raw { background: rgba(255,255,255,0.08); color: var(--text); border-style: dashed; box-shadow: none; font-weight: 700; }
 .tb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
 #holdBanner { position: absolute; left: 22px; bottom: 70px; z-index: 4; padding: 8px 14px; border-radius: 10px; background: rgba(60,35,18,0.9); border: 1px solid rgba(240,163,94,0.45); color: #ffd6ad; font-size: 12.5px; }
 
@@ -446,6 +453,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
   border-radius: 7px; padding: 4px 8px; font: inherit; cursor: pointer; white-space: nowrap;
 }
 #god button:hover { background: rgba(255, 255, 255, 0.13); }
+#god button.on { border-color: var(--accent); color: #ffd6ad; }
 #god .god-note { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.4; }
 
 .season-end { text-align: center; }

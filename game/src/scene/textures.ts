@@ -9,62 +9,69 @@ function canvas(w: number, h: number): HTMLCanvasElement {
   return c;
 }
 
+function desat(r: number, g: number, b: number, amount = 0.36): [number, number, number] {
+  const l = r * 0.299 + g * 0.587 + b * 0.114;
+  return [Math.round(r + (l - r) * amount), Math.round(g + (l - g) * amount), Math.round(b + (l - b) * amount)];
+}
+
+function pixelate(t: THREE.CanvasTexture): THREE.CanvasTexture {
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.anisotropy = 1;
+  return t;
+}
+
 function toTexture(c: HTMLCanvasElement, { repeat = [1, 1], srgb = true }: { repeat?: [number, number]; srgb?: boolean } = {}) {
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeat[0], repeat[1]);
-  t.anisotropy = 8;
+  pixelate(t);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
-// 木地板：暖色橡木长条拼板
+// 木地板：宽木板条，两三种去饱和色块，没有细木纹（低分采样不会出摩尔纹）
 export function floorTexture() {
-  const c = canvas(1024, 1024);
-  const g = c.getContext('2d')!;
-  const r = mulberry32(7);
-  const plankH = 64;
-  for (let y = 0; y < 1024; y += plankH) {
-    let x = -Math.floor(r() * 400);
-    while (x < 1024) {
-      const len = 300 + r() * 420;
-      const base = 0.85 + r() * 0.18;
-      const col = [Math.round(176 * base), Math.round(124 * base), Math.round(82 * base)];
-      g.fillStyle = `rgb(${col.join(',')})`;
-      g.fillRect(x, y, len, plankH);
-      // 木纹
-      for (let i = 0; i < 14; i++) {
-        const yy = y + 4 + r() * (plankH - 8);
-        g.strokeStyle = `rgba(${r() < 0.5 ? '90,55,30' : '220,170,120'},${0.08 + r() * 0.12})`;
-        g.lineWidth = 1 + r() * 1.5;
-        g.beginPath();
-        g.moveTo(x, yy);
-        for (let xx = x; xx < x + len; xx += 40) g.lineTo(xx, yy + Math.sin(xx * 0.02 + i) * 2);
-        g.stroke();
-      }
-      g.fillStyle = 'rgba(40,24,12,0.55)';
-      g.fillRect(x, y, 2, plankH);
-      x += len;
-    }
-    g.fillStyle = 'rgba(40,24,12,0.5)';
-    g.fillRect(0, y, 1024, 2);
-  }
-  return toTexture(c, { repeat: [3.2, 3.2] });
-}
-
-// 墙面：细微肌理的灰泥（石灰水洗墙）
-export function plasterTexture() {
   const c = canvas(512, 512);
   const g = c.getContext('2d')!;
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, 512, 512);
-  const r = mulberry32(11);
-  for (let i = 0; i < 9000; i++) {
-    const v = 225 + Math.floor(r() * 30);
-    g.fillStyle = `rgba(${v},${v - 4},${v - 10},0.35)`;
-    g.fillRect(r() * 512, r() * 512, 1 + r() * 3, 1 + r() * 3);
+  const plankH = 128;
+  const tones: [number, number, number][] = [[168, 132, 96], [146, 116, 84], [178, 142, 108]];
+  tones.forEach((tone, i) => {
+    const y = i * plankH;
+    const col = desat(tone[0], tone[1], tone[2], 0.38);
+    g.fillStyle = `rgb(${col.join(',')})`;
+    g.fillRect(0, y, 512, plankH);
+    const seam = desat(92, 66, 46, 0.28);
+    g.fillStyle = `rgb(${seam.join(',')})`;
+    g.fillRect(0, y, 512, 8);
+    g.fillRect(70 + i * 120, y, 8, plankH);
+  });
+  const last = desat(158, 124, 90, 0.38);
+  g.fillStyle = `rgb(${last.join(',')})`;
+  g.fillRect(0, 384, 512, 128);
+  const seam = desat(92, 66, 46, 0.28);
+  g.fillStyle = `rgb(${seam.join(',')})`;
+  g.fillRect(0, 384, 512, 8);
+  g.fillRect(300, 384, 8, 128);
+  return toTexture(c, { repeat: [2.1, 2.1] });
+}
+
+// 墙面：大块灰泥色块，没有细碎噪点
+export function plasterTexture() {
+  const c = canvas(256, 256);
+  const g = c.getContext('2d')!;
+  const cell = 64;
+  for (let y = 0; y < 256; y += cell) {
+    for (let x = 0; x < 256; x += cell) {
+      const n = ((x / cell) * 3 + (y / cell) * 5) % 4;
+      const v = 214 + n * 8;
+      const col = desat(v, v - 3, v - 8, 0.4);
+      g.fillStyle = `rgb(${col.join(',')})`;
+      g.fillRect(x, y, cell, cell);
+    }
   }
-  return toTexture(c, { repeat: [3, 1.5] });
+  return toTexture(c, { repeat: [2, 1.2] });
 }
 
 // 胡桃木竖条格栅
@@ -82,22 +89,25 @@ export function slatTexture() {
   return toTexture(c, { repeat: [2, 1] });
 }
 
-// 地毯：米色编织纹 + 锈橙色边
+// 地毯：大块双色格，没有细碎噪点
 export function rugTexture(main = '#d9c7aa', border = '#b5643a') {
-  const c = canvas(512, 512);
+  const c = canvas(256, 256);
   const g = c.getContext('2d')!;
   g.fillStyle = border;
-  g.fillRect(0, 0, 512, 512);
+  g.fillRect(0, 0, 256, 256);
   g.fillStyle = main;
-  g.fillRect(28, 28, 456, 456);
-  const r = mulberry32(5);
-  for (let i = 0; i < 6000; i++) {
-    g.fillStyle = `rgba(0,0,0,${r() * 0.05})`;
-    g.fillRect(r() * 512, r() * 512, 2, 2);
+  g.fillRect(18, 18, 220, 220);
+  const cell = 28;
+  for (let y = 28; y < 228; y += cell) {
+    for (let x = 28; x < 228; x += cell) {
+      if (((x + y) / cell) % 2 < 1) continue;
+      g.fillStyle = 'rgba(90,70,48,0.16)';
+      g.fillRect(x, y, cell - 2, cell - 2);
+    }
   }
-  g.strokeStyle = 'rgba(120,70,40,0.35)';
-  g.lineWidth = 3;
-  g.strokeRect(48, 48, 416, 416);
+  g.strokeStyle = 'rgba(120,70,40,0.45)';
+  g.lineWidth = 6;
+  g.strokeRect(28, 28, 200, 200);
   return toTexture(c);
 }
 
@@ -191,7 +201,7 @@ export function screenTexture(kind: ScreenKind, seed = 1): THREE.CanvasTexture {
     g.fillStyle = '#05070a';
     g.fillRect(0, 0, 256, 160);
   }
-  const t = new THREE.CanvasTexture(c);
+  const t = pixelate(new THREE.CanvasTexture(c));
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -210,9 +220,8 @@ export class WhiteboardTexture {
   private lastKey = '';
   constructor() {
     this.canvas = canvas(768, 512);
-    this.texture = new THREE.CanvasTexture(this.canvas);
+    this.texture = pixelate(new THREE.CanvasTexture(this.canvas));
     this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.texture.anisotropy = 8;
     this.lastKey = '';
   }
 
@@ -273,7 +282,7 @@ export class SkyTexture {
   private lastKey = '';
   constructor() {
     this.canvas = canvas(512, 256);
-    this.texture = new THREE.CanvasTexture(this.canvas);
+    this.texture = pixelate(new THREE.CanvasTexture(this.canvas));
     this.texture.colorSpace = THREE.SRGBColorSpace;
     const r = mulberry32(21);
     this.buildings = [];
@@ -322,7 +331,7 @@ export function plinthLabel(text: string, size = 60): THREE.CanvasTexture {
   g.font = `bold ${size}px "PingFang SC","Microsoft YaHei",sans-serif`;
   g.textBaseline = 'middle';
   g.fillText(text, 40, 66);
-  const t = new THREE.CanvasTexture(c);
+  const t = pixelate(new THREE.CanvasTexture(c));
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -342,7 +351,7 @@ export function artTexture(seed: number): THREE.CanvasTexture {
     else g.fillRect(30 + r() * 120, 40 + r() * 180, 50 + r() * 90, 50 + r() * 90);
     g.fill();
   }
-  const t = new THREE.CanvasTexture(c);
+  const t = pixelate(new THREE.CanvasTexture(c));
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -369,44 +378,32 @@ export function posterTexture(): THREE.CanvasTexture {
   g.fillStyle = '#d8c79a';
   g.fillText('本赛季目标：升级城市联赛', 128, 260);
   g.fillText('（打印版奖杯已备好）', 128, 290);
-  const t = new THREE.CanvasTexture(c);
+  const t = pixelate(new THREE.CanvasTexture(c));
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
-// 网吧地砖：60 cm 米灰色瓷砖，砖缝发黑，零星污渍（场地老旧）
+// 网吧地砖：大块双色棋盘格，砖缝发黑，没有污渍噪点
 export function tileTexture() {
-  const c = canvas(1024, 1024);
+  const c = canvas(512, 512);
   const g = c.getContext('2d')!;
-  const r = mulberry32(17);
-  const n = 8, s = 1024 / n;
+  const n = 4;
+  const s = 512 / n;
+  const a = desat(188, 182, 170, 0.4);
+  const b = desat(158, 154, 146, 0.4);
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
-      const b = 0.9 + r() * 0.1;
-      g.fillStyle = `rgb(${Math.round(196 * b)},${Math.round(190 * b)},${Math.round(178 * b)})`;
+      const col = (i + j) % 2 ? a : b;
+      g.fillStyle = `rgb(${col.join(',')})`;
       g.fillRect(i * s, j * s, s, s);
-      for (let k = 0; k < 40; k++) {
-        g.fillStyle = `rgba(90,80,70,${r() * 0.06})`;
-        g.fillRect(i * s + r() * s, j * s + r() * s, 2 + r() * 6, 2 + r() * 6);
-      }
     }
   }
-  for (let k = 0; k < 7; k++) {
-    const grd = g.createRadialGradient(0, 0, 0, 0, 0, 30 + r() * 50);
-    grd.addColorStop(0, 'rgba(70,55,40,0.18)');
-    grd.addColorStop(1, 'rgba(70,55,40,0)');
-    g.save();
-    g.translate(r() * 1024, r() * 1024);
-    g.fillStyle = grd;
-    g.fillRect(-90, -90, 180, 180);
-    g.restore();
-  }
-  g.fillStyle = 'rgba(60,52,44,0.75)';
+  g.fillStyle = 'rgb(68,62,56)';
   for (let i = 0; i <= n; i++) {
-    g.fillRect(i * s - 2, 0, 4, 1024);
-    g.fillRect(0, i * s - 2, 1024, 4);
+    g.fillRect(i * s - 4, 0, 8, 512);
+    g.fillRect(0, i * s - 4, 512, 8);
   }
-  return toTexture(c, { repeat: [14 / 4.8, 10 / 4.8] });
+  return toTexture(c, { repeat: [3.4, 2.5] });
 }
 
 export interface SignSpec {
@@ -454,9 +451,8 @@ export function signTexture(sp: SignSpec): THREE.CanvasTexture {
     g.fillText(l, x, y + ls * 0.78);
     y += ls * 1.55;
   }
-  const t = new THREE.CanvasTexture(c);
+  const t = pixelate(new THREE.CanvasTexture(c));
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
   return t;
 }
 
@@ -484,7 +480,7 @@ export function neonTexture(text: string, color: string, sub?: string): THREE.Ca
     g.font = `bold 46px ${font}`;
     g.fillText(sub, 512, 210);
   }
-  const t = new THREE.CanvasTexture(c);
+  const t = pixelate(new THREE.CanvasTexture(c));
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }

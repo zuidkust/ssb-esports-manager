@@ -19,6 +19,15 @@ export const ROW_Z = [-4.45, -1.75];
 // 工位：后排（靠窗）吊隆、狗粮、弟必；前排 阿鸡、当邓、撇干
 export const DESK_OWNERS = ['diaolong', 'gouliang', 'dibi', 'aji', 'dangdeng', 'piegan'];
 
+function dull(hex: number, amount = 0.34): number {
+  const c = new THREE.Color(hex);
+  const l = c.r * 0.299 + c.g * 0.587 + c.b * 0.114;
+  c.r += (l - c.r) * amount;
+  c.g += (l - c.g) * amount;
+  c.b += (l - c.b) * amount;
+  return c.getHex();
+}
+
 type MatOpts = THREE.MeshStandardMaterialParameters;
 const matCache = new Map<string, THREE.MeshStandardMaterial>();
 export function mat(color: number, opts: MatOpts = {}): THREE.MeshStandardMaterial {
@@ -423,7 +432,7 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: Reado
   scene.add(root);
   const { x0, x1, z0, z1, h } = ROOM;
   const W = x1 - x0, D = z1 - z0;
-  const wallMat = new THREE.MeshStandardMaterial({ color: theme.wall, map: plasterTexture(), roughness: 0.92 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: dull(theme.wall, 0.34), map: plasterTexture(), roughness: 0.92 });
   const wallTop = mat(0xf2e7d6, { roughness: 0.9 });
   const trim = mat(0x3a2a20, { roughness: 0.6 });
   const frame = mat(0x2b2e34, { roughness: 0.45, metalness: 0.3 });
@@ -441,7 +450,8 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: Reado
   }
 
   // ── 地板 ──
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.55, color: theme.floor }));
+  const floorMat = new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.5, metalness: 0.08, color: dull(theme.floor, 0.2) });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   root.add(floor);
@@ -726,7 +736,7 @@ export function buildOffice(scene: THREE.Scene, members: MemberDef[], fac: Reado
   };
 
   return {
-    level: 1, root, desks, spots, lamps, sky, wb, doorPivot, clock, glowMat, fridgeDoor,
+    level: 1, root, desks, spots, lamps, sky, wb, doorPivot, clock, glowMat, floorMat, fridgeDoor,
     nav: OFFICE_NAV, door: 'D', exit: new THREE.Vector3(-5.85, 0, -5.7),
   };
 }

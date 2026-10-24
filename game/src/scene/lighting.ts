@@ -40,14 +40,21 @@ export class Lighting {
     this.sun.shadow.mapSize.set(sz, sz);
     const cam = this.sun.shadow.camera;
     cam.left = -11; cam.right = 11; cam.top = 11; cam.bottom = -11; cam.near = 1; cam.far = 70;
-    this.sun.shadow.bias = -0.0004;
-    this.sun.shadow.normalBias = 0.03;
-    this.sun.shadow.radius = 4;
+    this.sun.shadow.bias = -0.001;
+    this.sun.shadow.normalBias = 0.02;
+    this.sun.shadow.radius = 0;
     scene.add(this.sun, this.sun.target);
 
     this.moon = new THREE.DirectionalLight(0x7d93d8, 0);
-    this.moon.position.set(-8, 14, 10);
-    scene.add(this.moon);
+    this.moon.position.set(-8, 16, 10);
+    this.moon.castShadow = quality.shadows;
+    this.moon.shadow.mapSize.set(sz, sz);
+    const moonCam = this.moon.shadow.camera;
+    moonCam.left = -12; moonCam.right = 12; moonCam.top = 12; moonCam.bottom = -12; moonCam.near = 1; moonCam.far = 40;
+    this.moon.shadow.bias = -0.001;
+    this.moon.shadow.normalBias = 0.02;
+    this.moon.shadow.radius = 0;
+    scene.add(this.moon, this.moon.target);
 
     // 办公室顶灯（没有天花板，用一盏不投影的上方柔光代替）
     this.ceiling = new THREE.DirectionalLight(0xfff0dc, 0);
@@ -81,8 +88,8 @@ export class Lighting {
 
     this.hemi.color.copy(mix3(...PALETTE.sky, day, dusk));
     this.hemi.groundColor.copy(mix3(...PALETTE.ground, day, dusk));
-    this.hemi.intensity = 0.2 + day * 0.7 + dusk * 0.2;
-    this.moon.intensity = night * 0.35;
+    this.hemi.intensity = 0.12 + day * 0.7 + dusk * 0.16;
+    this.moon.intensity = night * 0.55;
 
     const present = info.present > 0;
     const lightsOn = present;
@@ -103,5 +110,10 @@ export class Lighting {
 
     // 底座灯带
     this.office.glowMat.emissiveIntensity = 0.6 + night * 1.6;
+    const floor = this.office.floorMat;
+    if (floor) {
+      floor.roughness = 0.55 - night * 0.1;
+      floor.metalness = 0.04 + night * 0.16;
+    }
   }
 }

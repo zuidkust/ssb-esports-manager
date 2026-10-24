@@ -36,6 +36,8 @@ export interface GodHooks {
   showOffseason: () => void;
   showBracket: () => void;
   refreshCheatModal: () => void;
+  getPixelSize: () => 2 | 3 | 4;
+  setPixelSize: (size: 2 | 3 | 4) => void;
 }
 
 export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
@@ -109,6 +111,12 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
         <button type="button" id="godChainGo">触发</button>
       </div>
       <div class="god-row">
+        <span>像素粒度</span>
+        <button type="button" data-px="2">2</button>
+        <button type="button" data-px="3">3</button>
+        <button type="button" data-px="4">4</button>
+      </div>
+      <div class="god-row">
         <button type="button" id="godClear">清空冷却</button>
       </div>
     </div>`;
@@ -147,6 +155,8 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
     rateLabel.textContent = clock.manualPause ? `暂停 · ×${mult}` : `×${mult}`;
     pauseBtn.textContent = clock.manualPause ? '继续' : '暂停';
     if (!godEditing() && document.activeElement !== slider) slider.value = String(mult);
+    const px = hooks.getPixelSize();
+    root.querySelectorAll<HTMLButtonElement>('[data-px]').forEach((b) => b.classList.toggle('on', Number(b.dataset.px) === px));
     fillClock();
   }
   function afterTime(note: string) {
@@ -284,6 +294,14 @@ export function mountGodPanel(hooks: GodHooks): { sync: () => void } {
   }
   $('godOrder').addEventListener('click', () => order(null));
   $('godChainGo').addEventListener('click', () => order(($('godChain') as HTMLSelectElement).value));
+  root.querySelectorAll<HTMLButtonElement>('[data-px]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const size = Number(btn.dataset.px);
+      if (size !== 2 && size !== 3 && size !== 4) return;
+      hooks.setPixelSize(size);
+      sync();
+    });
+  });
   $('godClear').addEventListener('click', () => {
     hooks.ensureLive();
     clearCooldowns(hooks.world.state);
